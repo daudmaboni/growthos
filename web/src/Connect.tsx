@@ -55,6 +55,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
 
   return (
     <div className="shell-grid" ref={pageRef}>
+      <p className="small muted" style={{ margin: 0 }}>Exchange rate, language and your password have moved to <a href="#settings">Settings</a>.</p>
       {!metaConfigured() && <div className="finding warn"><b>Meta app not configured</b><span className="small">Add VITE_META_APP_ID and the two config IDs to the site's environment, then redeploy. See SETUP.md.</span></div>}
       {msg.ok && <p className="ok">{msg.ok}</p>}
       {msg.err && <p className="err">{msg.err}</p>}
@@ -89,57 +90,11 @@ export default function Connect({ ws }: { ws: Workspace }) {
         ))}
       </section>
       <ImportChats ws={ws} />
-      <RateBox ws={ws} />
-      <PasswordBox />
     </div>
   );
 }
 
-function RateBox({ ws }: { ws: Workspace }) {
-  const [rate, setRate] = useState(ws.fx_rate ? String(ws.fx_rate) : "");
-  const [msg, setMsg] = useState("");
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    const v = rate.trim() === "" ? null : Number(rate.replace(/,/g, ""));
-    if (v !== null && !(v > 0)) return setMsg("Enter a number above 0.");
-    const { error } = await supabase.from("workspaces").update({ fx_rate: v }).eq("id", ws.id);
-    setMsg(error ? error.message : "Saved. Reload the page to apply it.");
-  }
-  return (
-    <form className="card" onSubmit={save}>
-      <h2>Exchange rate</h2>
-      <p className="small muted" style={{ margin: 0 }}>Only needed when the ad account is billed in another currency (for example US dollars) and sales are in {ws.currency}. Used for return on ad spend.</p>
-      <div className="row">
-        <label htmlFor="fx">1 unit of ad currency =</label>
-        <input id="fx" inputMode="decimal" style={{ width: 120 }} placeholder="e.g. 2600" value={rate} onChange={(e) => setRate(e.target.value)} />
-        <span>{ws.currency}</span>
-        <button>Save</button>
-      </div>
-      {msg && <p className={msg.startsWith("Saved") ? "ok" : "err"}>{msg}</p>}
-    </form>
-  );
-}
 
-function PasswordBox() {
-  const [pw, setPw] = useState("");
-  const [msg, setMsg] = useState("");
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (pw.length < 8) return setMsg("Use at least 8 characters.");
-    const { error } = await supabase.auth.updateUser({ password: pw });
-    setMsg(error ? error.message : "Password changed."); if (!error) setPw("");
-  }
-  return (
-    <form className="card" onSubmit={save}>
-      <h2>Your password</h2>
-      <div className="row">
-        <input type="password" aria-label="New password" autoComplete="new-password" placeholder="New password" value={pw} onChange={(e) => setPw(e.target.value)} />
-        <button>Change password</button>
-      </div>
-      {msg && <p className={msg === "Password changed." ? "ok" : "err"}>{msg}</p>}
-    </form>
-  );
-}
 
 function StatusRow({ c }: { c: Conn }) {
   return (
