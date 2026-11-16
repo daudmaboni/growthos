@@ -1,6 +1,6 @@
 // Loads everything the dashboard and the weekly report need for a period plus its comparison
 // period, then runs the central metrics. One place, so both views agree.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase, Workspace, Outcome, AdPerf, Order, localDay } from "./lib";
 import { computeFunnel, comparisonOf, periodEnding, FunnelMetrics, DailyInsight, Expense } from "./metrics";
 
@@ -31,14 +31,27 @@ export async function loadConversations(ws: string, fromIso: string) {
 
 export function useGrowthData(ws: Workspace, days: number): GrowthData {
   const [state, setState] = useState<GrowthData>({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), ws.timezone) });
+  // Background refresh: re-read every 2 min and whenever the tab comes back into view.
+  // Refreshes are silent (no skeletons); only a new workspace or period shows the loading state.
+  const [tick, setTick] = useState(0);
+  const loadedKey = useRef("");
+  useEffect(() => {
+    const bump = () => { if (document.visibilityState === "visible") setTick((t) => t + 1); };
+    const id = window.setInterval(bump, 120_000);
+    document.addEventListener("visibilitychange", bump);
+    window.addEventListener("focus", bump);
+    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", bump); window.removeEventListener("focus", bump); };
+  }, []);
   useEffect(() => {
     let live = true;
+    const key = ws.id + "|" + days + "|" + ws.timezone;
+    const silent = loadedKey.current === key;
     const tz = ws.timezone || "Africa/Dar_es_Salaam";
     const today = localDay(new Date(), tz);
     const period = periodEnding(today, days, "current");
     const prevP = comparisonOf(period);
     const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
-    setState((s) => ({ ...s, loading: true, err: "" }));
+    if (!silent) setState((s) => ({ ...s, loading: true, err: "" }));
     (async () => {
       try {
         const [a, ap, c, d, o, e, cn, nm, h, ib] = await Promise.all([
@@ -54,6 +67,7 @@ export function useGrowthData(ws: Workspace, days: number): GrowthData {
           supabase.from("import_batches").select("kind,created_at,created_count").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(5),
         ]);
         if (!live) return;
+        loadedKey.current = key;
         const firstErr = [a, ap, d, o, e, cn, nm, h, ib].find((r) => r.error)?.error;
         const daily = ((d.data as any[]) ?? []).map((r) => ({ day: r.day, spend: Number(r.spend), currency: r.currency, impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks ?? 0), messaging_conversations: Number(r.messaging_conversations ?? 0) }));
         const orders = (o.data as Order[]) ?? [];
@@ -67,10 +81,10 @@ export function useGrowthData(ws: Workspace, days: number): GrowthData {
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
         });
       } catch (err) {
-        if (live) setState((s) => ({ ...s, loading: false, err: (err as Error).message }));
+        if (live && !silent) setState((s) => ({ ...s, loading: false, err: (err as Error).message }));
       }
     })();
     return () => { live = false; };
-  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, days]);
+  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, days, tick]);
   return state;
 }

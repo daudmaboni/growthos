@@ -68,11 +68,9 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
       <div className="hero">
         <div style={{ display: "grid", gap: 4 }}>
           <h2>{greeting(lang, ws.timezone)}</h2>
-          <div className="sub">
-            <span><span className={"dot" + (adsConn.length ? "" : " off")} />{adsConn.length ? `${T("Ads synced", "Matangazo yamesawazishwa")} ${ago(lastSync)}` : T("Ad account not connected", "Akaunti ya matangazo haijaunganishwa")}</span>
-            <span>{waConn.length ? `WhatsApp ${T("connected", "imeunganishwa")}` : T("WhatsApp: chat uploads only", "WhatsApp: chats zilizopakiwa tu")}</span>
-            <span>{mx.period.from} → {mx.period.to} · {ws.timezone} · {ws.currency}{adCur !== ws.currency ? ` (${T("ads in", "matangazo kwa")} ${adCur})` : ""}</span>
-          </div>
+          {(!adsConn.length || adsConn.some((c) => c.last_error)) && (
+            <div className="sub"><span><span className="dot off" />{!adsConn.length ? T("Ad account not connected", "Akaunti ya matangazo haijaunganishwa") : T("Last ad sync had an error. See Connections.", "Usawazishaji wa mwisho ulikuwa na hitilafu. Angalia Connections.")}</span></div>
+          )}
         </div>
         <div className="row">
           <div className="seg" role="group" aria-label="Period">
