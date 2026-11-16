@@ -1,3 +1,4 @@
+import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, dur, fmt, L } from "./lib";
 
@@ -74,8 +75,13 @@ export default function Chats({ ws }: { ws: Workspace }) {
     setRechecking(false);
   }
 
+  const pageRef = usePageEnter<HTMLElement>((root) => {
+    if (loading) return;
+    enterCards(root, { y: 18 });
+    enterRows(select(root, "table tbody tr"), { delay: 0.3, stagger: 0.04 });
+  }, [loading, filter]);
   return (
-    <section className="card">
+    <section className="card" ref={pageRef}>
       <div className="row between">
         <h2>Chats</h2>
         <div className="row" role="tablist">

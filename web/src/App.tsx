@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace } from "./lib";
 import Dashboard from "./Dashboard";
@@ -19,12 +20,14 @@ export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try { return localStorage.getItem("growthos-theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
   });
-  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
-  const toggleTheme = () => setTheme((t) => {
-    const n = t === "dark" ? "light" : "dark";
-    try { localStorage.setItem("growthos-theme", n); } catch { /* storage unavailable */ }
-    return n;
-  });
+  useEffect(() => { document.documentElement.dataset.theme = theme; }, []);
+  const themeBtn = useRef<HTMLButtonElement>(null);
+  const toggleTheme = () => {
+    const n = theme === "dark" ? "light" : "dark";
+    switchTheme(n, themeBtn.current); // circular wipe from the button, then the attribute + storage are set
+    setTheme(n);
+  };
+  const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -46,7 +49,7 @@ export default function App() {
   if (ws === null) return <CreateWorkspace onDone={setWs} />;
 
   return (
-    <div className="shell">
+    <div className="shell" ref={shellRef}>
       <header className="topbar">
         <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><h1>GrowthOS</h1></a><span className="ws">{ws.name}</span></div>
         <nav className="tabs" aria-label="Sections">
@@ -55,7 +58,7 @@ export default function App() {
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
         </nav>
         <div className="actions">
-          <button className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
+          <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
           <button className="small" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
@@ -73,12 +76,13 @@ function Login() {
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.06 }); });
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr(""); setBusy(true);
     if (mode === "password") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) setErr(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message);
+      if (error) { shake(formRef.current); setErr(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message); }
       return;
     }
     const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } });
@@ -87,7 +91,7 @@ function Login() {
   }
   return (
     <div className="center">
-      <form className="card auth" onSubmit={submit}>
+      <form className="card auth" ref={formRef} onSubmit={submit}>
         <div className="row"><Logo size={44} /><h1>GrowthOS</h1></div>
         <p className="muted" style={{ margin: 0 }}>See which ads bring paying customers, not just chats.</p>
         {sent ? <p className="ok">Check {email} for a sign-in link.</p> : (<>
@@ -111,6 +115,7 @@ function Login() {
 function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
+  const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.06 }); });
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     const { data: id, error } = await supabase.rpc("create_workspace", { p_name: name.trim() });
@@ -120,7 +125,7 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   }
   return (
     <div className="center">
-      <form className="card auth" onSubmit={submit}>
+      <form className="card auth" ref={formRef} onSubmit={submit}>
         <h2>Name your business</h2>
         <label htmlFor="wsname" className="small muted">This is the workspace your ads and WhatsApp connect to.</label>
         <input id="wsname" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kayani Herbs" />
