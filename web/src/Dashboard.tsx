@@ -5,7 +5,7 @@ import { TrendChart, SpendSplit, CostBars } from "./Charts";
 
 export default function Dashboard({ ws }: { ws: Workspace }) {
   const [days, setDays] = useState(14);
-  const [lang, setLang] = useState<"sw" | "en">(ws.language);
+  const lang = ws.language;
   const [ads, setAds] = useState<AdPerf[]>([]);
   const [convs, setConvs] = useState<Outcome[]>([]);
   const [daily, setDaily] = useState<{ day: string; spend: number }[]>([]);
@@ -129,10 +129,6 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
         <div className="row">
           <div className="seg" role="group" aria-label="Period">
             {[7, 14, 30].map((d) => <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)} aria-pressed={days === d}>{d} {T("days", "siku")}</button>)}
-          </div>
-          <div className="seg" role="group" aria-label="Language">
-            <button className={lang === "sw" ? "on" : ""} onClick={() => setLang("sw")} aria-pressed={lang === "sw"}>SW</button>
-            <button className={lang === "en" ? "on" : ""} onClick={() => setLang("en")} aria-pressed={lang === "en"}>EN</button>
           </div>
         </div>
       </div>

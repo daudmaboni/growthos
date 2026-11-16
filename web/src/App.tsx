@@ -29,6 +29,12 @@ export default function App() {
     setTheme(n);
   };
   const toggleTheme = () => setThemeFrom(theme === "dark" ? "light" : "dark");
+  const setLanguage = async (l: "sw" | "en") => {
+    if (!ws || ws.language === l) return;
+    setWs({ ...ws, language: l }); // instant; everyone in the workspace sees the new default
+    const { error } = await supabase.from("workspaces").update({ language: l }).eq("id", ws.id);
+    if (error) setWs(ws);
+  };
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -58,10 +64,13 @@ export default function App() {
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#chats" className={view === "chats" ? "on" : ""}>Chats</a>
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
-          <a href="#settings" className={view === "settings" ? "on" : ""} aria-label="Settings">Settings</a>
         </nav>
         <div className="actions">
+          <div className="seg" role="group" aria-label="Language">
+            {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
+          </div>
           <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
+          <a href="#settings" className={"icon" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
       </header>
       {view === "dashboard" && <Dashboard ws={ws} />}
@@ -69,6 +78,15 @@ export default function App() {
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
     </div>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </svg>
   );
 }
 
