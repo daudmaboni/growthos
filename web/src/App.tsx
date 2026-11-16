@@ -171,7 +171,8 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   );
 }
 
-const ORDER: View[] = ["dashboard", "report", "actions", "chats"];
+const ORDER: View[] = ["dashboard", "chats"];
+const SLOTS = ORDER.length + 1; // + More
 
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
 export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
@@ -186,17 +187,17 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
   const L = (en: string, s: string) => (sw ? s : en);
   const main: [View, string, JSX.Element][] = [
     ["dashboard", L("Home", "Nyumbani"), <Ico d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />],
-    ["report", L("Diagnosis", "Uchunguzi"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
-    ["actions", L("Actions", "Vitendo"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
     ["chats", "Chats", <Ico d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" />],
   ];
   const more: [View, string, string, JSX.Element][] = [
+    ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
+    ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
     ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
-    ["connect", "Connections", L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
+    ["connect", L("Connections", "Miunganisho"), L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
     ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
   ];
   const moreOn = more.some(([v]) => v === view);
-  const idx = open || moreOn ? 4 : Math.max(0, ORDER.indexOf(view));
+  const idx = open || moreOn ? SLOTS - 1 : Math.max(0, ORDER.indexOf(view));
   const navRef = useRef<HTMLElement>(null);
   const suppressClick = useRef(false);
   const setLens = (i: number, dragging: boolean) => {
@@ -206,7 +207,7 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
   };
   useEffect(() => { setLens(idx, false); }, [idx]);
   const go = (i: number) => {
-    if (i >= 4) { setOpen(true); setLens(4, false); return; }
+    if (i >= SLOTS - 1) { setOpen(true); setLens(SLOTS - 1, false); return; }
     setOpen(false);
     if (ORDER[i] !== view) { window.scrollTo({ top: 0 }); location.hash = ORDER[i]; } else setLens(i, false);
   };
@@ -215,12 +216,12 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
   const onBarDown = (e: React.PointerEvent<HTMLElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     const n = navRef.current; if (!n) return;
-    const r = n.getBoundingClientRect(), slot = (r.width - 12) / 5, x0 = e.clientX;
+    const r = n.getBoundingClientRect(), slot = (r.width - 12) / SLOTS, x0 = e.clientX;
     let moved = false, frac = idx;
     const move = (ev: PointerEvent) => {
       if (!moved && Math.abs(ev.clientX - x0) < 8) return;
       moved = true;
-      frac = Math.min(4, Math.max(0, (ev.clientX - r.left - 6 - slot / 2) / slot));
+      frac = Math.min(SLOTS - 1, Math.max(0, (ev.clientX - r.left - 6 - slot / 2) / slot));
       setLens(frac, true);
     };
     const up = () => {
@@ -254,14 +255,14 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
       dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
       if (!mode) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v"; if (mode === "v") return; }
       const w = window.innerWidth;
-      setLens(Math.min(3, Math.max(0, cur - dx / w * 1.6)), true);
+      setLens(Math.min(ORDER.length - 1, Math.max(0, cur - dx / w * 1.2)), true);
     };
     const end = () => {
       if (mode !== "h") return;
       const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
       const next = Math.abs(dx) > window.innerWidth * 0.28 || (fast && Math.abs(dx) > 40) ? cur + (dx < 0 ? 1 : -1) : cur;
       mode = "";
-      if (next >= 0 && next <= 3 && next !== cur) go(next); else setLens(cur, false);
+      if (next >= 0 && next < ORDER.length && next !== cur) go(next); else setLens(cur, false);
     };
     window.addEventListener("touchstart", start, { passive: true });
     window.addEventListener("touchmove", move, { passive: true });
@@ -284,7 +285,7 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
           ))}
         </div>
       )}
-      <nav className="bottomnav" aria-label="Sections" ref={navRef} onPointerDown={onBarDown}
+      <nav className="bottomnav" aria-label="Sections" ref={navRef} style={{ ["--n" as any]: SLOTS }} onPointerDown={onBarDown}
         onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}>
         <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
