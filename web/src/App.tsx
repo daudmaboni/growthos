@@ -171,8 +171,10 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   );
 }
 
+const ORDER: View[] = ["dashboard", "report", "actions", "chats"];
+
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
-function BottomNav({ view, sw }: { view: View; sw: boolean }) {
+export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const close = () => setOpen(false);
@@ -194,6 +196,80 @@ function BottomNav({ view, sw }: { view: View; sw: boolean }) {
     ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
   ];
   const moreOn = more.some(([v]) => v === view);
+  const idx = open || moreOn ? 4 : Math.max(0, ORDER.indexOf(view));
+  const navRef = useRef<HTMLElement>(null);
+  const suppressClick = useRef(false);
+  const setLens = (i: number, dragging: boolean) => {
+    const n = navRef.current; if (!n) return;
+    n.style.setProperty("--i", String(i));
+    n.classList.toggle("dragging", dragging);
+  };
+  useEffect(() => { setLens(idx, false); }, [idx]);
+  const go = (i: number) => {
+    if (i >= 4) { setOpen(true); setLens(4, false); return; }
+    setOpen(false);
+    if (ORDER[i] !== view) { window.scrollTo({ top: 0 }); location.hash = ORDER[i]; } else setLens(i, false);
+  };
+
+  // Drag along the bar: the lens follows the finger and snaps to the tab where it is released.
+  const onBarDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const n = navRef.current; if (!n) return;
+    const r = n.getBoundingClientRect(), slot = (r.width - 12) / 5, x0 = e.clientX;
+    let moved = false, frac = idx;
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - x0) < 8) return;
+      moved = true;
+      frac = Math.min(4, Math.max(0, (ev.clientX - r.left - 6 - slot / 2) / slot));
+      setLens(frac, true);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      if (!moved) return;
+      suppressClick.current = true; setTimeout(() => (suppressClick.current = false), 350);
+      go(Math.round(frac));
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+
+  // Swipe the page left/right to move between the four main sections; the lens tracks the swipe.
+  useEffect(() => {
+    const cur = ORDER.indexOf(view);
+    if (cur < 0 || open) return;
+    let x0 = 0, y0 = 0, t0 = 0, mode: "" | "h" | "v" = "", dx = 0;
+    const blocked = (el: EventTarget | null) => {
+      for (let n = el as HTMLElement | null; n && n !== document.body; n = n.parentElement) {
+        if (n.matches("input, textarea, select, .seg, .bottomnav, .sheet, [data-noswipe]")) return true;
+        const ox = getComputedStyle(n).overflowX;
+        if ((ox === "auto" || ox === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
+      }
+      return false;
+    };
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || blocked(e.target)) { mode = "v"; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); mode = ""; dx = 0;
+    };
+    const move = (e: TouchEvent) => {
+      if (mode === "v") return;
+      dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
+      if (!mode) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v"; if (mode === "v") return; }
+      const w = window.innerWidth;
+      setLens(Math.min(3, Math.max(0, cur - dx / w * 1.6)), true);
+    };
+    const end = () => {
+      if (mode !== "h") return;
+      const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
+      const next = Math.abs(dx) > window.innerWidth * 0.28 || (fast && Math.abs(dx) > 40) ? cur + (dx < 0 ? 1 : -1) : cur;
+      mode = "";
+      if (next >= 0 && next <= 3 && next !== cur) go(next); else setLens(cur, false);
+    };
+    window.addEventListener("touchstart", start, { passive: true });
+    window.addEventListener("touchmove", move, { passive: true });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
+    return () => { window.removeEventListener("touchstart", start); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", end); window.removeEventListener("touchcancel", end); };
+  }, [view, open]);
+
   return (
     <>
       {open && <div className="sheet-back" onClick={() => setOpen(false)} />}
@@ -208,7 +284,8 @@ function BottomNav({ view, sw }: { view: View; sw: boolean }) {
           ))}
         </div>
       )}
-      <nav className="bottomnav" aria-label="Sections" style={{ ["--i" as any]: open || moreOn ? 4 : Math.max(0, main.findIndex(([v]) => v === view)) }}>
+      <nav className="bottomnav" aria-label="Sections" ref={navRef} onPointerDown={onBarDown}
+        onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}>
         <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
           <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span></a>
