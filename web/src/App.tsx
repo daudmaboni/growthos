@@ -208,7 +208,8 @@ function BottomNav({ view, sw }: { view: View; sw: boolean }) {
           ))}
         </div>
       )}
-      <nav className="bottomnav" aria-label="Sections">
+      <nav className="bottomnav" aria-label="Sections" style={{ ["--i" as any]: open || moreOn ? 4 : Math.max(0, main.findIndex(([v]) => v === view)) }}>
+        <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
           <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span></a>
         ))}
