@@ -80,9 +80,10 @@ export default function App() {
             {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
           </div>
           <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
-          <a href="#settings" className={"icon" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
+          <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
       </header>
+      <BottomNav view={view} sw={ws.language === "sw"} />
       {view === "dashboard" && <Dashboard ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
@@ -168,4 +169,57 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
       </form>
     </div>
   );
+}
+
+/** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
+function BottomNav({ view, sw }: { view: View; sw: boolean }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const close = () => setOpen(false);
+    window.addEventListener("hashchange", close);
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("hashchange", close); window.removeEventListener("keydown", esc); };
+  }, []);
+  const L = (en: string, s: string) => (sw ? s : en);
+  const main: [View, string, JSX.Element][] = [
+    ["dashboard", L("Home", "Nyumbani"), <Ico d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />],
+    ["report", L("Diagnosis", "Uchunguzi"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
+    ["actions", L("Actions", "Vitendo"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
+    ["chats", "Chats", <Ico d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" />],
+  ];
+  const more: [View, string, string, JSX.Element][] = [
+    ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
+    ["connect", "Connections", L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
+    ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
+  ];
+  const moreOn = more.some(([v]) => v === view);
+  return (
+    <>
+      {open && <div className="sheet-back" onClick={() => setOpen(false)} />}
+      {open && (
+        <div className="sheet" role="dialog" aria-label={L("More", "Zaidi")}>
+          <span className="sheet-grip" aria-hidden="true" />
+          {more.map(([v, label, note, icon]) => (
+            <a key={v} href={"#" + v} className={"sheet-item" + (view === v ? " on" : "")}>
+              <span className="sheet-ico">{icon}</span>
+              <span><b>{label}</b><span className="small muted">{note}</span></span>
+            </a>
+          ))}
+        </div>
+      )}
+      <nav className="bottomnav" aria-label="Sections">
+        {main.map(([v, label, icon]) => (
+          <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span></a>
+        ))}
+        <button type="button" className={moreOn || open ? "on" : ""} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span>{L("More", "Zaidi")}</span>
+        </button>
+      </nav>
+    </>
+  );
+}
+
+function Ico({ d, w = 2 }: { d: string; w?: number }) {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
 }
