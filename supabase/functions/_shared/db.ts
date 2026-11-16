@@ -1,0 +1,67 @@
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
+import { analyze, Msg } from "./signals.ts";
+
+export const GRAPH = `https://graph.facebook.com/${Deno.env.get("META_GRAPH_VERSION") ?? "v25.0"}`;
+
+export function admin(): SupabaseClient {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+  });
+}
+
+export function userClient(req: Request): SupabaseClient {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+  });
+}
+
+export async function graph(path: string, token: string, init: RequestInit = {}) {
+  const url = path.startsWith("http") ? path : `${GRAPH}/${path.replace(/^\//, "")}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.error) {
+    const e = body.error ?? {};
+    throw new Error(`Graph ${res.status}: ${e.message ?? "request failed"} (code ${e.code ?? "?"}${e.error_subcode ? "/" + e.error_subcode : ""})`);
+  }
+  return body;
+}
+
+export async function readToken(db: SupabaseClient, secretId: string): Promise<string> {
+  const { data, error } = await db.rpc("svc_read_token", { p_secret_id: secretId });
+  if (error || !data) throw new Error("token unavailable");
+  return data as string;
+}
+
+export async function storeToken(db: SupabaseClient, name: string, token: string): Promise<string> {
+  const { data, error } = await db.rpc("svc_store_token", { p_name: name, p_token: token });
+  if (error) throw new Error("could not store token: " + error.message);
+  return data as string;
+}
+
+/** Recompute signals for conversations and save them. */
+export async function reanalyze(db: SupabaseClient, conversationIds: string[]) {
+  for (const id of [...new Set(conversationIds)]) {
+    const { data: msgs } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", id).order("sent_at");
+    if (!msgs?.length) continue;
+    const a = analyze(msgs as Msg[]);
+    await db.from("conversations").update({
+      ...a,
+      started_at: msgs[0].sent_at,
+      last_message_at: msgs[msgs.length - 1].sent_at,
+      analyzed_at: new Date().toISOString(),
+    }).eq("id", id);
+  }
+}
+
+export const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...cors } });
+
+export const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};

@@ -1,0 +1,78 @@
+import { fmt } from "./lib";
+
+export const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)"];
+
+/** Area chart of a daily series, with the previous period as a dashed line on the same scale. */
+export function TrendChart({ days, cur, prev }: { days: string[]; cur: number[]; prev: number[] }) {
+  const W = 720, H = 220, L = 46, R = 10, T = 12, B = 26;
+  const max = Math.max(0.01, ...cur, ...prev);
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const x = (i: number) => L + (days.length <= 1 ? 0 : (i * (W - L - R)) / (days.length - 1));
+  const y = (v: number) => T + (H - T - B) * (1 - v / top);
+  const line = (a: number[]) => a.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
+  const every = Math.max(1, Math.ceil(days.length / 7));
+  const last = cur.length - 1;
+  return (
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily ad spend, this period against the previous one">
+      <defs>
+        <linearGradient id="gfill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="var(--c2)" stopOpacity="0.35" /><stop offset="1" stopColor="var(--c2)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeWidth="1" />
+          <text x={L - 8} y={y(t) + 4} textAnchor="end">{short(t)}</text>
+        </g>
+      ))}
+      {days.map((d, i) => (i % every === 0 ? <text key={d} x={x(i)} y={H - 8} textAnchor="middle">{label(d)}</text> : null))}
+      {prev.some((v) => v > 0) && <path d={line(prev)} fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeDasharray="4 4" />}
+      {cur.length > 0 && <>
+        <path d={`${line(cur)} L${x(last).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`} fill="url(#gfill)" />
+        <path d={line(cur)} fill="none" stroke="var(--c2)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(last)} cy={y(cur[last])} r="4.5" fill="var(--c2)" stroke="var(--card)" strokeWidth="2" />
+      </>}
+    </svg>
+  );
+}
+function niceStep(raw: number) {
+  const p = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 0.01))));
+  const n = raw / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+}
+function short(v: number) { return v > 0 && v < 10 ? String(+v.toFixed(1)) : v >= 1e6 ? (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(v); }
+function label(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
+
+/** One stacked bar plus legend: how the spend splits across ads. */
+export function SpendSplit({ items, total, f = fmt }: { items: { name: string; value: number }[]; total: number; f?: (n: number) => string }) {
+  const top = items.slice(0, 5);
+  const rest = items.slice(5).reduce((s, i) => s + i.value, 0);
+  const rows = rest > 0 ? [...top, { name: `Other (${items.length - 5})`, value: rest }] : top;
+  return (
+    <>
+      <div className="split" aria-hidden="true">{rows.map((r, i) => <i key={r.name} style={{ width: `${total ? (r.value / total) * 100 : 0}%`, background: COLORS[i % 6] }} />)}</div>
+      <div className="legend">{rows.map((r, i) => (
+        <div className="li" key={r.name}>
+          <span className="sw" style={{ background: COLORS[i % 6] }} /><span className="nm" title={r.name}>{r.name}</span>
+          <span className="num muted">{f(r.value)}</span><b className="num">{total ? Math.round((r.value / total) * 100) : 0}%</b>
+        </div>
+      ))}</div>
+    </>
+  );
+}
+
+/** Horizontal bars, cheapest first. Shorter is cheaper. */
+export function CostBars({ items, bestLabel, f = fmt }: { items: { name: string; cost: number; note: string }[]; bestLabel: string; f?: (n: number) => string }) {
+  const max = Math.max(1e-9, ...items.map((i) => i.cost));
+  return (
+    <div style={{ display: "grid", gap: 12 }}>{items.map((r, i) => (
+      <div className="costrow" key={r.name}>
+        <span className="nm" title={r.name}>{r.name}{i === 0 && items.length > 1 && <> <span className="chip ok">{bestLabel}</span></>}<div className="small muted">{r.note}</div></span>
+        <div className="bar"><i style={{ width: `${(r.cost / max) * 100}%`, background: i === 0 ? "var(--good)" : "var(--c2)" }} /></div>
+        <span className="val">{f(r.cost)}</span>
+      </div>
+    ))}</div>
+  );
+}
