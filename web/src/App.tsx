@@ -5,12 +5,13 @@ import { supabase, Workspace } from "./lib";
 import Dashboard from "./Dashboard";
 import Chats from "./Chats";
 import Connect from "./Connect";
+import Settings from "./Settings";
 import Logo from "./Logo";
 
-type View = "dashboard" | "chats" | "connect";
+type View = "dashboard" | "chats" | "connect" | "settings";
 const viewFromHash = (): View => {
-  const h = location.hash.replace("#", "");
-  return h === "chats" || h === "connect" ? h : "dashboard";
+  const h = location.hash.replace("#", "").split("/")[0];
+  return h === "chats" || h === "connect" || h === "settings" ? h : "dashboard";
 };
 
 export default function App() {
@@ -22,11 +23,12 @@ export default function App() {
   });
   useEffect(() => { document.documentElement.dataset.theme = theme; }, []);
   const themeBtn = useRef<HTMLButtonElement>(null);
-  const toggleTheme = () => {
-    const n = theme === "dark" ? "light" : "dark";
-    switchTheme(n, themeBtn.current); // circular wipe from the button, then the attribute + storage are set
+  const setThemeFrom = (n: "dark" | "light", from?: HTMLElement | null) => {
+    if (n === theme) return;
+    switchTheme(n, from ?? themeBtn.current); // circular wipe from the button, then the attribute + storage are set
     setTheme(n);
   };
+  const toggleTheme = () => setThemeFrom(theme === "dark" ? "light" : "dark");
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -56,15 +58,16 @@ export default function App() {
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#chats" className={view === "chats" ? "on" : ""}>Chats</a>
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
+          <a href="#settings" className={view === "settings" ? "on" : ""} aria-label="Settings">Settings</a>
         </nav>
         <div className="actions">
           <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
-          <button className="small" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
       {view === "dashboard" && <Dashboard ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
       {view === "connect" && <Connect ws={ws} />}
+      {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
     </div>
   );
 }
