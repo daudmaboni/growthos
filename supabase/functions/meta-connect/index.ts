@@ -35,15 +35,15 @@ Deno.serve(async (req) => {
       const { data: tok } = await db.rpc("svc_read_token", { p_secret_id: body.pending_secret });
       if (!tok) return json({ error: "Login expired. Connect again." }, 400);
       const secret = await storeToken(db, `meta_ads:${ws}:${body.ad_account_id}`, tok);
-      const { error } = await db.from("connections").upsert({
+      const { data: connection, error } = await db.from("connections").upsert({
         workspace_id: ws, provider: "meta_ads", external_id: body.ad_account_id, label: body.label ?? null,
         token_secret_id: secret, status: "active", last_error: null,
-      }, { onConflict: "provider,external_id" });
+      }, { onConflict: "provider,external_id" }).select("id").single();
       if (error) throw new Error(error.message);
-      // first sync: 30 days
+      // First sync is explicitly limited to the connection just authorized.
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ads-sync`, {
         method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ days: 30 }),
+        body: JSON.stringify({ days: 30, workspace_id: ws, connection_id: connection!.id }),
       }).catch(() => {});
       return json({ ok: true });
     }

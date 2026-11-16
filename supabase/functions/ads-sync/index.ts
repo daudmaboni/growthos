@@ -54,17 +54,24 @@ Deno.serve(async (req) => {
   const days = Math.min(Math.max(Number(body.days ?? 30), 1), 90);
   const auth = req.headers.get("Authorization") ?? "";
   const cronSecret = Deno.env.get("CRON_SECRET");
-  const isService = auth === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` ||
-    (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret);
+  const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret;
+  const isServiceRole = auth === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
 
   let q = db.from("connections").select("*").eq("provider", "meta_ads").eq("status", "active");
-  if (!isService) {
+  if (isCron) {
+    if (body.action !== "sync_all") return json({ error: "scheduled sync action required" }, 403);
+  } else if (isServiceRole) {
+    // Internal first sync must name one authorized workspace and connection.
+    if (!body.workspace_id || !body.connection_id) return json({ error: "workspace_id and connection_id required" }, 400);
+    q = q.eq("workspace_id", body.workspace_id).eq("id", body.connection_id);
+  } else {
     if (!body.workspace_id) return json({ error: "workspace_id required" }, 400);
     const { data: ok } = await userClient(req).rpc("is_member", { ws: body.workspace_id });
     if (!ok) return json({ error: "not a member of this workspace" }, 403);
-    q = db.from("connections").select("*").eq("provider", "meta_ads").eq("workspace_id", body.workspace_id);
+    q = q.eq("workspace_id", body.workspace_id).in("status", ["active", "error"]);
   }
-  const { data: conns } = await q;
+  const { data: conns, error: queryError } = await q;
+  if (queryError) return json({ error: "could not load ad connections" }, 500);
   const results: any[] = [];
   for (const c of conns ?? []) {
     try { results.push({ account: c.external_id, rows: await syncConnection(db, c, days) }); }
@@ -73,6 +80,14 @@ Deno.serve(async (req) => {
       await db.from("connections").update({ status: /code 190/.test(msg) ? "error" : c.status, last_error: msg.slice(0, 300) }).eq("id", c.id);
       results.push({ account: c.external_id, error: msg });
     }
+  }
+  if (isCron && cronSecret) {
+    // Reclaim webhook events that were durably saved but failed during background processing.
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/wa-webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret },
+      body: JSON.stringify({ action: "retry_failed" }),
+    }).catch(() => {});
   }
   return json({ synced: results });
 });

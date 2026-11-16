@@ -1,10 +1,12 @@
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, dur, fmt, L } from "./lib";
+import ImportSales from "./ImportSales";
 
 type Filter = "follow" | "lost" | "open" | "sold" | "all";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string };
+type FollowUpTask = { id: string; conversation_id: string; title: string; draft: string | null; status: "open" | "snoozed" | "done" | "dismissed" };
 
 export default function Chats({ ws }: { ws: Workspace }) {
   const [filter, setFilter] = useState<Filter>("follow");
@@ -13,6 +15,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [tasks, setTasks] = useState<Record<string, FollowUpTask>>({});
   const [autoDone, setAutoDone] = useState(false);
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
@@ -24,7 +27,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else if (filter !== "all") q = q.eq("outcome", filter);
     supabase.from("kito_runs").select("id,trigger,ran_at,checked,failed,remaining,note").eq("workspace_id", ws.id).order("ran_at", { ascending: false }).limit(20)
       .then(({ data }) => setRuns((data as Run[]) ?? []));
-    Promise.all([q, supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id)]).then(([c, a]) => {
+    Promise.all([
+      q,
+      supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id),
+      supabase.from("follow_up_tasks").select("id,conversation_id,title,draft,status").eq("workspace_id", ws.id).in("status", ["open", "snoozed"]),
+    ]).then(([c, a, t]) => {
       let list = (c.data as Outcome[]) ?? [];
       if (filter === "follow") {
         // Call list: hottest first, then customers still waiting for our reply, then longest ignored
@@ -33,6 +40,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       }
       setRows(list);
       setAdNames(Object.fromEntries((a.data ?? []).map((x: any) => [x.ad_id, x.name])));
+      setTasks(Object.fromEntries(((t.data ?? []) as FollowUpTask[]).map((task) => [task.conversation_id, task])));
       setLoading(false);
     });
   }, [ws.id, filter, tick]);
@@ -81,6 +89,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
     enterRows(select(root, "table tbody tr"), { delay: 0.3, stagger: 0.04 });
   }, [loading, filter]);
   return (
+    <>
+    <ImportSales ws={ws} onImported={refresh} />
     <section className="card" ref={pageRef}>
       <div className="row between">
         <h2>Chats</h2>
@@ -111,10 +121,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
       {loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="empty">{filter === "follow" ? T("Nobody to follow up right now.", "Hakuna wa kufuatilia kwa sasa.") : T("No chats here yet.", "Hakuna chat hapa bado.")}</div> : (
         <div className="scroll"><table>
           <thead><tr><th>{T("Customer", "Mteja")}</th><th>{T("Source", "Chanzo")}</th><th>{T("What happened", "Kilichotokea")}</th><th className="n">{T("1st reply", "Jibu la 1")}</th><th>{T("Why / next step", "Kwa nini / hatua")}</th><th>{T("Action", "Kitendo")}</th></tr></thead>
-          <tbody>{rows.map((r) => <Row key={r.id} r={r} lang={lang} adName={r.ad_id ? adNames[r.ad_id] : undefined} ws={ws} onChange={refresh} />)}</tbody>
+          <tbody>{rows.map((r) => <Row key={r.id} r={r} lang={lang} adName={r.ad_id ? adNames[r.ad_id] : undefined} ws={ws} task={tasks[r.id]} onChange={refresh} />)}</tbody>
         </table></div>
       )}
     </section>
+    </>
   );
 }
 
@@ -124,7 +135,7 @@ const daysSince = (iso: string | null) => (iso ? Math.max(0, Math.floor((Date.no
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
-function Row({ r, lang, adName, ws, onChange }: { r: Outcome; lang: "sw" | "en"; adName?: string; ws: Workspace; onChange: () => void }) {
+function Row({ r, lang, adName, ws, task, onChange }: { r: Outcome; lang: "sw" | "en"; adName?: string; ws: Workspace; task?: FollowUpTask; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [amount, setAmount] = useState<string>(String(r.sale_amount ?? r.kito_amount ?? r.payment_amount ?? ""));
@@ -143,12 +154,32 @@ function Row({ r, lang, adName, ws, onChange }: { r: Outcome; lang: "sw" | "en";
     if (!amt) return setErr("Enter the amount paid.");
     setBusy(true); setErr("");
     const { error } = await supabase.from("sales").upsert({ workspace_id: ws.id, conversation_id: r.id, amount: amt, currency: ws.currency, provenance: "owner_confirmed", confirmed_by: (await supabase.auth.getUser()).data.user?.id }, { onConflict: "conversation_id" });
+    if (!error && task) await supabase.from("follow_up_tasks").update({ status: "done", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", task.id).eq("workspace_id", ws.id);
     setBusy(false); if (error) setErr(error.message); else onChange();
   }
   async function setOverride(v: "lost" | "open" | null) {
     setBusy(true); setErr("");
     if (r.sale_amount != null) await supabase.from("sales").delete().eq("conversation_id", r.id);
     const { error } = await supabase.from("conversations").update({ outcome_override: v }).eq("id", r.id);
+    if (!error && v === "lost" && task) await supabase.from("follow_up_tasks").update({ status: "dismissed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", task.id).eq("workspace_id", ws.id);
+    setBusy(false); if (error) setErr(error.message); else onChange();
+  }
+
+  async function createFollowUp() {
+    setBusy(true); setErr("");
+    const { data: user } = await supabase.auth.getUser();
+    const { error } = await supabase.from("follow_up_tasks").insert({
+      workspace_id: ws.id, conversation_id: r.id,
+      title: `Follow up with ${r.contact_name ?? "customer"}`,
+      draft: r.kito_next ?? null, due_at: new Date().toISOString(), created_by: user.user?.id,
+    });
+    setBusy(false); if (error) setErr(error.code === "23505" ? T("A follow-up task already exists.", "Tayari kuna kazi ya kufuatilia.") : error.message); else onChange();
+  }
+
+  async function updateTask(status: "done" | "dismissed") {
+    if (!task) return;
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("follow_up_tasks").update({ status, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", task.id).eq("workspace_id", ws.id);
     setBusy(false); if (error) setErr(error.message); else onChange();
   }
 
@@ -196,6 +227,18 @@ function Row({ r, lang, adName, ws, onChange }: { r: Outcome; lang: "sw" | "en";
           {r.kito_next && <div className="small" style={{ marginTop: 3 }}>→ {r.kito_next}</div>}
         </td>
         <td>
+          {task ? (
+            <div className="small">
+              <b>{task.title}</b>
+              {task.draft && <div className="muted" style={{ maxWidth: 220 }}>{T("Kito’s suggested next step: ", "Hatua inayopendekezwa na Kito: ")}{task.draft}</div>}
+              <div className="row" style={{ gap: 6, marginTop: 4 }}>
+                <button className="small" disabled={busy} onClick={() => updateTask("done")}>{T("Done", "Imekamilika")}</button>
+                <button className="small" disabled={busy} onClick={() => updateTask("dismissed")}>{T("Dismiss", "Ondoa")}</button>
+              </div>
+            </div>
+          ) : outcome !== "sold" && (temp === "hot" || temp === "warm") ? (
+            <button className="small" disabled={busy} onClick={createFollowUp}>{T("Create follow-up task", "Tengeneza kazi ya kufuatilia")}</button>
+          ) : null}
           {r.sale_provenance === "owner_confirmed" ? (
             <button className="small" disabled={busy} onClick={() => setOverride(null)}>{T("Undo sale", "Tengua mauzo")}</button>
           ) : (

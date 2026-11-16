@@ -45,15 +45,17 @@ export async function storeToken(db: SupabaseClient, name: string, token: string
 /** Recompute signals for conversations and save them. */
 export async function reanalyze(db: SupabaseClient, conversationIds: string[]) {
   for (const id of [...new Set(conversationIds)]) {
-    const { data: msgs } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", id).order("sent_at");
+    const { data: msgs, error: readError } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", id).order("sent_at");
+    if (readError) throw new Error(`could not load messages for analysis: ${readError.message}`);
     if (!msgs?.length) continue;
     const a = analyze(msgs as Msg[]);
-    await db.from("conversations").update({
+    const { error: updateError } = await db.from("conversations").update({
       ...a,
       started_at: msgs[0].sent_at,
       last_message_at: msgs[msgs.length - 1].sent_at,
       analyzed_at: new Date().toISOString(),
     }).eq("id", id);
+    if (updateError) throw new Error(`could not save conversation analysis: ${updateError.message}`);
   }
 }
 

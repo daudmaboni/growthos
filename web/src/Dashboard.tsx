@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
-import { supabase, Workspace, Outcome, AdPerf, fmt, tzs, pct, dur, median, daysAgo, L, amt, money } from "./lib";
+import { supabase, Workspace, Outcome, AdPerf, fmt, pct, dur, median, daysAgo, L, amt, money } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
+
+async function loadConversations(ws: string, from: string) {
+  const rows: Outcome[] = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase.from("conversation_outcomes").select("*")
+      .eq("workspace_id", ws).gte("started_at", from + "T00:00:00+03:00")
+      .order("started_at", { ascending: true }).order("id", { ascending: true }).range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    rows.push(...((page.data as Outcome[]) ?? []));
+    if (!page.data || page.data.length < 1000) break;
+  }
+  return { data: rows, error: null };
+}
 
 export default function Dashboard({ ws }: { ws: Workspace }) {
   const [days, setDays] = useState(14);
@@ -20,11 +33,11 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     const from = daysAgo(days - 1), to = daysAgo(0);
     Promise.all([
       supabase.rpc("ad_performance", { p_ws: ws.id, p_from: from, p_to: to }),
-      supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).gte("started_at", from + "T00:00:00+03:00").limit(5000),
+      loadConversations(ws.id, from),
       supabase.from("ad_insights_daily").select("day,spend,currency").eq("workspace_id", ws.id).gte("day", daysAgo(days * 2 - 1)).lte("day", to).limit(10000),
     ]).then(([a, c, d]) => {
       if (!live) return;
-      if (a.error || c.error) setErr((a.error || c.error)!.message);
+      if (a.error || c.error || d.error) setErr((a.error || c.error || d.error)!.message);
       setAds((a.data as AdPerf[]) ?? []); setConvs((c.data as Outcome[]) ?? []);
       const rows = (d.data as any[]) ?? [];
       setDaily(rows.map((r) => ({ day: r.day, spend: Number(r.spend) })));
@@ -38,10 +51,13 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     const spend = ads.reduce((s, a) => s + Number(a.spend), 0);
     const platformConv = ads.reduce((s, a) => s + Number(a.platform_conversations), 0);
     const adChats = convs.filter((c) => c.source === "ad");
-    const sold = convs.filter((c) => c.outcome === "sold");
-    const adSold = adChats.filter((c) => c.outcome === "sold");
-    const revenue = sold.reduce((s, c) => s + Number(c.sale_amount ?? c.kito_amount ?? c.payment_amount ?? 0), 0);
-    const adRevenue = adSold.reduce((s, c) => s + Number(c.sale_amount ?? c.kito_amount ?? c.payment_amount ?? 0), 0);
+    // Only rows in `sales` are confirmed purchases. Kito/payment signals stay
+    // visible as inferred outcomes but must not inflate revenue, ROAS, or CPA.
+    const isConfirmedSale = (c: Outcome) => c.sale_provenance === "owner_confirmed" || c.sale_provenance === "import";
+    const sold = convs.filter(isConfirmedSale);
+    const adSold = adChats.filter(isConfirmedSale);
+    const inferredSold = convs.filter((c) => c.outcome === "sold" && !isConfirmedSale(c));
+    const adRevenue = adSold.reduce((s, c) => s + Number(c.sale_amount ?? 0), 0);
     const frt = convs.map((c) => c.first_response_sec).filter((x): x is number => x != null);
     const warm = convs.filter((c) => (c.kito_temp ? c.kito_temp !== "cold" : c.warm) && c.outcome !== "sold");
     const warmNoFollow = warm.filter((c) => !c.followed_up);
@@ -49,10 +65,10 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     for (const c of convs) if (c.outcome !== "sold") for (const o of new Set([...(c.objections ?? []), ...(c.kito_objections ?? [])])) objections[o] = (objections[o] ?? 0) + 1;
     const stages: Record<string, number> = {};
     for (const c of convs) if (c.outcome === "lost" && c.stage) stages[c.stage] = (stages[c.stage] ?? 0) + 1;
-    const unconfirmed = convs.filter((c) => c.payment_signal && c.sale_provenance !== "owner_confirmed").length;
+    const unconfirmed = inferredSold.length;
     return {
       spend, platformConv, chats: convs.length, adChats: adChats.length, replied: convs.filter((c) => c.first_response_sec != null).length,
-      priced: convs.filter((c) => c.price_shared).length, sold: sold.length, adSold: adSold.length, revenue, adRevenue,
+      priced: convs.filter((c) => c.price_shared).length, sold: sold.length, inferredSold: inferredSold.length, adSold: adSold.length, adRevenue,
       conv: convs.length ? sold.length / convs.length : 0, adConv: adChats.length ? adSold.length / adChats.length : null,
       costPerChat: platformConv ? spend / platformConv : null, costPerSale: adSold.length ? spend / adSold.length : null,
       roas: spend && (adCur === ws.currency || ws.fx_rate) ? adRevenue / (spend * (adCur === ws.currency ? 1 : Number(ws.fx_rate))) : null, frtMedian: median(frt), over1h: frt.filter((x) => x > 3600).length,
@@ -81,9 +97,9 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
   const findings = useMemo(() => {
     const f: [string, string, string][] = [];
     if (m.spend && m.costPerChat && m.adConv != null && m.adConv < 0.2 && m.adChats >= 5)
-      f.push(["bad", T("Ads bring chats cheaply. Chats aren't turning into sales.", "Matangazo yanaleta chats kwa bei nafuu. Chats hazigeuki mauzo."),
-        T(`${money(m.costPerChat, adCur)} per chat, but only ${pct(m.adConv)} of ad chats paid. Fix the sales conversation before raising the budget.`,
-          `${money(m.costPerChat, adCur)} kwa chat, lakini ${pct(m.adConv)} tu ya chats za matangazo walilipa. Rekebisha mazungumzo ya mauzo kabla ya kuongeza bajeti.`)]);
+      f.push(["bad", T("Ads bring chats cheaply. Few have a recorded sale.", "Matangazo yanaleta chats kwa bei nafuu. Mauzo yaliyorekodiwa ni machache."),
+        T(`${money(m.costPerChat, adCur)} per chat, but only ${pct(m.adConv)} of ad chats have a recorded confirmed sale. Fix the sales conversation before raising the budget.`,
+          `${money(m.costPerChat, adCur)} kwa chat, lakini ${pct(m.adConv)} tu ya chats za matangazo zina mauzo yaliyothibitishwa. Rekebisha mazungumzo ya mauzo kabla ya kuongeza bajeti.`)]);
     if (m.warmNoFollow.length) f.push(["bad", T(`${m.warmNoFollow.length} warm leads have no follow-up`, `Wateja moto ${m.warmNoFollow.length} hawajafuatiliwa`),
       T(`They asked the price, raised a doubt or said "later", and heard nothing after going quiet.${m.soldAfterFollow ? ` ${m.soldAfterFollow} sales this period came after a follow-up.` : ""}`,
         `Waliuliza bei, walikuwa na wasiwasi au walisema "baadae", na hawakupata ujumbe baada ya kunyamaza.${m.soldAfterFollow ? ` Mauzo ${m.soldAfterFollow} kipindi hiki yalikuja baada ya ufuatiliaji.` : ""}`)]);
@@ -123,7 +139,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
           <div className="sub">
             <span><span className="dot" />{ads.filter((a) => Number(a.spend) > 0).length} {T("ads with spend", "matangazo yenye matumizi")}</span>
             <span>{fmt(m.chats)} {T("chats seen", "chats zimeonekana")}</span>
-            <span>{fmt(m.sold)} {T("sales", "mauzo")}</span>
+            <span>{fmt(m.sold)} {T("confirmed sales", "mauzo yaliyothibitishwa")}</span>
           </div>
         </div>
         <div className="row">
@@ -139,9 +155,9 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
         <div className="kpis">
           <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(m.spend, adCur)} n={m.spend} f={(x) => money(x, adCur)} s={`${fmt(m.platformConv)} ${T("chats (Meta)", "chats (Meta)")}`} />
           <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(m.costPerChat, adCur)} n={m.costPerChat} f={(x) => money(x, adCur)} s={T("What Ads Manager shows", "Kile Ads Manager inaonyesha")} />
-          <Kpi k={T("Cost per sale", "Gharama kwa mauzo")} v={money(m.costPerSale, adCur)} n={m.costPerSale} f={(x) => money(x, adCur)} s={`${m.adSold} ${T("sales from ad chats", "mauzo kutoka matangazo")}`} cls={m.costPerSale == null ? "" : "ok"} />
-          <Kpi k={T("Ad chats → paid", "Chats za matangazo → walilipa")} v={pct(m.adConv)} s={`${m.adSold} / ${m.adChats}`} cls={m.adConv != null && m.adConv < 0.15 ? "flag" : ""} />
-          <Kpi k={T("Return on ad spend", "Mapato kwa kila shilingi ya tangazo")} v={m.roas == null ? "–" : m.roas.toFixed(1) + "×"} s={m.roas == null && m.adRevenue > 0 ? T("Set the exchange rate in Connections", "Weka kiwango cha kubadilisha kwenye Connections") : tzs(m.adRevenue) + T(" revenue", " mapato")} />
+          <Kpi k={T("Cost per confirmed sale", "Gharama kwa mauzo yaliyothibitishwa")} v={money(m.costPerSale, adCur)} n={m.costPerSale} f={(x) => money(x, adCur)} s={`${m.adSold} ${T("confirmed sales linked to ad chats", "mauzo yaliyothibitishwa yaliyounganishwa na matangazo")}`} cls={m.costPerSale == null ? "" : "ok"} />
+          <Kpi k={T("Ad chats → confirmed sale", "Chat za matangazo → mauzo yaliyothibitishwa")} v={pct(m.adConv)} s={`${m.adSold} / ${m.adChats}`} cls={m.adConv != null && m.adConv < 0.15 ? "flag" : ""} />
+          <Kpi k={T("Return on ad spend", "Mapato kwa kila shilingi ya tangazo")} v={m.roas == null ? "–" : m.roas.toFixed(1) + "×"} s={m.roas == null && m.adRevenue > 0 ? T("Set the exchange rate in Connections", "Weka kiwango cha kubadilisha kwenye Connections") : money(m.adRevenue, ws.currency) + T(" revenue", " mapato")} />
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(m.frtMedian)} s={`${m.over1h} ${T("waited over 1 h", "zilisubiri > saa 1")}`} cls={m.frtMedian != null && m.frtMedian > 900 ? "flag" : ""} />
           <Kpi k={T("Warm leads, no follow-up", "Wateja moto bila ufuatiliaji")} v={fmt(m.warmNoFollow.length)} n={m.warmNoFollow.length} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${m.warm}`} cls={m.warmNoFollow.length ? "flag" : "ok"} />
         </div>
@@ -171,9 +187,9 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
         </section>
 
         <section className="card">
-          <h2>{T("Ads: chats vs paying customers", "Matangazo: chats dhidi ya wateja waliolipa")}</h2>
+          <h2>{T("Ads: chats vs confirmed paying customers", "Matangazo: chats dhidi ya wateja waliothibitishwa")}</h2>
           <div className="scroll"><table>
-            <thead><tr><th>#</th><th>Ad</th><th className="n">Spend ({adCur})</th><th className="n">Chats (Meta)</th><th className="n">Chats seen</th><th className="n">Price shared</th><th className="n">Paid</th><th className="n">Cost / sale</th></tr></thead>
+            <thead><tr><th>#</th><th>Ad</th><th className="n">Spend ({adCur})</th><th className="n">Chats (Meta)</th><th className="n">Chats seen</th><th className="n">Price shared</th><th className="n">Paid (confirmed)</th><th className="n">Cost / sale</th></tr></thead>
             <tbody>
               {ads.map((a, i) => (
                 <tr key={a.ad_id}>
@@ -181,12 +197,12 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
                   <td><b>{a.ad_name ?? a.ad_id}</b><div className="small muted">{a.campaign_name}</div></td>
                   <td className="n">{amt(Number(a.spend), adCur)}</td><td className="n">{fmt(a.platform_conversations)}</td><td className="n">{fmt(a.chats)}</td>
                   <td className="n">{fmt(a.priced)}</td><td className="n"><b>{fmt(a.sold)}</b></td>
-                  <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no sales", "hakuna mauzo")}</span> : "–") : amt(Number(a.spend) / Number(a.sold), adCur)}</td>
+                  <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no confirmed sales", "hakuna mauzo yaliyothibitishwa")}</span> : "–") : amt(Number(a.spend) / Number(a.sold), adCur)}</td>
                 </tr>
               ))}
             </tbody>
           </table></div>
-          <p className="small muted" style={{ margin: 0 }}>{T("\"Chats seen\" are chats GrowthOS linked to the ad through WhatsApp's ad referral. Sales are confirmed or detected payments.", "\"Chats seen\" ni chats ambazo GrowthOS imeziunganisha na tangazo kupitia WhatsApp. Mauzo ni malipo yaliyothibitishwa au kugunduliwa.")}</p>
+          <p className="small muted" style={{ margin: 0 }}>{T(`“Chats seen” are chats GrowthOS linked to the ad through WhatsApp’s ad referral. This is an observed referral link, not proof the ad caused a purchase. Cost per sale and revenue use only sales explicitly recorded in GrowthOS. ${m.inferredSold} additional chats are marked sold or detected but have no recorded sale amount, so they are excluded until a sale is recorded.`, `“Chats seen” ni chats ambazo GrowthOS imeziunganisha na tangazo kupitia WhatsApp. Huu ni uhusiano wa referral unaoonekana, si uthibitisho kuwa tangazo limesababisha ununuzi. Gharama kwa mauzo na mapato hutumia mauzo yaliyorekodiwa wazi kwenye GrowthOS pekee. Chats ${m.inferredSold} zaidi zimewekewa alama ya kuuzwa au malipo kugunduliwa, lakini hazina kiasi kilichorekodiwa; hazijahesabiwa hadi mauzo yaingizwe.`)}</p>
         </section>
 
         <div className="two">
