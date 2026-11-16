@@ -1,7 +1,12 @@
 // WhatsApp Cloud API webhook (Coexistence-aware).
 // Handles: messages (customer → business, incl. CTWA referral), smb_message_echoes (sent from the
 // Business app on the phone), history (6-month backfill), smb_app_state_sync (contact names).
-import { admin, reanalyze } from "../_shared/db.ts";
+//
+// Durability: every verified change is saved to raw_events BEFORE Meta gets a 200. Processing
+// runs after the response and is idempotent; failed events are retried by the scheduled job
+// (bounded by max_attempts) or replayed on request by a workspace owner/admin.
+import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
+import { eventKey, safeError, isRetryable } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
@@ -48,11 +53,12 @@ async function conversationFor(ctx: Ctx, waId: string, name?: string | null) {
 
 async function saveMessage(ctx: Ctx, convId: string, m: any, direction: "in" | "out", origin: string) {
   if (m.type === "reaction" || m.type === "unsupported" || !m.id) return;
+  // Upsert on the provider message id: a replayed event never creates a second copy.
   const { error } = await ctx.db.from("messages").upsert({
     id: m.id, workspace_id: ctx.ws, conversation_id: convId, direction, origin,
     sent_at: new Date(Number(m.timestamp) * 1000).toISOString(), type: m.type, body: textOf(m), raw: m,
   }, { onConflict: "id", ignoreDuplicates: true });
-  if (error) throw error;
+  if (error) throw new Error("could not save message");
   ctx.touched.push(convId);
 }
 
@@ -74,10 +80,10 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
           ad_id: r.source_type === "ad" ? r.source_id : null,
           ctwa_clid: r.ctwa_clid ?? null, referral: r,
         }).eq("id", conv.id);
-        if (error) throw error;
+        if (error) throw new Error("could not save ad referral");
       } else if (conv.source === "unknown" && !conv.started_at) {
         const { error } = await db.from("conversations").update({ source: "organic" }).eq("id", conv.id).eq("source", "unknown");
-        if (error) throw error;
+        if (error) throw new Error("could not save conversation source");
       }
       await saveMessage(ctx, conv.id, m, "in", "webhook");
     }
@@ -90,7 +96,7 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
     for (const h of value.history ?? []) {
       if (h.errors?.length) {
         const { error } = await db.from("wa_numbers").update({ history_status: "declined" }).eq("phone_number_id", pnid);
-        if (error) throw error;
+        if (error) throw new Error("could not save history status");
         continue;
       }
       for (const th of h.threads ?? []) {
@@ -101,26 +107,22 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
       }
       const progress = Number(h.metadata?.progress ?? 0);
       const { error } = await db.from("wa_numbers").update({ history_status: progress >= 100 ? "complete" : "receiving" }).eq("phone_number_id", pnid);
-      if (error) throw error;
+      if (error) throw new Error("could not save history progress");
     }
   } else if (field === "smb_app_state_sync") {
     for (const s of value.state_sync ?? []) {
       if (s.type === "contact" && s.contact?.phone_number && s.action !== "remove") {
         const { error } = await db.from("contacts").upsert({ workspace_id: ctx.ws, wa_id: s.contact.phone_number.replace(/\D/g, ""), name: s.contact.full_name ?? s.contact.first_name ?? null }, { onConflict: "workspace_id,wa_id" });
-        if (error) throw error;
+        if (error) throw new Error("could not save contact name");
       }
     }
   }
+  // Signals are recomputed from the full message history, so a partial earlier run is repaired here.
   if (ctx.touched.length) await reanalyze(db, ctx.touched);
 }
 
-async function eventKey(change: unknown) {
-  const data = new TextEncoder().encode(JSON.stringify(change));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
-  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function processStored(db: ReturnType<typeof admin>, id: number) {
+/** Claim one saved event and process it. Returns true when it is now processed. */
+async function processStored(db: SupabaseClient, id: number) {
   const { data: claimed, error: claimError } = await db.rpc("claim_raw_event", { p_id: id });
   if (claimError) throw new Error("could not claim saved webhook event");
   if (!claimed) return false;
@@ -134,8 +136,14 @@ async function processStored(db: ReturnType<typeof admin>, id: number) {
     if (doneError) throw new Error("could not mark webhook event processed");
     return true;
   } catch (e) {
-    const message = String((e as Error).message ?? "webhook processing failed").slice(0, 500);
-    await db.from("raw_events").update({ status: "failed", error: message, last_error: message }).eq("id", id);
+    const message = safeError(e);
+    // Transient errors stay inside the automatic retry budget; permanent ones wait for a replay.
+    const patch: Record<string, unknown> = { status: "failed", error: message, last_error: message };
+    if (!isRetryable(message)) {
+      const { data: cur } = await db.from("raw_events").select("max_attempts").eq("id", id).single();
+      if (cur) patch.attempts = cur.max_attempts;
+    }
+    await db.from("raw_events").update(patch).eq("id", id);
     console.error("webhook event failed", id, message);
     return false;
   }
@@ -148,8 +156,8 @@ async function persistChanges(raw: string) {
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value ?? {};
-      if (change.field === "messages" && !value.messages) continue; // delivery status is not needed for analysis
-      const key = await eventKey(change);
+      if (change.field === "messages" && !value.messages) continue; // delivery statuses are not needed for analysis
+      const key = await eventKey(entry.id, change);
       const phoneNumberId = value.metadata?.phone_number_id;
       let workspaceId: string | null = null;
       if (phoneNumberId) {
@@ -164,7 +172,7 @@ async function persistChanges(raw: string) {
       if (insertError) throw new Error("could not persist WhatsApp event");
       if (inserted?.length) { ids.push(inserted[0].id); continue; }
 
-      // A duplicate delivery is safe to ignore only after successful processing.
+      // Provider retry of a change we already hold: only skip it if it was fully processed.
       const { data: existing, error } = await db.from("raw_events").select("id,processed_at,status").eq("provider", "whatsapp").eq("event_key", key).single();
       if (error || !existing) throw new Error("could not recover saved WhatsApp event");
       if (!existing.processed_at && existing.status !== "processing") ids.push(existing.id);
@@ -173,8 +181,22 @@ async function persistChanges(raw: string) {
   return { db, ids };
 }
 
+async function retryBatch(db: SupabaseClient, ws: string | null, limit: number) {
+  const staleBefore = new Date(Date.now() - 5 * 60_000).toISOString();
+  let retryable = db.from("raw_events").select("id").eq("provider", "whatsapp").is("processed_at", null).in("status", ["pending", "failed"]).order("received_at").limit(limit);
+  let stale = db.from("raw_events").select("id").eq("provider", "whatsapp").is("processed_at", null).eq("status", "processing").lt("last_attempt_at", staleBefore).order("received_at").limit(limit);
+  if (ws) { retryable = retryable.eq("workspace_id", ws); stale = stale.eq("workspace_id", ws); }
+  const [a, b] = await Promise.all([retryable, stale]);
+  if (a.error || b.error) throw new Error("retry query failed");
+  const rows = [...(a.data ?? []), ...(b.data ?? [])].slice(0, limit);
+  let processed = 0;
+  for (const row of rows) if (await processStored(db, row.id)) processed++;
+  return { processed, checked: rows.length };
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method === "GET") {
     if (url.searchParams.get("hub.mode") === "subscribe" && VERIFY_TOKEN && url.searchParams.get("hub.verify_token") === VERIFY_TOKEN) {
       return new Response(url.searchParams.get("hub.challenge") ?? "", { status: 200 });
@@ -183,38 +205,40 @@ Deno.serve(async (req) => {
   }
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
 
-  // Scheduled recovery path. The shared secret must be rotated because it was
-  // committed to the public repository; this path is never exposed to browsers.
+  // ---- Scheduled recovery (shared secret; never exposed to browsers) ----
   const cronSecret = Deno.env.get("CRON_SECRET");
   if (cronSecret && req.headers.get("x-cron-secret") === cronSecret) {
     const body = await req.json().catch(() => ({}));
     if (body.action !== "retry_failed") return new Response("forbidden", { status: 403 });
-    const db = admin();
-    const staleBefore = new Date(Date.now() - 5 * 60_000).toISOString();
-    const [retryable, stale] = await Promise.all([
-      db.from("raw_events").select("id").eq("provider", "whatsapp").is("processed_at", null)
-        .in("status", ["pending", "failed"]).order("received_at").limit(50),
-      db.from("raw_events").select("id").eq("provider", "whatsapp").is("processed_at", null)
-        .eq("status", "processing").lt("last_attempt_at", staleBefore).order("received_at").limit(50),
-    ]);
-    if (retryable.error || stale.error) return new Response("retry query failed", { status: 500 });
-    const rows = [...(retryable.data ?? []), ...(stale.data ?? [])].slice(0, 50);
-    let processed = 0;
-    for (const row of rows) if (await processStored(db, row.id)) processed++;
-    return new Response(JSON.stringify({ processed, checked: rows.length }), { status: 200, headers: { "Content-Type": "application/json" } });
+    try { return json(await retryBatch(admin(), null, 50)); }
+    catch { return new Response("retry failed", { status: 500 }); }
   }
 
+  // ---- Controlled replay by a workspace owner/admin (user JWT) ----
+  if (req.headers.get("content-type")?.includes("application/json") && req.headers.get("authorization")?.startsWith("Bearer ") && !req.headers.get("x-hub-signature-256")) {
+    const body = await req.json().catch(() => ({}));
+    if (body.action !== "replay") return json({ error: "unknown action" }, 400);
+    const ws = String(body.workspace_id ?? "");
+    if (!ws) return json({ error: "workspace_id required" }, 400);
+    const { data: ok } = await userClient(req).rpc("can_manage", { ws });
+    if (!ok) return json({ error: "Only a workspace owner or admin can replay events." }, 403);
+    const db = admin();
+    const { data: requeued, error } = await db.rpc("svc_requeue_failed_events", { p_ws: ws, p_limit: 200 });
+    if (error) return json({ error: "could not requeue events" }, 500);
+    try { return json({ requeued: requeued ?? 0, ...(await retryBatch(db, ws, 50)) }); }
+    catch { return json({ error: "replay failed part-way; remaining events stay queued for the scheduled retry" }, 500); }
+  }
+
+  // ---- Meta delivery ----
   const raw = await req.text();
   if (!(await validSignature(raw, req.headers.get("x-hub-signature-256")))) return new Response("bad signature", { status: 401 });
-  // Persist first; only acknowledge once the event is durable. Processing can
-  // then continue in the background and be replayed by the scheduled worker.
-  let saved: { db: ReturnType<typeof admin>; ids: number[] };
+  let saved: { db: SupabaseClient; ids: number[] };
   try { saved = await persistChanges(raw); }
   catch (e) {
-    console.error("webhook persistence failed", String((e as Error).message).slice(0, 200));
-    return new Response("temporary persistence failure", { status: 500 });
+    console.error("webhook persistence failed", safeError(e));
+    return new Response("temporary persistence failure", { status: 500 }); // Meta will retry; nothing was acknowledged
   }
   // @ts-ignore EdgeRuntime is provided by Supabase
-  EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id))));
+  EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id).catch((e) => console.error("background processing", safeError(e))))));
   return new Response("ok", { status: 200 });
 });

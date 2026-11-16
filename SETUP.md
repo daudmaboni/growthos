@@ -11,7 +11,24 @@ The existing pilot has a live web app and Supabase project. Repository changes a
 
 ## Deploy repository updates
 
-Before using the updated MVP, apply migrations `0001` through `0009` in order (skip versions already recorded by your Supabase project), deploy the updated `ads-sync`, `meta-connect`, and `wa-webhook` functions plus the new `sales-import` function, then deploy the `web/` app to Netlify. Confirm the scheduled `ads-sync` request uses the `sync_all` action shown above. Do not run these steps against production until the rotated secrets and migration have been reviewed.
+Nothing in this repository deploys itself. To put the MVP live (after review):
+
+1. **Database** — apply migrations in order, skipping versions already recorded by the project. `0010_growth_mvp.sql` is new: it copies existing `sales` rows into `orders` and renames the old table to `sales_legacy_v01` (kept for verification; drop it later by hand if you want). Back up first (Database → Backups) and apply on a branch/staging project before production.
+   ```
+   supabase link --project-ref <ref>
+   supabase db push            # or paste the file into the SQL editor
+   ```
+2. **Edge Functions** — deploy the changed and new functions. `wa-webhook` must stay public to Meta (no JWT check); the others keep the default JWT check.
+   ```
+   supabase functions deploy wa-webhook --no-verify-jwt
+   supabase functions deploy ads-sync meta-connect kito csv-import chat-import
+   supabase functions delete sales-import     # replaced by csv-import
+   ```
+3. **Web app** — `cd web && npm ci && npm run build`, then deploy `web/dist` to Netlify (or link the site to the repo with base directory `web`).
+4. Confirm the scheduled `ads-sync` job sends `{"action":"sync_all","days":30}` with the `x-cron-secret` header (see the security section below). Each scheduled run also retries up to 50 saved WhatsApp events that are pending or failed.
+
+### Roles after migration 0010
+Existing members keep their `memberships.role`. Owners/admins can change settings, connect accounts and replay webhook events; analysts can record orders, import CSVs, work tasks and edit the business profile; viewers read only. Check `select user_id, role from memberships;` after migrating.
 
 ---
 
@@ -76,10 +93,23 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
 
 ## Known limits of v0.1
 - Only people with a role on the Meta app can connect (development mode). Opening to other businesses needs Meta App Review + Tech Provider verification later.
-- Sales are detected from payment messages ("nimetuma", M-Pesa confirmations) and can be confirmed or corrected in **Chats**.
+- Payments are *detected* from messages ("nimetuma", M-Pesa confirmations, screenshots) and by Kito, but only count as sales once an order is recorded in **Chats** or imported by CSV.
 - Chats from before an ad referral existed (old history) show as source "unknown". Per-ad cost per sale is accurate for chats started after connecting.
-- Not built yet: AI-written weekly report, sending sales back to Meta (Conversions API), team members.
+- The weekly diagnosis is rule-based, not AI-written. Not built yet: sending sales back to Meta (Conversions API), inviting team members from the UI (add rows to `memberships` for now), Facebook/Instagram content insights (needs extra Meta permissions and App Review; manual post records work today).
 
 ## Security follow-up after the public release
 
-The prior `CRON_SECRET` and `META_VERIFY_TOKEN` values were committed to this repository. Treat both as compromised even after removing them from the current files: generate replacements, update Supabase Edge Function secrets, update every scheduled Edge Function request that uses `CRON_SECRET` (including `ads-sync`, `kito`, and any `chat-import` reanalysis job), and update the Meta webhook configuration to use the new verification token. The scheduled all-workspace `ads-sync` request must send `{"action":"sync_all","days":30}`. Redeploy the Edge Functions after updating secrets and verify one scheduled sync and one Meta webhook verification. Do not put replacement values in GitHub, chat, screenshots, or deployment logs.
+The prior `CRON_SECRET` and `META_VERIFY_TOKEN` values were committed to this repository while it was public. Removing them from the current files does **not** remove them from Git history, forks or clones: treat both as compromised.
+
+**Rotate `CRON_SECRET`**
+1. Generate a new value on your own machine: `openssl rand -hex 32`. Do not paste it into GitHub, chat, screenshots or logs.
+2. Supabase → Edge Functions → Secrets → set `CRON_SECRET` to the new value (or `supabase secrets set CRON_SECRET=...` from a terminal whose history you then clear).
+3. Update every scheduled request that sends `x-cron-secret`: Supabase → Integrations → Cron (or `select jobid, jobname, schedule from cron.job;` in the SQL editor). For each job calling `ads-sync`, `kito` or `chat-import`, edit it so the header uses the new value. If the job reads the value from Vault (`vault.decrypted_secrets`), update that Vault secret instead. The `ads-sync` body must be `{"action":"sync_all","days":30}`.
+4. Verify: in SQL run `select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;` after the next run, or trigger once by hand with `curl -X POST <project-url>/functions/v1/ads-sync -H "x-cron-secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{"action":"sync_all","days":1}'` (expect `{"synced":[...]}`), and confirm **Connections** shows a new "Last successful sync". A request with the old value must now get 401/403.
+
+**Rotate `META_VERIFY_TOKEN`**
+1. Generate a new value (`openssl rand -hex 32`) and set it in Supabase Edge Function secrets as `META_VERIFY_TOKEN`.
+2. Meta App Dashboard → WhatsApp → Configuration → Webhook → Edit → paste the same new value as the Verify token → **Verify and save**. Meta calls `wa-webhook` with a GET; success means the function returned the challenge.
+3. Verify: `curl "<project-url>/functions/v1/wa-webhook?hub.mode=subscribe&hub.verify_token=<old value>&hub.challenge=x"` must return 403, and the new value must return `x`. Then send a test WhatsApp message to the connected number and confirm **Connections → Webhook events** shows a new `processed` event.
+
+**Also worth checking**: rotating `META_APP_SECRET` (App Dashboard → Settings → Basic → Reset) if you have any doubt it was ever shared, and reviewing GitHub → Settings → Secret scanning alerts. Do not rewrite public Git history without deciding that deliberately; it does not un-leak a value that was already public.

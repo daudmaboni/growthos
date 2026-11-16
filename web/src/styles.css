@@ -159,3 +159,23 @@ nav.subtabs a { padding: 7px 18px; }
 .field .row input { width: auto; }
 .saverow { margin-top: 4px; }
 .saverow .savemsg { font-size: 13.5px; min-height: 1.4em; }
+
+/* ---- provenance badges, confidence chips, queues (MVP) ---- */
+.src { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); background: var(--raised); vertical-align: middle; }
+.src-confirmed { color: var(--good); border-color: var(--good); } .src-inferred { color: var(--warn); border-color: var(--warn); border-style: dashed; }
+.src-matched { color: var(--c2); border-color: var(--c2); } .src-platform { color: var(--ink-2); } .src-imported { color: var(--c4); border-color: var(--c4); }
+.chip.conf-high { border-color: var(--good); } .chip.conf-medium { border-color: var(--warn); } .chip.conf-low { border-style: dashed; }
+.dot.off { background: var(--muted); } .dot.off::after { display: none; }
+.evidence { display: grid; gap: 4px; padding: 8px 10px; background: var(--paper); border-radius: var(--r-sm); border-left: 3px solid var(--line-2); font-size: 13px; }
+.evidence q { quotes: "“" "”"; }
+.queue { display: grid; gap: 10px; }
+.qitem { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) auto; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--raised); align-items: start; }
+.qitem textarea { width: 100%; min-height: 90px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 8px 10px; resize: vertical; }
+.draft-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--warn); }
+.stepper { display: flex; gap: 6px; flex-wrap: wrap; } .stepper span { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); } .stepper span.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.map label { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.rowstat { font-size: 12px; padding: 1px 7px; border-radius: 999px; font-weight: 700; }
+.rowstat.ready { background: var(--good-soft); color: var(--good); } .rowstat.duplicate { background: var(--raised); color: var(--muted); border: 1px solid var(--line); } .rowstat.rejected { background: var(--bad-soft); color: var(--bad); }
+textarea { font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 9px 12px; max-width: 100%; }
+@media (max-width: 760px) { .qitem { grid-template-columns: 1fr; } }

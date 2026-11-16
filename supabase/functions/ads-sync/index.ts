@@ -83,11 +83,13 @@ Deno.serve(async (req) => {
   }
   if (isCron && cronSecret) {
     // Reclaim webhook events that were durably saved but failed during background processing.
-    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/wa-webhook`, {
+    const retry = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/wa-webhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret },
       body: JSON.stringify({ action: "retry_failed" }),
     }).catch(() => {});
+    // @ts-ignore EdgeRuntime is provided by Supabase; keeps the request alive after we respond
+    EdgeRuntime.waitUntil(retry);
   }
   return json({ synced: results });
 });

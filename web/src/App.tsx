@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, Workspace } from "./lib";
+import { supabase, Workspace, WS_COLUMNS, Role } from "./lib";
 import Dashboard from "./Dashboard";
 import Chats from "./Chats";
 import Connect from "./Connect";
 import Settings from "./Settings";
+import Report from "./Report";
+import Actions from "./Actions";
+import Content from "./Content";
 import Logo from "./Logo";
 
-type View = "dashboard" | "chats" | "connect" | "settings";
+type View = "dashboard" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
+const VIEWS: View[] = ["dashboard", "report", "actions", "chats", "content", "connect", "settings"];
 const viewFromHash = (): View => {
   const h = location.hash.replace("#", "").split("/")[0];
-  return h === "chats" || h === "connect" || h === "settings" ? h : "dashboard";
+  return (VIEWS as string[]).includes(h) ? (h as View) : "dashboard";
 };
 
 export default function App() {
@@ -47,8 +51,11 @@ export default function App() {
 
   useEffect(() => {
     if (!session) { setWs(undefined); return; }
-    supabase.from("workspaces").select("id,name,currency,language,unit_cost,fx_rate").order("created_at").limit(1)
-      .then(({ data }) => setWs((data?.[0] as Workspace) ?? null));
+    supabase.from("workspaces").select(WS_COLUMNS).order("created_at").limit(1).then(async ({ data }) => {
+      const w = (data?.[0] as unknown as Workspace) ?? null;
+      if (w) { const { data: role } = await supabase.rpc("member_role", { ws: w.id }); w.role = (role as Role) ?? "viewer"; }
+      setWs(w);
+    });
   }, [session]);
 
   if (session === undefined) return <div className="center muted">Loading…</div>;
@@ -62,7 +69,10 @@ export default function App() {
         <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><h1>GrowthOS</h1></a><span className="ws">{ws.name}</span></div>
         <nav className="tabs" aria-label="Sections">
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
+          <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>
+          <a href="#actions" className={view === "actions" ? "on" : ""}>{ws.language === "sw" ? "Vitendo" : "Actions"}</a>
           <a href="#chats" className={view === "chats" ? "on" : ""}>Chats</a>
+          <a href="#content" className={view === "content" ? "on" : ""}>{ws.language === "sw" ? "Maudhui" : "Content"}</a>
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
         </nav>
         <div className="actions">
@@ -74,7 +84,10 @@ export default function App() {
         </div>
       </header>
       {view === "dashboard" && <Dashboard ws={ws} />}
+      {view === "report" && <Report ws={ws} />}
+      {view === "actions" && <Actions ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
+      {view === "content" && <Content ws={ws} />}
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
     </div>
@@ -141,8 +154,8 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
     e.preventDefault(); setErr("");
     const { data: id, error } = await supabase.rpc("create_workspace", { p_name: name.trim() });
     if (error) return setErr(error.message);
-    const { data } = await supabase.from("workspaces").select("id,name,currency,language,unit_cost,fx_rate").eq("id", id).single();
-    onDone(data as Workspace);
+    const { data } = await supabase.from("workspaces").select(WS_COLUMNS).eq("id", id).single();
+    onDone({ ...(data as unknown as Workspace), role: "owner" });
   }
   return (
     <div className="center">

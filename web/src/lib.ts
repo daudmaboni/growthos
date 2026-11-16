@@ -13,7 +13,12 @@ export async function callFn<T = any>(name: string, body: Record<string, unknown
   return data as T;
 }
 
-export type Workspace = { id: string; name: string; currency: string; language: "sw" | "en"; unit_cost: number | null; fx_rate: number | null };
+export type Role = "owner" | "admin" | "analyst" | "viewer";
+export type Workspace = { id: string; name: string; currency: string; language: "sw" | "en"; unit_cost: number | null; fx_rate: number | null;
+  timezone: string; follow_up_hours: number; conversion_window_days: number; role?: Role };
+export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,timezone,follow_up_hours,conversion_window_days";
+export const canEdit = (ws: Workspace) => ws.role == null || ws.role !== "viewer";
+export const canManage = (ws: Workspace) => ws.role === "owner" || ws.role === "admin";
 
 export type Outcome = {
   id: string; contact_name: string | null; contact_id: string; started_at: string | null; last_message_at: string | null;
@@ -21,11 +26,27 @@ export type Outcome = {
   replied_after_price: boolean; payment_signal: boolean; payment_amount: number | null; objections: string[];
   followed_up: boolean; warm: boolean; stage: string | null; auto_outcome: string | null; outcome_override: string | null;
   label: string | null; kito_outcome: string | null; kito_label: string | null; kito_amount: number | null; kito_objections: string[] | null; kito_tags: string[] | null; kito_temp: "hot" | "warm" | "cold" | null; kito_blocker: string | null; last_dir: "in" | "out" | null; kito_summary: string | null; kito_next: string | null; kito_confidence: string | null; kito_checked_at: string | null; kito_error: string | null; outcome: string | null; sale_amount: number | null; sale_provenance: string | null;
+  kito_evidence: string[] | null; override_by: string | null; override_at: string | null; override_note: string | null;
+  paid_orders: number; first_paid_at: string | null; last_paid_at: string | null; last_out_at: string | null; pay_instructions: boolean;
+};
+
+export type Order = {
+  id: string; workspace_id: string; conversation_id: string | null; ad_id: string | null; amount: number; discount: number; refund_amount: number; currency: string;
+  status: "pending" | "paid" | "refunded" | "cancelled"; fulfillment_status: "not_applicable" | "not_shipped" | "shipped" | "delivered" | "returned";
+  product: string | null; notes: string | null; occurred_at: string; paid_at: string | null; provenance: "manual" | "csv_import" | "provider" | "inferred";
+  inferred_from: string | null; external_ref: string | null; created_by: string | null; updated_by: string | null; created_at: string; updated_at: string;
+};
+export const orderNet = (o: Pick<Order, "amount" | "discount" | "refund_amount">) => Number(o.amount) - Number(o.discount) - Number(o.refund_amount);
+
+export type Task = {
+  id: string; conversation_id: string; title: string; draft: string | null; due_at: string | null; status: "open" | "snoozed" | "done" | "dismissed";
+  assigned_to: string | null; snoozed_until: string | null; source: "manual" | "queue"; draft_source: "kito" | "manual" | "edited" | null;
+  draft_edited_at: string | null; created_by: string | null; created_at: string; updated_at: string; completed_at: string | null;
 };
 
 export type AdPerf = {
-  ad_id: string; ad_name: string | null; campaign_name: string | null; spend: number; platform_conversations: number;
-  chats: number; priced: number; sold: number; revenue: number; cost_per_sale: number | null;
+  ad_id: string; ad_name: string | null; campaign_name: string | null; spend: number; impressions: number; clicks: number; platform_conversations: number;
+  chats: number; replied: number; priced: number; payment_signals: number; sold: number; revenue: number; cost_per_sale: number | null;
 };
 
 export const fmt = (n: number | null | undefined) => (n == null || !isFinite(n) ? "–" : Math.round(n).toLocaleString("en-US"));
@@ -38,9 +59,21 @@ export const median = (a: number[]) => {
   const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-export const daysAgo = (n: number) => {
-  const d = new Date(Date.now() - n * 864e5);
-  return d.toISOString().slice(0, 10);
+export const daysAgo = (n: number, tz?: string) => localDay(new Date(Date.now() - n * 864e5), tz);
+/** Calendar day (YYYY-MM-DD) of an instant in the workspace timezone. */
+export const localDay = (d: Date | string | number, tz = "Africa/Dar_es_Salaam") => {
+  const date = typeof d === "string" || typeof d === "number" ? new Date(d) : d;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    return `${get("year")}-${get("month")}-${get("day")}`;
+  } catch { return date.toISOString().slice(0, 10); }
+};
+export const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "–");
+export const ago = (iso: string | null | undefined) => {
+  if (!iso) return "–";
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 };
 
 // Bilingual labels for stored codes
@@ -53,6 +86,9 @@ export const L = {
     temp: { hot: "Hot", warm: "Warm", cold: "Cold" } as Record<string, string>,
     blocker: { price: "Price", think: "Still deciding", money: "No money now", trust: "Needs proof / trust", delivery: "Distance / delivery", business_slow: "We replied late" } as Record<string, string>,
     label: { new: "New", talking: "Talking", priced: "Price given", awaiting_payment: "Awaiting payment", paid: "Paid", shipped: "Shipped", received: "Received", using: "Using product" } as Record<string, string>,
+    provenance: { manual: "Confirmed by you", csv_import: "Imported (CSV)", provider: "From provider", inferred: "Inferred" } as Record<string, string>,
+    orderStatus: { pending: "Pending", paid: "Paid", refunded: "Refunded", cancelled: "Cancelled" } as Record<string, string>,
+    fulfillment: { not_applicable: "–", not_shipped: "Not shipped", shipped: "Shipped", delivered: "Delivered", returned: "Returned" } as Record<string, string>,
   },
   sw: {
     stage: { no_reply: "Hakujibiwa", before_price: "Aliondoka kabla ya bei", silent_after_price: "Kimya baada ya bei", after_price_talk: "Aliacha baada ya bei", paid: "Amelipa" } as Record<string, string>,
@@ -62,6 +98,9 @@ export const L = {
     temp: { hot: "Moto", warm: "Vuguvugu", cold: "Baridi" } as Record<string, string>,
     blocker: { price: "Bei", think: "Bado anafikiria", money: "Hana pesa sasa", trust: "Anahitaji uhakika", delivery: "Umbali / usafirishaji", business_slow: "Tulichelewa kujibu" } as Record<string, string>,
     label: { new: "Mpya", talking: "Mazungumzo", priced: "Amepewa bei", awaiting_payment: "Anasubiri malipo", paid: "Amelipa", shipped: "Ametumiwa mzigo", received: "Amepokea", using: "Anatumia dawa" } as Record<string, string>,
+    provenance: { manual: "Umethibitisha wewe", csv_import: "Imeingizwa (CSV)", provider: "Kutoka mfumo", inferred: "Makisio" } as Record<string, string>,
+    orderStatus: { pending: "Inasubiri", paid: "Imelipwa", refunded: "Imerudishwa pesa", cancelled: "Imefutwa" } as Record<string, string>,
+    fulfillment: { not_applicable: "–", not_shipped: "Haijatumwa", shipped: "Imetumwa", delivered: "Imefika", returned: "Imerudishwa" } as Record<string, string>,
   },
 };
 
