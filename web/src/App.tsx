@@ -66,7 +66,7 @@ export default function App() {
   return (
     <div className="shell" ref={shellRef}>
       <header className="topbar">
-        <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><h1>GrowthOS</h1></a><span className="ws">{ws.name}</span></div>
+        <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>GrowthOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <nav className="tabs" aria-label="Sections">
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>

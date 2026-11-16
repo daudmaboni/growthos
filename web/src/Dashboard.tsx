@@ -67,7 +67,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     <div className="shell-grid" ref={pageRef}>
       <div className="hero">
         <div style={{ display: "grid", gap: 4 }}>
-          <h2>{greeting(lang)}</h2>
+          <h2>{greeting(lang, ws.timezone)}</h2>
           <div className="sub">
             <span><span className={"dot" + (adsConn.length ? "" : " off")} />{adsConn.length ? `${T("Ads synced", "Matangazo yamesawazishwa")} ${ago(lastSync)}` : T("Ad account not connected", "Akaunti ya matangazo haijaunganishwa")}</span>
             <span>{waConn.length ? `WhatsApp ${T("connected", "imeunganishwa")}` : T("WhatsApp: chat uploads only", "WhatsApp: chats zilizopakiwa tu")}</span>
@@ -87,11 +87,11 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
       ) : (<>
         <div className="kpis">
           <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(mx.spend.value, adCur)} n={mx.spend.value} f={(x) => money(x, adCur)} s={`${fmt(mx.platformConversations.value)} ${T("chats (Meta)", "chats (Meta)")}`} d={delta(mx.spend, prev.spend)} src={mx.spend.provenance} title={D("spend")} />
-          <Kpi k={T("Cost per chat (Meta)", "Gharama kwa chat (Meta)")} v={money(mx.costPerPlatformConversation.value, adCur)} n={mx.costPerPlatformConversation.value} f={(x) => money(x, adCur)} s={T("What Ads Manager shows", "Kile Ads Manager inaonyesha")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
+          <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(mx.costPerPlatformConversation.value, adCur)} n={mx.costPerPlatformConversation.value} f={(x) => money(x, adCur)} s={T("As in Ads Manager", "Kama Ads Manager")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
           <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(mx.costPerQualifiedInquiry.value, adCur)} s={mx.costPerQualifiedInquiry.value == null ? T("No ad chats with a price yet", "Bado hakuna chat za tangazo zilizopewa bei") : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
           <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(mx.costPerAttributedSale.value, adCur)} n={mx.costPerAttributedSale.value} f={(x) => money(x, adCur)} s={`${mx.attributedAdSales.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}`} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
-          <Kpi k={T("Revenue (confirmed)", "Mapato (yaliyothibitishwa)")} v={money(mx.revenue.value, ws.currency)} n={mx.revenue.value} f={(x) => money(x, ws.currency)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")} />
-          <Kpi k={T("Return on ad spend (matched)", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio") : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(mx.attributedRevenue.value, ws.currency) + T(" attributed revenue", " mapato yaliyounganishwa")} src="matched" title={D("returnOnAdSpend")} />
+          <Kpi k={T("Revenue", "Mapato")} v={money(mx.revenue.value, ws.currency)} n={mx.revenue.value} f={(x) => money(x, ws.currency)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")} />
+          <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio") : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(mx.attributedRevenue.value, ws.currency) + T(" attributed revenue", " mapato yaliyounganishwa")} src="matched" title={D("returnOnAdSpend")} />
           <Kpi k={T("Contribution", "Faida ya mchango")} v={money(mx.contribution.value, ws.currency)} s={mx.contribution.value == null ? (mx.contribution.note === "needs exchange rate" ? T("Needs the exchange rate", "Inahitaji kiwango cha kubadilisha") : mx.contribution.note === "no paid orders in period" ? T("No paid orders this period", "Hakuna oda zilizolipwa") : T("Set cost per order in Settings or import expenses", "Weka gharama kwa oda au uingize matumizi")) : T("after ad spend and costs", "baada ya matangazo na gharama")} src="derived" title={D("contribution")} />
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(mx.medianFirstReply.value)} s={`${mx.over1h.value} ${T("waited over 1 h", "zilisubiri > saa 1")}${mx.noReply.value ? ` · ${mx.noReply.value} ${T("no reply", "hazikujibiwa")}` : ""}`} cls={mx.medianFirstReply.value != null && mx.medianFirstReply.value > 900 ? "flag" : ""} src="observed" />
           <Kpi k={T("Warm, waiting for follow-up", "Wenye nia, wanasubiri ufuatiliaji")} v={fmt(mx.warmNoFollowUp.value)} n={mx.warmNoFollowUp.value} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${mx.warmNoFollowUp.n} ${T("warm", "wenye nia")} · ${T("rule", "kanuni")}: ${ws.follow_up_hours} h`} cls={mx.warmNoFollowUp.value ? "flag" : "ok"} src="inferred" />
@@ -215,15 +215,17 @@ function Kpi({ k, v, s, cls = "", n, f, d, invert, src, title }: { k: string; v:
   const good = d == null ? null : invert ? d < 0 : d > 0;
   return (
     <div className={"kpi " + cls} title={title}>
-      <span className="k">{k}{src && <SourceBadge p={src as any} lang="en" compact />}</span>
+      <span className="k">{src && <SourceBadge p={src as any} lang="en" />}<span>{k}</span></span>
       <span className="v" ref={ref}>{v}</span>
-      <span className="s">{d != null && <span className={"delta " + (good ? "down" : "up")} style={{ marginRight: 6 }}>{d > 0 ? "↑" : "↓"} {Math.abs(Math.round(d * 100))}%</span>}{s}</span>
+      <span className="s">{d != null && <span className={"delta " + (good ? "down" : "up")}>{d > 0 ? "↑" : "↓"} {Math.abs(Math.round(d * 100))}%</span>}{s && <span>{s}</span>}</span>
     </div>
   );
 }
 
-function greeting(lang: "sw" | "en") {
-  const h = new Date().getHours();
-  if (lang === "sw") return h < 12 ? "Habari za asubuhi" : h < 16 ? "Habari za mchana" : "Habari za jioni";
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+/** Greeting by the hour in the business's timezone (falls back to the device clock). */
+function greeting(lang: "sw" | "en", tz?: string | null) {
+  let h = new Date().getHours();
+  try { if (tz) h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(new Date())); } catch { /* bad tz: keep device hour */ }
+  if (lang === "sw") return h < 5 ? "Habari za usiku" : h < 12 ? "Habari za asubuhi" : h < 16 ? "Habari za mchana" : h < 19 ? "Habari za jioni" : "Habari za usiku";
+  return h < 5 ? "Hello, night owl" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
