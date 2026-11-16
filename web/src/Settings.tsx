@@ -98,6 +98,7 @@ function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: 
           <button type="button" className={theme === "light" ? "on" : ""} aria-pressed={theme === "light"} onClick={(e) => onTheme("light", e.currentTarget)}>{T("Light", "Mwanga")}</button>
         </div>
       </section>
+      <FontPicker T={T} />
       <form className="card" onSubmit={(e) => e.preventDefault()}>
         <div><h2>{T("Language", "Lugha")}</h2><span className="small muted">{T("Default language for the dashboard and Kito's notes. Everyone in the workspace sees this.", "Lugha chaguo-msingi ya dashibodi na maelezo ya Kito. Wote kwenye workspace wanaiona.")}</span></div>
         <div className="seg" role="group" aria-label="Language">
@@ -244,5 +245,34 @@ function SaveRow({ busy, msg, T, label, noButton }: { busy: boolean; msg: { ok?:
       <span className={"savemsg " + (msg.err ? "err" : "ok")}>{msg.err ?? msg.ok ?? ""}</span>
       {!noButton && <button className="primary" disabled={busy}>{busy ? T("Saving…", "Inahifadhi…") : label ?? T("Save changes", "Hifadhi mabadiliko")}</button>}
     </div>
+  );
+}
+
+const FONTS: { id: string; name: string; family: string; note: [string, string] }[] = [
+  { id: "urbanist", name: "Urbanist", family: '"Urbanist", system-ui, sans-serif', note: ["Current · rounded, friendly", "Ya sasa · ya mviringo"] },
+  { id: "inter", name: "Inter", family: '"Inter", system-ui, sans-serif', note: ["Clean · easy to read numbers", "Safi · namba zinasomeka vizuri"] },
+];
+
+function FontPicker({ T }: { T: Tr }) {
+  const read = () => { try { return localStorage.getItem("growthos-font") || "urbanist"; } catch { return "urbanist"; } };
+  const [font, setFont] = useState(read);
+  const pick = (id: string) => {
+    setFont(id);
+    if (id === "urbanist") delete document.documentElement.dataset.font; else document.documentElement.dataset.font = id;
+    try { localStorage.setItem("growthos-font", id); } catch { /* storage unavailable */ }
+  };
+  return (
+    <section className="card">
+      <div><h2>{T("Font", "Herufi")}</h2><span className="small muted">{T("Saved on this device only.", "Inahifadhiwa kwenye kifaa hiki tu.")}</span></div>
+      <div className="fontpick" role="group" aria-label="Font">
+        {FONTS.map((f) => (
+          <button key={f.id} type="button" className={font === f.id ? "on" : ""} aria-pressed={font === f.id} onClick={() => pick(f.id)} style={{ fontFamily: f.family }}>
+            <span className="fp-sample">USD 462.71</span>
+            <span>{f.name}</span>
+            <span className="fp-name">{T(f.note[0], f.note[1])}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

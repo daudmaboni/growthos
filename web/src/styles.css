@@ -190,3 +190,11 @@ textarea { font: inherit; color: var(--ink); background: var(--raised); border: 
   .brand-text h1 { line-height: 1.15; }
   .brand-text .ws { font-size: 12.5px; max-width: 100%; }
 }
+
+/* font choice (Settings → Appearance), saved per device */
+html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+.fontpick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.fontpick button { display: grid; gap: 4px; text-align: left; border-radius: var(--r-lg); padding: 14px 16px; }
+.fontpick button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.fontpick .fp-sample { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fontpick .fp-name { font-size: 12.5px; color: var(--muted); font-weight: 600; }
