@@ -215,7 +215,7 @@ function Kpi({ k, v, s, cls = "", n, f, d, invert, src, title }: { k: string; v:
   const good = d == null ? null : invert ? d < 0 : d > 0;
   return (
     <div className={"kpi " + cls} title={title}>
-      <span className="k">{src && <SourceBadge p={src as any} lang="en" />}<span>{k}</span></span>
+      <span className="k">{src && <SourceBadge p={src as any} lang="en" compact />}<span className="kt">{k}</span></span>
       <span className="v" ref={ref}>{v}</span>
       <span className="s">{d != null && <span className={"delta " + (good ? "down" : "up")}>{d > 0 ? "↑" : "↓"} {Math.abs(Math.round(d * 100))}%</span>}{s && <span>{s}</span>}</span>
     </div>
