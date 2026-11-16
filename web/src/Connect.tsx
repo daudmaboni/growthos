@@ -1,3 +1,4 @@
+import { enterCards, usePageEnter, select } from "./motion";
 import { useEffect, useState } from "react";
 import { supabase, callFn, Workspace } from "./lib";
 import { loginForAds, embeddedSignup, metaConfigured } from "./meta";
@@ -50,9 +51,10 @@ export default function Connect({ ws }: { ws: Workspace }) {
 
   const adsConns = conns.filter((c) => c.provider === "meta_ads");
   const waConns = conns.filter((c) => c.provider === "whatsapp");
+  const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card, :scope > .finding"), { stagger: 0.07 }); });
 
   return (
-    <>
+    <div className="shell-grid" ref={pageRef}>
       {!metaConfigured() && <div className="finding warn"><b>Meta app not configured</b><span className="small">Add VITE_META_APP_ID and the two config IDs to the site's environment, then redeploy. See SETUP.md.</span></div>}
       {msg.ok && <p className="ok">{msg.ok}</p>}
       {msg.err && <p className="err">{msg.err}</p>}
@@ -89,7 +91,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
       <ImportChats ws={ws} />
       <RateBox ws={ws} />
       <PasswordBox />
-    </>
+    </div>
   );
 }
 

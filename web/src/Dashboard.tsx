@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
 import { supabase, Workspace, Outcome, AdPerf, fmt, tzs, pct, dur, median, daysAgo, L, amt, money } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 
@@ -95,11 +96,27 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     return f;
   }, [m, lang]);
 
-  if (loading) return <p className="muted">Loading…</p>;
   const noData = !ads.length && !convs.length;
+  const pageRef = usePageEnter<HTMLDivElement>((root) => {
+    if (loading) return;
+    enterRows(select(root, ".hero > *"), { y: 10, stagger: 0.08 });
+    enterCards(select(root, ".kpis > .kpi, .shell-grid > .card, .two > .card, .empty"), { stagger: 0.06, delay: 0.1 });
+    growBars(select(root, ".fstep .bar > i, .costrow .bar > i"), { axis: "x", delay: 0.5, stagger: 0.07 });
+    enterRows(select(root, "table tbody tr"), { delay: 0.45, stagger: 0.04 });
+    enterRows(select(root, ".finding, .legend .li"), { delay: 0.4, x: -8, y: 0, stagger: 0.05 });
+  }, [loading, days, noData]);
+  const totalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (!loading) countTo(totalRef.current, trend.total, (n) => money(n, adCur), { duration: 1.2, delay: 0.35 }); }, [loading, trend.total, adCur]);
+
+  if (loading) return (
+    <div className="skeletons" aria-busy="true" aria-label="Loading">
+      <div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
+      <div className="two"><div className="skeleton" style={{ minHeight: 300 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>
+    </div>
+  );
 
   return (
-    <>
+    <div className="shell-grid" ref={pageRef}>
       <div className="hero">
         <div style={{ display: "grid", gap: 4 }}>
           <h2>{greeting(lang)}</h2>
@@ -124,13 +141,13 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
         <div className="empty">{T("No data yet. Connect the ad account and WhatsApp in ", "Bado hakuna data. Unganisha matangazo na WhatsApp kwenye ")}<a href="#connect">{T("Connections", "Connections")}</a>.</div>
       ) : (<>
         <div className="kpis">
-          <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(m.spend, adCur)} s={`${fmt(m.platformConv)} ${T("chats (Meta)", "chats (Meta)")}`} />
-          <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(m.costPerChat, adCur)} s={T("What Ads Manager shows", "Kile Ads Manager inaonyesha")} />
-          <Kpi k={T("Cost per sale", "Gharama kwa mauzo")} v={money(m.costPerSale, adCur)} s={`${m.adSold} ${T("sales from ad chats", "mauzo kutoka matangazo")}`} cls={m.costPerSale == null ? "" : "ok"} />
+          <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(m.spend, adCur)} n={m.spend} f={(x) => money(x, adCur)} s={`${fmt(m.platformConv)} ${T("chats (Meta)", "chats (Meta)")}`} />
+          <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(m.costPerChat, adCur)} n={m.costPerChat} f={(x) => money(x, adCur)} s={T("What Ads Manager shows", "Kile Ads Manager inaonyesha")} />
+          <Kpi k={T("Cost per sale", "Gharama kwa mauzo")} v={money(m.costPerSale, adCur)} n={m.costPerSale} f={(x) => money(x, adCur)} s={`${m.adSold} ${T("sales from ad chats", "mauzo kutoka matangazo")}`} cls={m.costPerSale == null ? "" : "ok"} />
           <Kpi k={T("Ad chats → paid", "Chats za matangazo → walilipa")} v={pct(m.adConv)} s={`${m.adSold} / ${m.adChats}`} cls={m.adConv != null && m.adConv < 0.15 ? "flag" : ""} />
           <Kpi k={T("Return on ad spend", "Mapato kwa kila shilingi ya tangazo")} v={m.roas == null ? "–" : m.roas.toFixed(1) + "×"} s={m.roas == null && m.adRevenue > 0 ? T("Set the exchange rate in Connections", "Weka kiwango cha kubadilisha kwenye Connections") : tzs(m.adRevenue) + T(" revenue", " mapato")} />
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(m.frtMedian)} s={`${m.over1h} ${T("waited over 1 h", "zilisubiri > saa 1")}`} cls={m.frtMedian != null && m.frtMedian > 900 ? "flag" : ""} />
-          <Kpi k={T("Warm leads, no follow-up", "Wateja moto bila ufuatiliaji")} v={fmt(m.warmNoFollow.length)} s={`${T("of", "kati ya")} ${m.warm}`} cls={m.warmNoFollow.length ? "flag" : "ok"} />
+          <Kpi k={T("Warm leads, no follow-up", "Wateja moto bila ufuatiliaji")} v={fmt(m.warmNoFollow.length)} n={m.warmNoFollow.length} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${m.warm}`} cls={m.warmNoFollow.length ? "flag" : "ok"} />
         </div>
 
         <div className="two">
@@ -139,7 +156,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
               <div><h2>{T("Ad spend per day", "Matumizi ya matangazo kwa siku")}</h2><span className="small muted">{T("Solid: this period. Dashed: the one before.", "Mstari kamili: kipindi hiki. Wenye nukta: kilichopita.")}</span></div>
               {trend.change != null && <span className={"delta " + (trend.change > 0 ? "up" : "down")}>{trend.change > 0 ? "↑" : "↓"} {Math.abs(Math.round(trend.change * 100))}%</span>}
             </div>
-            <div className="big">{money(trend.total, adCur)}</div>
+            <div className="big" ref={totalRef}>{money(trend.total, adCur)}</div>
             <TrendChart days={trend.labels} cur={trend.cur} prev={trend.prev} />
           </section>
           <section className="card">
@@ -197,12 +214,15 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
           </section>
         </div>
       </>)}
-    </>
+    </div>
   );
 }
 
-function Kpi({ k, v, s, cls = "" }: { k: string; v: string; s?: string; cls?: string }) {
-  return <div className={"kpi " + cls}><span className="k">{k}</span><span className="v">{v}</span>{s && <span className="s">{s}</span>}</div>;
+/** KPI tile. Pass `n` + `f` to count the value up on load instead of showing `v` at once. */
+function Kpi({ k, v, s, cls = "", n, f }: { k: string; v: string; s?: string; cls?: string; n?: number | null; f?: (x: number) => string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => { if (n != null && isFinite(n) && f) countTo(ref.current, n, f, { duration: 1.2, delay: 0.3 }); }, [n, f]);
+  return <div className={"kpi " + cls}><span className="k">{k}</span><span className="v" ref={ref}>{v}</span>{s && <span className="s">{s}</span>}</div>;
 }
 
 function greeting(lang: "sw" | "en") {
