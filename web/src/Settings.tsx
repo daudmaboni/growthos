@@ -13,6 +13,7 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
   useEffect(() => { history.replaceState(null, "", "#settings/" + tab); }, [tab]);
+  useEffect(() => { document.querySelector("nav.subtabs a.on")?.scrollIntoView({ block: "nearest", inline: "center" }); }, [tab]);
   const pageRef = usePageEnter<HTMLDivElement>((root) => {
     enterCards(select(root, ":scope > .card"), { stagger: 0.07 });
     enterRows(select(root, ".field"), { delay: 0.25, y: 8, stagger: 0.04 });

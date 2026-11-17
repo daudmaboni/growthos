@@ -154,7 +154,7 @@ details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-
 /* ---- settings ---- */
 nav.subtabs { justify-self: start; max-width: 100%; overflow-x: auto; }
 nav.subtabs a { padding: 7px 18px; }
-@media (max-width: 760px) { nav.subtabs { display: flex; width: 100%; } nav.subtabs a { flex: 1; text-align: center; padding: 8px 6px; } }
+@media (max-width: 760px) { nav.subtabs { display: flex; width: 100%; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; } nav.subtabs::-webkit-scrollbar { display: none; } nav.subtabs a { flex: 0 0 auto; text-align: center; padding: 8px 14px; } }
 .field { display: grid; gap: 6px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .field input, .field select { width: 100%; font-size: 14.5px; padding: 11px 13px; border-radius: var(--r-md); }
@@ -204,7 +204,7 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
 :root { --glass: rgba(28, 29, 33, .52); --glass-edge: rgba(255, 255, 255, .16); --glass-hi: rgba(255, 255, 255, .22); --glass-lens: rgba(255, 255, 255, .13); }
 [data-theme="light"] { --glass: rgba(255, 255, 255, .58); --glass-edge: rgba(255, 255, 255, .85); --glass-hi: rgba(255, 255, 255, .95); --glass-lens: rgba(20, 24, 36, .07); }
 @media (max-width: 760px) {
-  nav.tabs, .actions .gear { display: none; }
+  nav.tabs:not(.subtabs), .actions .gear { display: none; }
   .shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
   .bottomnav { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); position: fixed; z-index: 40; left: 50%; right: auto; width: min(320px, calc(100% - 28px)); transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom));
     padding: 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-edge);
