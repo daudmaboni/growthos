@@ -7,6 +7,7 @@ exports), links chats to ad referrals where available, shows where conversations
 ## What it does (MVP)
 | View | What the owner gets |
 |---|---|
+| **Ask Kito** | Ask anything in Kiswahili or English ("who did I send Lipa namba to but hasn't paid?", "which ads bring paying customers?", "what do payers have in common?"). Kito writes read-only SQL over the `kito.*` views, the database computes every number, and the answer comes back with the chats (Open chat / WhatsApp / draft a follow-up), ads, tables and stats behind it, plus the queries it ran. |
 | **Dashboard** | Ad spend, Meta-reported chats, chats received, replies, price shared, payment signals (inferred), confirmed paid orders, revenue, cost per chat / qualified inquiry / attributed sale, matched return on ad spend, contribution (only when cost data exists), period-over-period deltas, source health and data coverage. Every figure is labelled with its source. |
 | **Diagnosis** | Weekly, rule-based bottleneck findings (unanswered, slow reply, low intent, price, no follow-up, payment friction, unconfirmed payments, fulfilment, data gaps) with counts, sample size, confidence, observed facts vs hypothesis, missing data and links to the supporting chats/orders. |
 | **Actions** | Follow-up queue (configurable hours) → tasks that can be assigned, snoozed, completed or dismissed, with history. Kito drafts replies in Kiswahili and English grounded in the chat and the business profile. **Drafts are never sent.** |
@@ -27,6 +28,7 @@ exports), links chats to ad referrals where available, shows where conversations
   - `wa-webhook` — stores each verified change before acknowledging, processes idempotently, bounded automatic retries, owner/admin replay.
   - `csv-import` — dry-run validation, duplicate detection and in-workspace chat matching, then import with provenance.
   - `chat-import` — WhatsApp `.txt/.zip` export upload and re-analysis.
+  - `kito-ask` — Ask Kito: Claude plans and runs read-only queries through `public.kito_query` with the user's own token (RLS + workspace pin + read-only transaction), returns a structured answer, logs it in `kito_asks`.
   - `kito` — AI labelling with evidence quotes; on-demand reply drafts and content ideas (drafts only).
   - `_shared/` — `signals.ts` (Kiswahili/English chat rules), `csv.ts`, `webhook.ts`, `db.ts`.
 - `supabase/tests/` — SQL authorization tests run against a throwaway local Postgres.

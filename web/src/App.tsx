@@ -9,10 +9,11 @@ import Settings from "./Settings";
 import Report from "./Report";
 import Actions from "./Actions";
 import Content from "./Content";
+import Kito from "./Kito";
 import Logo from "./Logo";
 
-type View = "dashboard" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
-const VIEWS: View[] = ["dashboard", "report", "actions", "chats", "content", "connect", "settings"];
+type View = "dashboard" | "kito" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
+const VIEWS: View[] = ["dashboard", "kito", "report", "actions", "chats", "content", "connect", "settings"];
 const viewFromHash = (): View => {
   const h = location.hash.replace("#", "").split("/")[0];
   return (VIEWS as string[]).includes(h) ? (h as View) : "dashboard";
@@ -69,6 +70,7 @@ export default function App() {
         <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>GrowthOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <nav className="tabs" aria-label="Sections">
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
+          <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
           <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>
           <a href="#actions" className={view === "actions" ? "on" : ""}>{ws.language === "sw" ? "Vitendo" : "Actions"}</a>
           <a href="#chats" className={view === "chats" ? "on" : ""}>Chats</a>
@@ -85,6 +87,7 @@ export default function App() {
       </header>
       <BottomNav view={view} sw={ws.language === "sw"} />
       {view === "dashboard" && <Dashboard ws={ws} />}
+      {view === "kito" && <Kito ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
@@ -171,7 +174,7 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   );
 }
 
-const ORDER: View[] = ["dashboard", "chats"];
+const ORDER: View[] = ["dashboard", "kito", "chats"];
 const SLOTS = ORDER.length + 1; // + More
 
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
@@ -187,6 +190,7 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
   const L = (en: string, s: string) => (sw ? s : en);
   const main: [View, string, JSX.Element][] = [
     ["dashboard", L("Home", "Nyumbani"), <Ico d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />],
+    ["kito", "Kito", <Ico d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />],
     ["chats", "Chats", <Ico d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" />],
   ];
   const more: [View, string, string, JSX.Element][] = [

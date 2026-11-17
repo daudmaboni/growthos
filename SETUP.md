@@ -13,7 +13,7 @@ The existing pilot has a live web app and Supabase project. Repository changes a
 
 Nothing in this repository deploys itself. To put the MVP live (after review):
 
-1. **Database** — apply migrations in order, skipping versions already recorded by the project. `0010_growth_mvp.sql` is new: it copies existing `sales` rows into `orders` and renames the old table to `sales_legacy_v01` (kept for verification; drop it later by hand if you want). Back up first (Database → Backups) and apply on a branch/staging project before production.
+1. **Database** — apply migrations in order, skipping versions already recorded by the project. `0011_kito_ask.sql` adds Ask Kito (the `kito` schema of read-only views, `public.kito_query`, the `kito_asks` log); it changes no existing data. `0010_growth_mvp.sql` is new: it copies existing `sales` rows into `orders` and renames the old table to `sales_legacy_v01` (kept for verification; drop it later by hand if you want). Back up first (Database → Backups) and apply on a branch/staging project before production.
    ```
    supabase link --project-ref <ref>
    supabase db push            # or paste the file into the SQL editor
@@ -21,9 +21,10 @@ Nothing in this repository deploys itself. To put the MVP live (after review):
 2. **Edge Functions** — deploy the changed and new functions. `wa-webhook` must stay public to Meta (no JWT check); the others keep the default JWT check.
    ```
    supabase functions deploy wa-webhook --no-verify-jwt
-   supabase functions deploy ads-sync meta-connect kito csv-import chat-import
+   supabase functions deploy ads-sync meta-connect kito kito-ask csv-import chat-import
    supabase functions delete sales-import     # replaced by csv-import
    ```
+   Ask Kito uses the same `ANTHROPIC_API_KEY` secret. Optional: `KITO_ASK_MODEL` (default `claude-sonnet-5-5`) and `KITO_ASK_HOURLY` (questions per person per hour, default 40).
 3. **Web app** — `cd web && npm ci && npm run build`, then deploy `web/dist` to Netlify (or link the site to the repo with base directory `web`).
 4. Confirm the scheduled `ads-sync` job sends `{"action":"sync_all","days":30}` with the `x-cron-secret` header (see the security section below). Each scheduled run also retries up to 50 saved WhatsApp events that are pending or failed.
 
