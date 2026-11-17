@@ -11,6 +11,7 @@ import Actions from "./Actions";
 import Content from "./Content";
 import Kito from "./Kito";
 import Logo from "./Logo";
+import { hidePreloader } from "./preloader";
 
 type View = "dashboard" | "kito" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
 const VIEWS: View[] = ["dashboard", "kito", "report", "actions", "chats", "content", "connect", "settings"];
@@ -58,6 +59,9 @@ export default function App() {
       setWs(w);
     });
   }, [session]);
+
+  // Keep the bouncing dots up until we know whether to show login, workspace setup or the dashboard.
+  useEffect(() => { if (session === null || (session && ws !== undefined)) hidePreloader(); }, [session, ws]);
 
   if (session === undefined) return <div className="center muted">Loading…</div>;
   if (!session) return <Login />;

@@ -10,6 +10,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Urbanist:wght@400..700&display=swap" rel="stylesheet" />
+  <style>
+    /* Bouncing-dots preloader: inline so it shows before the app's JS and CSS arrive. */
+    #preloader { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #0d0e10; transition: opacity .45s ease, visibility .45s ease; }
+    :root[data-theme="light"] #preloader { background: #eceef2; }
+    #preloader.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    #preloader .dots { display: flex; gap: 14px; }
+    #preloader .dots span { width: 16px; height: 16px; border-radius: 50%; animation: pl-bounce .9s cubic-bezier(.45,0,.55,1) infinite; }
+    #preloader .dots span:nth-child(1) { background: #3b7bff; }
+    #preloader .dots span:nth-child(2) { background: #f0457a; animation-delay: .15s; }
+    #preloader .dots span:nth-child(3) { background: #ff9a2e; animation-delay: .3s; }
+    @keyframes pl-bounce { 0%, 100% { transform: translateY(9px); } 50% { transform: translateY(-13px); } }
+    @media (prefers-reduced-motion: reduce) { #preloader .dots span { animation-duration: 2.4s; } }
+  </style>
+  <script>try { if (localStorage.getItem("growthos-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
 </head>
-<body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
+<body>
+  <div id="preloader" role="status" aria-label="Loading GrowthOS"><div class="dots"><span></span><span></span><span></span></div></div>
+  <div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
 </html>
