@@ -25,7 +25,7 @@ export default function App() {
   const [ws, setWs] = useState<Workspace | null | undefined>(undefined);
   const [view, setView] = useState<View>(viewFromHash());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
-    try { return localStorage.getItem("growthos-theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
+    try { return localStorage.getItem("growthos-theme") === "dark" ? "dark" : "light"; } catch { return "light"; } // light is the default
   });
   useEffect(() => { document.documentElement.dataset.theme = theme; }, []);
   const themeBtn = useRef<HTMLButtonElement>(null);

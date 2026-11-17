@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Logo from "./Logo";
 import { hidePreloader } from "./preloader";
 import "./home.css";
@@ -7,235 +7,231 @@ import "./home.css";
 const APP = "/app";
 
 export default function Home() {
-  const root = useRef<HTMLDivElement>(null);
-  const [scrolled, setScrolled] = useState(false);
   const [menu, setMenu] = useState(false);
 
   useEffect(() => {
     hidePreloader();
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-
-    // Reveal sections as they scroll into view.
-    const els = root.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? [];
-    let io: IntersectionObserver | undefined;
-    if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      io = new IntersectionObserver((entries) => {
-        for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io!.unobserve(e.target); }
-      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-      els.forEach((el) => io!.observe(el));
-    } else els.forEach((el) => el.classList.add("in"));
-
-    return () => { window.removeEventListener("scroll", onScroll); io?.disconnect(); };
+    document.documentElement.classList.add("hp-page");
+    return () => document.documentElement.classList.remove("hp-page");
   }, []);
+  useEffect(() => { document.body.style.overflow = menu ? "hidden" : ""; }, [menu]);
 
-  const close = () => setMenu(false);
+  const go = () => setMenu(false);
 
   return (
-    <div className="hp" ref={root}>
-      <header className={"hp-nav" + (scrolled ? " solid" : "")}>
-        <div className="hp-wrap hp-nav-in">
-          <a href="/" className="hp-brand" aria-label="GrowthOS home"><Logo size={32} /><span>GrowthOS</span></a>
-          <nav className={"hp-links" + (menu ? " open" : "")} aria-label="Main">
-            <a href="#services" onClick={close}>Services</a>
-            <a href="#how" onClick={close}>How it works</a>
-            <a href="#kito" onClick={close}>Kito AI</a>
-            <a href="#trust" onClick={close}>Why GrowthOS</a>
-            <a href={APP} className="hp-signin-m">Sign in</a>
+    <div className="hp">
+      <header className="hp-bar">
+        <div className="hp-w hp-bar-in">
+          <a href="/" className="hp-logo" aria-label="GrowthOS home"><Logo size={30} /><span>GrowthOS</span></a>
+          <nav className="hp-nav" aria-label="Main">
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <a href="#mission">About</a>
+            <a href={APP}>Log in</a>
+            <a href={APP} className="hp-pill hp-pill-sm">Get started</a>
           </nav>
-          <div className="hp-nav-cta">
-            <a href={APP} className="hp-signin">Sign in</a>
-            <a href={APP} className="hp-btn hp-btn-sm">Get started</a>
-            <button className="hp-burger" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><span /><span /></button>
-          </div>
+          <button className="hp-burger" onClick={() => setMenu(true)} aria-label="Open menu"><span /><span /></button>
         </div>
       </header>
+
+      {/* Full-screen mobile menu */}
+      <div className={"hp-menu" + (menu ? " open" : "")} aria-hidden={!menu}>
+        <div className="hp-w hp-bar-in">
+          <a href="/" className="hp-logo" onClick={go}><Logo size={30} /><span>GrowthOS</span></a>
+          <button className="hp-x" onClick={go} aria-label="Close menu">✕</button>
+        </div>
+        <nav>
+          <a href="/" onClick={go}>Home</a>
+          <a href="#features" onClick={go}>Features</a>
+          <a href="#how" onClick={go}>How it works</a>
+          <a href="#mission" onClick={go}>About</a>
+          <a href={APP}>Log in</a>
+          <a href={APP}>Get started</a>
+        </nav>
+      </div>
 
       <main>
         {/* HERO */}
         <section className="hp-hero">
-          <div className="hp-glow" aria-hidden="true" />
-          <div className="hp-wrap hp-hero-in">
-            <div className="hp-hero-copy" data-reveal>
-              <span className="hp-pill"><i className="hp-live" />Ads → WhatsApp → Sales intelligence</span>
-              <h1>Know which ads bring <em>paying customers</em>, not just chats.</h1>
-              <p className="hp-lead">GrowthOS connects your Meta ads and WhatsApp Business, reads every conversation, and shows you exactly where money is made and where customers drop off — in Kiswahili and English.</p>
-              <div className="hp-ctas">
-                <a href={APP} className="hp-btn">Get started <Arrow /></a>
-                <a href="#how" className="hp-btn hp-btn-ghost">See how it works</a>
+          <div className="hp-w hp-hero-in">
+            <div className="hp-hero-txt">
+              <h1>Know which ads <u>actually</u> make you money</h1>
+              <p>Your ads bring chats on WhatsApp. GrowthOS shows you which of those chats became paying customers, and which ad brought them.</p>
+              <a href={APP} className="hp-pill">Get started <span aria-hidden="true">→</span></a>
+              <small>Works in Kiswahili and English</small>
+            </div>
+
+            <div className="hp-hero-art" aria-hidden="true">
+              <Phone>
+                <div className="ph-top"><b>Mama Neema</b><span>online</span></div>
+                <div className="ph-tag">From ad · <b>Offer ya Wiki</b></div>
+                <div className="ph-b in">Habari, bei ya hii ni ngapi?</div>
+                <div className="ph-b out">Ni TSh 35,000. Unataka ngapi?</div>
+                <div className="ph-b in">Nitachukua mbili 🙏</div>
+                <div className="ph-b out">Sawa, Lipa namba: 5XXXXX</div>
+                <div className="ph-b in">Nimetuma ✅</div>
+              </Phone>
+              <div className="hp-float f1"><span className="dot g" />Paid · <b>TSh 70,000</b></div>
+              <div className="hp-float f2"><span className="dot y" />Kito: <b>Lipa namba sent</b></div>
+              <div className="hp-float f3">Ad → Sale<b>3 days</b></div>
+            </div>
+          </div>
+        </section>
+
+        {/* INTRO */}
+        <section className="hp-intro">
+          <div className="hp-w">
+            <h2>Built for businesses that sell on WhatsApp 🇹🇿</h2>
+            <p>If your customers find you through Facebook and Instagram ads, then talk to you on WhatsApp before they pay, GrowthOS was made for you.</p>
+          </div>
+        </section>
+
+        {/* FEATURES */}
+        <section id="features" className="hp-feats">
+          <Feature
+            tone="mint"
+            title="See which ad brought each customer"
+            text="Every chat that starts from an ad is linked back to that ad. So instead of just seeing clicks, you see real sales and what each sale cost you."
+            art={
+              <div className="hp-card-stack">
+                <AdRow name="Offer ya Wiki" chats="214" paid="38" good />
+                <AdRow name="Video ya Mteja" chats="131" paid="21" good />
+                <AdRow name="Picha ya Bidhaa" chats="96" paid="4" />
               </div>
-              <ul className="hp-ticks">
-                <li><Check />Built for businesses selling on WhatsApp</li>
-                <li><Check />Kiswahili & English</li>
-              </ul>
-            </div>
-
-            <div className="hp-mock" data-reveal aria-hidden="true">
-              <div className="hp-mock-bar"><i /><i /><i /><span>GrowthOS · Dashboard</span></div>
-              <div className="hp-mock-body">
-                <div className="hp-kpis">
-                  <Kpi label="Ad spend" value="TSh 1.2M" delta="This week" />
-                  <Kpi label="Chats from ads" value="486" delta="+18%" up />
-                  <Kpi label="Paid orders" value="73" delta="+11%" up />
-                  <Kpi label="Revenue" value="TSh 4.9M" delta="+22%" up />
-                </div>
-                <div className="hp-chart">
-                  <div className="hp-chart-h"><b>Chats → paid orders</b><span>Last 8 weeks</span></div>
-                  <div className="hp-bars">
-                    {[38, 52, 44, 61, 57, 72, 66, 84].map((h, i) => (
-                      <span key={i} style={{ ["--h" as any]: h + "%", ["--d" as any]: i * 70 + "ms" }}><i style={{ height: Math.round(h * 0.42) + "%" }} /></span>
-                    ))}
-                  </div>
-                </div>
-                <div className="hp-insight">
-                  <span className="hp-spark">✦</span>
-                  <div><b>Kito:</b> 14 customers received your Lipa namba but haven't paid. Most came from the "Offer ya Wiki" ad.</div>
-                </div>
+            }
+          />
+          <Feature
+            flip
+            tone="butter"
+            title="Kito reads your chats, so you don't have to"
+            text="Kito, our AI assistant, goes through your WhatsApp chats in the background and marks each customer: asked the price, got your Lipa namba, paid, or went quiet."
+            art={
+              <Phone>
+                <div className="ph-top"><b>Chats</b><span>today</span></div>
+                <ChatRow n="Juma K." m="Nimetuma pesa" t="Paid" c="g" />
+                <ChatRow n="Asha M." m="Ngoja kidogo..." t="Lipa namba sent" c="y" />
+                <ChatRow n="Peter" m="Bei gani?" t="Asked price" c="b" />
+                <ChatRow n="Neema S." m="Asante, nitarudi" t="Went quiet" c="r" />
+                <ChatRow n="Hamisi" m="Mko wapi?" t="Asked location" c="b" />
+              </Phone>
+            }
+          />
+          <Feature
+            tone="blush"
+            title="Know who to follow up with today"
+            text="Customers who got your Lipa namba but never paid are money left on the table. GrowthOS lists them for you, with a reply already written. You decide what to send."
+            art={
+              <div className="hp-card-stack">
+                <div className="hp-fu-h">Follow up today <span>14</span></div>
+                <FollowUp n="Asha M." d="Lipa namba sent 2 days ago" />
+                <FollowUp n="Baraka J." d="Asked for delivery to Arusha" />
+                <FollowUp n="Rehema" d="Said she'll pay Friday" />
               </div>
-              <p className="hp-sample">Sample data</p>
-            </div>
+            }
+          />
+          <Feature
+            flip
+            tone="sky"
+            title="Ask questions like you'd ask a person"
+            text="Ask Kito anything about your business in Kiswahili or English. It answers from your own numbers and takes you straight to the chats behind them."
+            art={
+              <Phone>
+                <div className="ph-top"><b>Kito</b><span>AI assistant</span></div>
+                <div className="ph-b out">Tangazo gani linaleta wateja wanaolipa?</div>
+                <div className="ph-b in">"Offer ya Wiki" — wateja 38 wamelipa kutoka chats 214. Ni bora mara 3 kuliko "Picha ya Bidhaa".</div>
+                <div className="ph-chip">Fungua chats 38 →</div>
+              </Phone>
+            }
+          />
+        </section>
+
+        {/* MISSION */}
+        <section id="mission" className="hp-mission">
+          <div className="hp-w">
+            <p className="hp-mission-k">Our mission</p>
+            <h2>Help every business in Tanzania see where its sales <u>really</u> come from.</h2>
+            <p className="hp-mission-p">Too many good businesses spend on ads and hope. We think you should know. GrowthOS is built in Dar es Salaam by Pondi Technologies, for the way people here actually buy.</p>
           </div>
         </section>
 
-        {/* STRIP */}
-        <section className="hp-strip">
-          <div className="hp-wrap hp-strip-in" data-reveal>
-            <span>Works with</span>
-            <b>Meta Ads Manager</b><b>WhatsApp Business</b><b>Facebook & Instagram</b><b>CSV orders & expenses</b>
-          </div>
-        </section>
-
-        {/* SERVICES */}
-        <section className="hp-sec" id="services">
-          <div className="hp-wrap">
-            <div className="hp-head" data-reveal>
-              <span className="hp-eyebrow">What we do</span>
-              <h2>Everything between your ad and the payment</h2>
-              <p>Most businesses can see clicks and chats. GrowthOS shows what happens after — who replied, who got a price, who paid, and which ad brought them.</p>
-            </div>
-            <div className="hp-grid">
-              {SERVICES.map((s, i) => (
-                <article className="hp-card" key={s.t} data-reveal style={{ ["--d" as any]: (i % 3) * 80 + "ms" }}>
-                  <span className="hp-ico">{s.i}</span>
-                  <h3>{s.t}</h3>
-                  <p>{s.d}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* HOW IT WORKS */}
-        <section className="hp-sec hp-alt" id="how">
-          <div className="hp-wrap">
-            <div className="hp-head" data-reveal>
-              <span className="hp-eyebrow">How it works</span>
-              <h2>Up and running in three steps</h2>
-            </div>
-            <ol className="hp-steps">
-              {STEPS.map((s, i) => (
-                <li key={s.t} data-reveal style={{ ["--d" as any]: i * 100 + "ms" }}>
-                  <span className="hp-num">0{i + 1}</span>
-                  <h3>{s.t}</h3>
-                  <p>{s.d}</p>
-                </li>
-              ))}
+        {/* HOW */}
+        <section id="how" className="hp-how">
+          <div className="hp-w">
+            <h2>No coding needed. Set up in minutes.</h2>
+            <ol>
+              <li><b>1</b><div><h3>Connect your ad account</h3><p>Log in with Facebook and pick the ad account you use.</p></div></li>
+              <li><b>2</b><div><h3>Connect your WhatsApp</h3><p>Your number keeps working on your phone exactly as before.</p></div></li>
+              <li><b>3</b><div><h3>Watch the numbers come in</h3><p>Kito starts reading new chats and your dashboard fills up.</p></div></li>
             </ol>
           </div>
         </section>
 
-        {/* KITO */}
-        <section className="hp-sec" id="kito">
-          <div className="hp-wrap hp-split">
-            <div data-reveal>
-              <span className="hp-eyebrow">Meet Kito</span>
-              <h2>Your AI analyst that speaks like your customers</h2>
-              <p className="hp-p">Kito works in the background, reading and labelling every chat. Ask it anything about your business in plain Kiswahili or English — it answers with real numbers from your data and links you straight to the chats behind them.</p>
-              <ul className="hp-list">
-                <li><Check />Labels every chat: price asked, Lipa namba sent, paid, lost</li>
-                <li><Check />Finds customers who need a follow-up</li>
-                <li><Check />Drafts replies for you — nothing is sent without you</li>
-              </ul>
-            </div>
-            <div className="hp-chat" data-reveal aria-hidden="true">
-              <div className="hp-msg me">Nani nilimtumia Lipa namba lakini hajalipa?</div>
-              <div className="hp-msg kito">
-                <b>Wateja 14</b> walitumiwa Lipa namba wiki hii lakini hawajalipa. 9 kati yao walitoka tangazo la <b>"Offer ya Wiki"</b>.
-                <div className="hp-chips"><span>Fungua chats</span><span>Andaa ujumbe wa kufuatilia</span></div>
-              </div>
-              <div className="hp-msg me">Which ads bring paying customers?</div>
-              <div className="hp-msg kito typing"><i /><i /><i /></div>
-            </div>
-          </div>
-        </section>
-
-        {/* TRUST */}
-        <section className="hp-sec hp-alt" id="trust">
-          <div className="hp-wrap">
-            <div className="hp-head" data-reveal>
-              <span className="hp-eyebrow">Why GrowthOS</span>
-              <h2>Numbers you can trust and act on</h2>
-            </div>
-            <div className="hp-grid hp-grid-4">
-              {TRUST.map((s, i) => (
-                <div className="hp-trust" key={s.t} data-reveal style={{ ["--d" as any]: i * 70 + "ms" }}>
-                  <h3>{s.t}</h3><p>{s.d}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* CTA */}
-        <section className="hp-sec">
-          <div className="hp-wrap">
-            <div className="hp-cta" data-reveal>
-              <h2>Stop guessing which ads work.</h2>
-              <p>Connect your ads and WhatsApp and see where your sales really come from.</p>
-              <a href={APP} className="hp-btn">Get started <Arrow /></a>
-            </div>
+        <section className="hp-end">
+          <div className="hp-w">
+            <h2>Stop guessing. Start knowing.</h2>
+            <a href={APP} className="hp-pill hp-pill-dark">Get started <span aria-hidden="true">→</span></a>
           </div>
         </section>
       </main>
 
       <footer className="hp-foot">
-        <div className="hp-wrap hp-foot-in">
-          <div className="hp-brand"><Logo size={28} /><span>GrowthOS</span></div>
-          <p>A product of Pondi Technologies · Dar es Salaam, Tanzania</p>
-          <nav><a href="/privacy.html">Privacy</a><a href={APP}>Sign in</a></nav>
+        <div className="hp-w">
+          <a href="/" className="hp-logo dark"><Logo size={28} /><span>GrowthOS</span></a>
+          <nav>
+            <a href={APP}>Log in</a>
+            <a href={APP}>Get started</a>
+            <a href="#features">Features</a>
+            <a href="/privacy.html">Privacy Policy</a>
+          </nav>
+          <p>© {new Date().getFullYear()} Pondi Technologies · Dar es Salaam, Tanzania</p>
         </div>
-        <div className="hp-wrap hp-copy">© {new Date().getFullYear()} Pondi Technologies. All rights reserved.</div>
       </footer>
     </div>
   );
 }
 
-function Kpi({ label, value, delta, up }: { label: string; value: string; delta: string; up?: boolean }) {
-  return <div className="hp-kpi"><span>{label}</span><b>{value}</b><small className={up ? "up" : ""}>{delta}</small></div>;
+function Phone({ children }: { children: ReactNode }) {
+  return <div className="ph"><div className="ph-notch" /><div className="ph-scr">{children}</div></div>;
 }
-function Arrow() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>; }
-function Check() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>; }
-function I({ d }: { d: string }) { return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>; }
 
-const SERVICES = [
-  { t: "Ad-to-sale tracking", d: "Link every WhatsApp chat back to the Meta ad that started it, and see cost per chat, cost per sale and return on ad spend.", i: <I d="M3 3v18h18M7 15l4-4 3 3 6-7" /> },
-  { t: "WhatsApp chat intelligence", d: "Every conversation is read and labelled automatically — who asked the price, who got your Lipa namba, who paid and who went quiet.", i: <I d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" /> },
-  { t: "Ask Kito, your AI analyst", d: "Ask any question about your sales in Kiswahili or English and get answers backed by your own numbers and chats.", i: <I d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /> },
-  { t: "Weekly sales diagnosis", d: "Find the bottleneck: unanswered chats, slow replies, price objections, payment friction or missed follow-ups.", i: <I d="M3 12h4l3-8 4 16 3-8h4" /> },
-  { t: "Follow-ups & actions", d: "A follow-up queue for your team with ready-made reply drafts, so warm customers don't go cold.", i: <I d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" /> },
-  { t: "Content performance", d: "Track which posts and themes bring real inquiries and sales, and plan your next content with ideas from Kito.", i: <I d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" /> },
-];
+function Feature({ title, text, art, tone, flip }: { title: string; text: string; art: ReactNode; tone: string; flip?: boolean }) {
+  return (
+    <div className={"hp-feat" + (flip ? " flip" : "")}>
+      <div className="hp-w hp-feat-in">
+        <div className={"hp-feat-art " + tone}>{art}</div>
+        <div className="hp-feat-txt"><h2>{title}</h2><p>{text}</p></div>
+      </div>
+    </div>
+  );
+}
 
-const STEPS = [
-  { t: "Connect your accounts", d: "Link your Meta ad account and WhatsApp Business number in a few clicks. Your existing WhatsApp keeps working as normal." },
-  { t: "Kito reads and labels", d: "GrowthOS syncs your ad results and chats, and Kito labels every conversation from first message to payment." },
-  { t: "See what pays, then act", d: "Your dashboard shows which ads bring paying customers, where sales stall, and who to follow up with today." },
-];
+function AdRow({ name, chats, paid, good }: { name: string; chats: string; paid: string; good?: boolean }) {
+  return (
+    <div className="hp-ad">
+      <div className="hp-ad-thumb" />
+      <div className="hp-ad-n"><b>{name}</b><span>{chats} chats</span></div>
+      <div className={"hp-ad-p" + (good ? " good" : "")}>{paid} paid</div>
+    </div>
+  );
+}
 
-const TRUST = [
-  { t: "Confirmed revenue only", d: "Revenue comes from orders you confirm — never guessed from chat messages alone." },
-  { t: "Every number explained", d: "Each figure shows where it came from, so you know what's measured and what's estimated." },
-  { t: "You stay in control", d: "Kito drafts replies but never sends them. Your team decides what goes to customers." },
-  { t: "Secure by design", d: "Access tokens are stored encrypted, and each business only ever sees its own data." },
-];
+function ChatRow({ n, m, t, c }: { n: string; m: string; t: string; c: string }) {
+  return (
+    <div className="ph-row">
+      <div className="ph-av">{n[0]}</div>
+      <div className="ph-row-t"><b>{n}</b><span>{m}</span></div>
+      <i className={"ph-lab " + c}>{t}</i>
+    </div>
+  );
+}
+
+function FollowUp({ n, d }: { n: string; d: string }) {
+  return (
+    <div className="hp-fu">
+      <div className="ph-av">{n[0]}</div>
+      <div className="hp-fu-t"><b>{n}</b><span>{d}</span></div>
+      <span className="hp-fu-btn">Reply</span>
+    </div>
+  );
+}
