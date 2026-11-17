@@ -1,0 +1,168 @@
+// Central, deterministic metric definitions for GrowthOS. Pure functions: no network, no AI.
+// Every figure carries its provenance so the UI can say where a number came from.
+//
+// Cohort rules
+//  - A chat belongs to the period in which it STARTED (workspace timezone).
+//  - "Sales from this period's chats" = paid orders linked to those chats, paid within the
+//    workspace conversion window after the chat started (an attributed/matched estimate).
+//  - "Revenue recorded in period" = paid orders whose paid_at falls in the period, whatever the chat.
+//  - Ad spend, impressions, clicks and Meta-reported conversations are platform figures by day.
+//  - Cost per sale divides ad spend by attributed sales from ad chats only, and only when both exist.
+//  - Contribution is shown only when the inputs it needs exist (fx rate when currencies differ,
+//    and either a unit cost per order or imported expenses).
+
+import type { AdPerf, Order, Outcome, Workspace } from "./lib";
+import { localDay, median } from "./lib";
+
+export type Provenance = "platform" | "observed" | "inferred" | "confirmed" | "imported" | "matched" | "derived";
+
+export type Period = { from: string; to: string; days: number; label: string };
+
+export type DailyInsight = { day: string; spend: number; currency: string | null; impressions?: number; clicks?: number; messaging_conversations?: number };
+export type Expense = { day: string; amount: number; currency: string; category: string };
+
+export type Metric = { value: number | null; provenance: Provenance; n?: number; d?: number; note?: string };
+
+export type FunnelMetrics = {
+  period: Period;
+  adCurrency: string;
+  spend: Metric; impressions: Metric; clicks: Metric; platformConversations: Metric;
+  chats: Metric; adChats: Metric; organicChats: Metric; unknownChats: Metric;
+  replied: Metric; priced: Metric; paymentSignals: Metric; unconfirmedSignals: Metric;
+  attributedSales: Metric; attributedAdSales: Metric; attributedRevenue: Metric;
+  ordersPaid: Metric; revenue: Metric; revenueManual: Metric; revenueImported: Metric; ordersUnlinked: Metric;
+  replyRate: Metric; priceRate: Metric; signalRate: Metric; saleRate: Metric; adSaleRate: Metric;
+  costPerPlatformConversation: Metric; costPerAdChat: Metric; costPerQualifiedInquiry: Metric; costPerAttributedSale: Metric;
+  returnOnAdSpend: Metric; contribution: Metric;
+  medianFirstReply: Metric; over1h: Metric; noReply: Metric; silentAfterPrice: Metric; warmNoFollowUp: Metric; kitoRead: Metric;
+  coverage: { knownSourceShare: number | null; kitoReadShare: number | null; chatsWithoutMessages: number; fxNeeded: boolean; fxSet: boolean; unitCostSet: boolean; expensesCount: number };
+};
+
+export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
+  spend: { en: "Ad spend reported by Meta for the ads in this period.", sw: "Matumizi ya matangazo kama Meta inavyoripoti kwa kipindi hiki." },
+  platformConversations: { en: "Messaging conversations started, as reported by Meta Ads Manager.", sw: "Mazungumzo yaliyoanza kama Meta Ads Manager inavyoripoti." },
+  chats: { en: "WhatsApp chats whose first message is in this period (observed by GrowthOS).", sw: "Chats za WhatsApp zilizoanza kipindi hiki (zimeonekana na GrowthOS)." },
+  adChats: { en: "Chats that carried a Meta ad referral (matched, not proof the ad caused anything).", sw: "Chats zilizokuja na referral ya tangazo (zimeunganishwa, si uthibitisho)." },
+  replied: { en: "Chats where the business sent at least one message.", sw: "Chats ambazo biashara ilijibu angalau mara moja." },
+  priced: { en: "Chats where a price was shared (rule-based detection).", sw: "Chats ambazo bei ilitolewa (kanuni za maneno)." },
+  paymentSignals: { en: "Chats with an inferred payment signal from words, screenshots or Kito. Not confirmed sales.", sw: "Chats zenye dalili ya malipo (maneno, picha au Kito). Si mauzo yaliyothibitishwa." },
+  attributedSales: { en: "Chats from this period with a confirmed paid order inside the conversion window.", sw: "Chats za kipindi hiki zenye oda iliyolipwa ndani ya dirisha la uthibitisho." },
+  revenue: { en: "Net revenue (amount − discount − refunds) of paid orders recorded in this period.", sw: "Mapato halisi (kiasi − punguzo − marejesho) ya oda zilizolipwa kipindi hiki." },
+  costPerPlatformConversation: { en: "Ad spend ÷ Meta-reported conversations.", sw: "Matumizi ÷ mazungumzo yaliyoripotiwa na Meta." },
+  costPerAdChat: { en: "Ad spend ÷ WhatsApp chats with an ad referral.", sw: "Matumizi ÷ chats za WhatsApp zenye referral ya tangazo." },
+  costPerQualifiedInquiry: { en: "Ad spend ÷ ad chats where a price was shared.", sw: "Matumizi ÷ chats za matangazo zilizopewa bei." },
+  costPerAttributedSale: { en: "Ad spend ÷ attributed sales from ad chats. A matched estimate.", sw: "Matumizi ÷ mauzo yaliyounganishwa na chats za matangazo. Ni makadirio." },
+  returnOnAdSpend: { en: "Attributed revenue from ad chats ÷ ad spend (converted with your exchange rate).", sw: "Mapato yaliyounganishwa na matangazo ÷ matumizi (kwa kiwango chako cha kubadilisha)." },
+  contribution: { en: "Revenue − ad spend − cost per order × orders − imported expenses. Shown only when those inputs exist.", sw: "Mapato − matangazo − gharama kwa oda × oda − matumizi yaliyoingizwa. Inaonyeshwa tu data ikiwepo." },
+};
+
+const m = (value: number | null, provenance: Provenance, extra: Partial<Metric> = {}): Metric => ({ value, provenance, ...extra });
+const ratio = (n: number, d: number, provenance: Provenance): Metric => (d > 0 ? m(n / d, provenance, { n, d }) : m(null, provenance, { n, d, note: "no denominator" }));
+
+export function periodEnding(today: string, days: number, label: string): Period {
+  const end = new Date(today + "T00:00:00Z");
+  const start = new Date(end.getTime() - (days - 1) * 864e5);
+  return { from: start.toISOString().slice(0, 10), to: today, days, label };
+}
+export function comparisonOf(p: Period): Period {
+  const end = new Date(new Date(p.from + "T00:00:00Z").getTime() - 864e5);
+  return periodEnding(end.toISOString().slice(0, 10), p.days, "previous");
+}
+const inPeriod = (day: string, p: Period) => day >= p.from && day <= p.to;
+
+export type Inputs = {
+  ws: Pick<Workspace, "currency" | "timezone" | "fx_rate" | "unit_cost" | "conversion_window_days" | "follow_up_hours">;
+  period: Period;
+  conversations: Outcome[];   // any range; filtered here by started_at
+  ads: AdPerf[];              // ad_performance for exactly this period
+  daily: DailyInsight[];      // any range; filtered here by day
+  orders: Order[];            // any range; filtered here by paid_at
+  expenses: Expense[];        // any range; filtered here by day
+  now?: number;
+};
+
+export function computeFunnel(i: Inputs): FunnelMetrics {
+  const tz = i.ws.timezone || "Africa/Dar_es_Salaam";
+  const now = i.now ?? Date.now();
+  const p = i.period;
+  const win = (i.ws.conversion_window_days ?? 30) * 864e5;
+
+  const daily = i.daily.filter((d) => inPeriod(d.day, p));
+  const adCurrency = daily.find((d) => d.currency)?.currency ?? i.ws.currency;
+  const spend = daily.reduce((s, d) => s + Number(d.spend || 0), 0);
+  const impressions = daily.reduce((s, d) => s + Number(d.impressions || 0), 0);
+  const clicks = daily.reduce((s, d) => s + Number(d.clicks || 0), 0);
+  const platformConv = daily.reduce((s, d) => s + Number(d.messaging_conversations || 0), 0);
+
+  const convs = i.conversations.filter((c) => c.started_at && inPeriod(localDay(c.started_at, tz), p));
+  const adChats = convs.filter((c) => c.source === "ad");
+  const organic = convs.filter((c) => c.source === "organic");
+  const unknown = convs.filter((c) => c.source === "unknown");
+  const confirmed = (c: Outcome) => Number(c.paid_orders) > 0;
+  const attributed = (c: Outcome) => confirmed(c) && !!c.first_paid_at && !!c.started_at && Date.parse(c.first_paid_at) <= Date.parse(c.started_at) + win;
+  const signal = (c: Outcome) => !!c.payment_signal || c.kito_outcome === "sold" || c.outcome_override === "sold";
+  const replied = convs.filter((c) => c.first_response_sec != null);
+  const priced = convs.filter((c) => c.price_shared);
+  const signals = convs.filter(signal);
+  const unconfirmed = convs.filter((c) => signal(c) && !confirmed(c));
+  const attributedChats = convs.filter(attributed);
+  const attributedAd = adChats.filter(attributed);
+  const attributedRevenue = attributedChats.reduce((s, c) => s + Number(c.sale_amount ?? 0), 0);
+  const attributedAdRevenue = attributedAd.reduce((s, c) => s + Number(c.sale_amount ?? 0), 0);
+
+  const paid = i.orders.filter((o) => o.status === "paid" && o.paid_at && inPeriod(localDay(o.paid_at, tz), p));
+  const net = (list: Order[]) => list.reduce((s, o) => s + (Number(o.amount) - Number(o.discount) - Number(o.refund_amount)), 0);
+  const revenue = net(paid);
+  const revenueManual = net(paid.filter((o) => o.provenance === "manual"));
+  const revenueImported = net(paid.filter((o) => o.provenance === "csv_import" || o.provenance === "provider"));
+  const unlinked = paid.filter((o) => !o.conversation_id).length;
+
+  const frt = convs.map((c) => c.first_response_sec).filter((x): x is number => x != null);
+  const warm = convs.filter((c) => (c.kito_temp ? c.kito_temp !== "cold" : c.warm) && c.outcome !== "sold");
+  const warmNoFollow = warm.filter((c) => !c.followed_up && !(c.last_out_at && now - Date.parse(c.last_out_at) < i.ws.follow_up_hours * 3600e3));
+  const kitoRead = convs.filter((c) => c.kito_checked_at).length;
+
+  const fxNeeded = adCurrency !== i.ws.currency;
+  const fx = fxNeeded ? (i.ws.fx_rate ? Number(i.ws.fx_rate) : null) : 1;
+  const spendInWs = fx != null ? spend * fx : null;
+  const expenses = i.expenses.filter((e) => inPeriod(e.day, p) && e.currency === i.ws.currency);
+  const expensesTotal = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const unitCost = i.ws.unit_cost != null ? Number(i.ws.unit_cost) : null;
+  const contribution = spendInWs != null && (unitCost != null || expenses.length > 0) && paid.length > 0
+    ? m(revenue - spendInWs - (unitCost ?? 0) * paid.length - expensesTotal, "derived", { note: unitCost != null && expenses.length ? "unit cost + expenses" : unitCost != null ? "unit cost per order" : "imported expenses" })
+    : m(null, "derived", { note: spendInWs == null ? "needs exchange rate" : paid.length === 0 ? "no paid orders in period" : "needs cost per order or expenses" });
+
+  return {
+    period: p, adCurrency,
+    spend: m(spend, "platform"), impressions: m(impressions, "platform"), clicks: m(clicks, "platform"), platformConversations: m(platformConv, "platform"),
+    chats: m(convs.length, "observed"), adChats: m(adChats.length, "matched"), organicChats: m(organic.length, "observed"), unknownChats: m(unknown.length, "observed"),
+    replied: m(replied.length, "observed"), priced: m(priced.length, "inferred"), paymentSignals: m(signals.length, "inferred"), unconfirmedSignals: m(unconfirmed.length, "inferred"),
+    attributedSales: m(attributedChats.length, "matched"), attributedAdSales: m(attributedAd.length, "matched"), attributedRevenue: m(attributedRevenue, "matched"),
+    ordersPaid: m(paid.length, "confirmed"), revenue: m(revenue, "confirmed"), revenueManual: m(revenueManual, "confirmed"), revenueImported: m(revenueImported, "imported"), ordersUnlinked: m(unlinked, "confirmed"),
+    replyRate: ratio(replied.length, convs.length, "observed"), priceRate: ratio(priced.length, convs.length, "inferred"),
+    signalRate: ratio(signals.length, convs.length, "inferred"), saleRate: ratio(attributedChats.length, convs.length, "matched"), adSaleRate: ratio(attributedAd.length, adChats.length, "matched"),
+    costPerPlatformConversation: spend > 0 ? ratio(spend, platformConv, "platform") : m(null, "platform", { note: "no spend" }),
+    costPerAdChat: spend > 0 ? ratio(spend, adChats.length, "matched") : m(null, "matched", { note: "no spend" }),
+    costPerQualifiedInquiry: spend > 0 ? ratio(spend, adChats.filter((c) => c.price_shared).length, "matched") : m(null, "matched", { note: "no spend" }),
+    costPerAttributedSale: spend > 0 ? ratio(spend, attributedAd.length, "matched") : m(null, "matched", { note: "no spend" }),
+    returnOnAdSpend: spend > 0 && fx != null ? m(attributedAdRevenue / (spend * fx), "matched", { n: attributedAdRevenue, d: spend * fx }) : m(null, "matched", { note: spend > 0 ? "needs exchange rate" : "no spend" }),
+    contribution,
+    medianFirstReply: m(median(frt), "observed", { n: frt.length }), over1h: m(frt.filter((x) => x > 3600).length, "observed"),
+    noReply: m(convs.filter((c) => c.stage === "no_reply").length, "observed"),
+    silentAfterPrice: m(convs.filter((c) => c.stage === "silent_after_price" && c.outcome !== "sold").length, "inferred"),
+    warmNoFollowUp: m(warmNoFollow.length, "inferred", { n: warm.length }),
+    kitoRead: m(kitoRead, "inferred"),
+    coverage: {
+      knownSourceShare: convs.length ? (convs.length - unknown.length) / convs.length : null,
+      kitoReadShare: convs.length ? kitoRead / convs.length : null,
+      chatsWithoutMessages: convs.filter((c) => !c.last_message_at).length,
+      fxNeeded, fxSet: !!i.ws.fx_rate, unitCostSet: unitCost != null, expensesCount: expenses.length,
+    },
+  };
+}
+
+/** Change between two metrics as a fraction of the comparison value; null when not comparable. */
+export function delta(cur: Metric, prev: Metric): number | null {
+  if (cur.value == null || prev.value == null || prev.value === 0) return null;
+  return (cur.value - prev.value) / Math.abs(prev.value);
+}

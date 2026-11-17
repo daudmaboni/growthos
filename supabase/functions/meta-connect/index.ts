@@ -19,9 +19,17 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const ws = body.workspace_id as string;
   if (!ws) return json({ error: "workspace_id required" }, 400);
-  const { data: ok } = await userClient(req).rpc("is_member", { ws });
-  if (!ok) return json({ error: "not a member of this workspace" }, 403);
+  // Connecting changes what the workspace syncs, so it needs an owner/admin, not just a member.
+  const { data: ok } = await userClient(req).rpc("can_manage", { ws });
+  if (!ok) return json({ error: "Only a workspace owner or admin can connect accounts." }, 403);
   const db = admin();
+
+  /** A provider account may belong to one workspace only. Refuse to re-home another workspace's connection. */
+  async function assertNotOwnedElsewhere(provider: "meta_ads" | "whatsapp", externalId: string) {
+    const { data: existing, error } = await db.from("connections").select("workspace_id").eq("provider", provider).eq("external_id", externalId).maybeSingle();
+    if (error) throw new Error("could not check existing connections");
+    if (existing && existing.workspace_id !== ws) throw new Error("This account is already connected to another GrowthOS workspace. Disconnect it there first.");
+  }
 
   try {
     // ---- Ads: step 1 list ad accounts, step 2 save the chosen one ----
@@ -34,6 +42,8 @@ Deno.serve(async (req) => {
     if (body.action === "ads_connect") {
       const { data: tok } = await db.rpc("svc_read_token", { p_secret_id: body.pending_secret });
       if (!tok) return json({ error: "Login expired. Connect again." }, 400);
+      if (!/^act_\d+$/.test(String(body.ad_account_id ?? ""))) return json({ error: "invalid ad account id" }, 400);
+      await assertNotOwnedElsewhere("meta_ads", body.ad_account_id);
       const secret = await storeToken(db, `meta_ads:${ws}:${body.ad_account_id}`, tok);
       const { data: connection, error } = await db.from("connections").upsert({
         workspace_id: ws, provider: "meta_ads", external_id: body.ad_account_id, label: body.label ?? null,
@@ -41,10 +51,11 @@ Deno.serve(async (req) => {
       }, { onConflict: "provider,external_id" }).select("id").single();
       if (error) throw new Error(error.message);
       // First sync is explicitly limited to the connection just authorized.
-      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ads-sync`, {
+      // @ts-ignore EdgeRuntime is provided by Supabase; keeps the first sync alive after we respond
+      EdgeRuntime.waitUntil(fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ads-sync`, {
         method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
         body: JSON.stringify({ days: 30, workspace_id: ws, connection_id: connection!.id }),
-      }).catch(() => {});
+      }).catch(() => {}));
       return json({ ok: true });
     }
 
@@ -52,6 +63,9 @@ Deno.serve(async (req) => {
     if (body.action === "wa_connect") {
       const { code, waba_id, phone_number_id } = body;
       if (!code || !waba_id || !phone_number_id) return json({ error: "code, waba_id and phone_number_id are required" }, 400);
+      await assertNotOwnedElsewhere("whatsapp", String(waba_id));
+      const { data: numberOwner } = await db.from("wa_numbers").select("workspace_id").eq("phone_number_id", String(phone_number_id)).maybeSingle();
+      if (numberOwner && numberOwner.workspace_id !== ws) return json({ error: "This WhatsApp number is already connected to another workspace." }, 409);
       const token = await oauth({ code });
       const secret = await storeToken(db, `whatsapp:${waba_id}`, token);
       const { data: conn, error } = await db.from("connections").upsert({
@@ -81,6 +95,7 @@ Deno.serve(async (req) => {
     }
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    return json({ error: (e as Error).message }, 502);
+    // Provider errors are safe to show (no tokens or customer data); keep them short.
+    return json({ error: String((e as Error).message).slice(0, 300) }, 502);
   }
 });

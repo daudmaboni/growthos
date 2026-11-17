@@ -1,0 +1,249 @@
+// Action Centre: the follow-up queue. Surfaces chats that need a reply or a follow-up, lets
+// staff assign / snooze / complete / dismiss tasks, and asks Kito for a DRAFT that a human
+// reviews and sends from their own phone. GrowthOS never sends WhatsApp messages.
+import { useEffect, useMemo, useState } from "react";
+import { enterCards, enterRows, usePageEnter, select } from "./motion";
+import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
+
+type Member = { user_id: string; role: string; email: string };
+type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null };
+type Draft = { draft_sw: string; draft_en: string; why: string; grounded_on: string[]; missing: string[]; profile_used: boolean };
+
+const tempOf = (r: Outcome) => r.kito_temp ?? (r.warm ? "warm" : null);
+
+export default function Actions({ ws }: { ws: Workspace }) {
+  const lang = ws.language;
+  const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
+  const [rows, setRows] = useState<Outcome[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [me, setMe] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [tick, setTick] = useState(0);
+  const [tab, setTab] = useState<"queue" | "tasks" | "done">("queue");
+  const refresh = () => setTick((t) => t + 1);
+  const editor = canEdit(ws);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true); setErr("");
+    const since = new Date(Date.now() - 45 * 864e5).toISOString();
+    Promise.all([
+      supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).gte("last_message_at", since).order("last_message_at", { ascending: false }).limit(500),
+      supabase.from("follow_up_tasks").select("*").eq("workspace_id", ws.id).order("updated_at", { ascending: false }).limit(300),
+      supabase.rpc("workspace_members", { p_ws: ws.id }),
+      supabase.auth.getUser(),
+    ]).then(([c, t, m, u]) => {
+      if (!live) return;
+      const e = c.error || t.error || m.error;
+      if (e) setErr(e.message);
+      setRows((c.data as Outcome[]) ?? []); setTasks((t.data as Task[]) ?? []); setMembers((m.data as Member[]) ?? []); setMe(u.data.user?.id ?? "");
+      setLoading(false);
+    });
+    return () => { live = false; };
+  }, [ws.id, tick]);
+
+  const open = useMemo(() => tasks.filter((t) => t.status === "open" || (t.status === "snoozed" && (!t.snoozed_until || Date.parse(t.snoozed_until) <= Date.now()))), [tasks]);
+  const snoozed = useMemo(() => tasks.filter((t) => t.status === "snoozed" && t.snoozed_until && Date.parse(t.snoozed_until) > Date.now()), [tasks]);
+  const closed = useMemo(() => tasks.filter((t) => t.status === "done" || t.status === "dismissed").slice(0, 50), [tasks]);
+  const handled = useMemo(() => new Set(tasks.filter((t) => t.status !== "done" && t.status !== "dismissed" || (t.completed_at && Date.now() - Date.parse(t.completed_at) < 7 * 864e5)).map((t) => t.conversation_id)), [tasks]);
+
+  // Eligibility rules (deterministic): not a confirmed buyer, not marked lost, not already handled.
+  const queue = useMemo(() => {
+    const H = ws.follow_up_hours * 3600e3;
+    const now = Date.now();
+    const items = rows.filter((r) => r.outcome !== "sold" && Number(r.paid_orders) === 0 && r.outcome_override !== "lost" && !handled.has(r.id))
+      .map((r) => {
+        const temp = tempOf(r);
+        const waiting = r.last_dir === "in" && r.last_message_at && now - Date.parse(r.last_message_at) > 30 * 60e3;
+        const stale = r.last_dir === "out" && r.last_out_at && now - Date.parse(r.last_out_at) > H && (temp === "hot" || temp === "warm");
+        const reason = waiting ? "reply" : stale ? "follow_up" : null;
+        return reason ? { r, reason, temp, age: now - Date.parse((waiting ? r.last_message_at : r.last_out_at) ?? r.last_message_at ?? "") } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x);
+    const rank = (x: typeof items[number]) => (x.reason === "reply" ? 0 : 10) + (x.temp === "hot" ? 0 : x.temp === "warm" ? 1 : 2);
+    return items.sort((a, b) => rank(a) - rank(b) || b.age - a.age);
+  }, [rows, handled, ws.follow_up_hours]);
+
+  const pageRef = usePageEnter<HTMLDivElement>((root) => { if (loading) return; enterCards(select(root, ":scope > .card"), { stagger: 0.07 }); enterRows(select(root, ".qitem"), { delay: 0.25, stagger: 0.04 }); }, [loading, tab]);
+
+  async function createTask(r: Outcome, reason: string) {
+    const { error } = await supabase.from("follow_up_tasks").insert({
+      workspace_id: ws.id, conversation_id: r.id, source: "queue",
+      title: reason === "reply" ? T(`Reply to ${r.contact_name ?? "customer"}`, `Mjibu ${r.contact_name ?? "mteja"}`) : T(`Follow up with ${r.contact_name ?? "customer"}`, `Mfuatilie ${r.contact_name ?? "mteja"}`),
+      draft: r.kito_next ? T("Suggested next step: ", "Hatua inayopendekezwa: ") + r.kito_next : null, draft_source: r.kito_next ? "kito" : null,
+      due_at: new Date().toISOString(), created_by: me,
+    });
+    if (error) setErr(error.code === "23505" ? T("A task already exists for this chat.", "Tayari kuna kazi ya chat hii.") : error.message); else refresh();
+  }
+
+  if (loading) return <div className="skeletons" aria-busy="true"><div className="skeleton" style={{ minHeight: 90 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>;
+
+  return (
+    <div className="shell-grid" ref={pageRef}>
+      <div className="hero">
+        <div style={{ display: "grid", gap: 4 }}>
+          <h2>{T("Actions", "Vitendo")}</h2>
+          <div className="sub"><span>{queue.length} {T("chats need attention", "chats zinahitaji hatua")}</span><span>{open.length} {T("open tasks", "kazi wazi")}</span><span>{T("follow-up rule", "kanuni")}: {ws.follow_up_hours} h <a href="#settings/rules" className="small">{T("change", "badilisha")}</a></span></div>
+        </div>
+        <div className="seg" role="group" aria-label="View">
+          <button className={tab === "queue" ? "on" : ""} onClick={() => setTab("queue")}>{T("Queue", "Foleni")} ({queue.length})</button>
+          <button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>{T("Tasks", "Kazi")} ({open.length + snoozed.length})</button>
+          <button className={tab === "done" ? "on" : ""} onClick={() => setTab("done")}>{T("Done", "Zilizokamilika")}</button>
+        </div>
+      </div>
+      {err && <p className="err">{err}</p>}
+      {!editor && <p className="small muted">{T("You have a viewer role: you can see the queue but not change tasks.", "Una nafasi ya kutazama tu: unaweza kuona foleni lakini si kubadilisha kazi.")}</p>}
+      <div className="finding"><b>{T("GrowthOS never sends messages.", "GrowthOS haitumi ujumbe kamwe.")}</b><span className="small">{T("Drafts here are suggestions. Copy one, edit it, and send it yourself from WhatsApp.", "Rasimu hapa ni mapendekezo. Nakili, hariri, na utume mwenyewe kutoka WhatsApp.")}</span></div>
+
+      {tab === "queue" && (
+        <section className="card">
+          <div><h2>{T("Needs a reply or a follow-up", "Inahitaji jibu au ufuatiliaji")}</h2><span className="small muted">{T(`Customer waiting for a reply, or a warm chat with no message from you for ${ws.follow_up_hours} hours. Buyers, lost chats and handled chats are excluded.`, `Mteja anasubiri jibu, au chat yenye nia bila ujumbe wako kwa saa ${ws.follow_up_hours}. Wanunuzi, waliopotea na zilizoshughulikiwa hazimo.`)}</span></div>
+          {queue.length === 0 ? <div className="empty">{T("Nothing waiting. Nice.", "Hakuna anayesubiri. Safi.")}</div> : (
+            <div className="queue">{queue.map(({ r, reason, temp }) => (
+              <div className="qitem" key={r.id}>
+                <div>
+                  <b>{r.contact_name ?? T("Customer", "Mteja")}</b>
+                  <div className="small" style={{ marginTop: 3 }}>
+                    <span className={"chip " + (reason === "reply" ? "bad" : "")}>{reason === "reply" ? T("Customer is waiting", "Mteja anasubiri") : T("Follow-up due", "Ufuatiliaji umefika")}</span>
+                    {temp && <span className={"temp " + temp + (r.kito_temp ? "" : " guess")}>{L[lang].temp[temp]}</span>}
+                    {(r.kito_label ?? r.label) && <span className="chip">{L[lang].label[(r.kito_label ?? r.label)!]}</span>}
+                  </div>
+                  <div className="small muted" style={{ marginTop: 3 }}>{T("Last message", "Ujumbe wa mwisho")} {ago(r.last_message_at)}{r.last_dir === "in" ? T(" (from customer)", " (kutoka mteja)") : T(" (from you)", " (kutoka kwako)")}</div>
+                  <a className="small" href={"#chats/ids=" + r.id}>{T("Open chat →", "Fungua chat →")}</a>
+                </div>
+                <div className="small">
+                  {r.kito_summary ? <div>{r.kito_summary}</div> : <div className="muted">{T("Kito has not read this chat yet.", "Kito bado hajasoma chat hii.")}</div>}
+                  {r.kito_next && <div style={{ marginTop: 3 }}>→ {r.kito_next}</div>}
+                  {r.kito_blocker && <div className="muted" style={{ marginTop: 3 }}>{T("Blocker", "Kikwazo")}: {L[lang].blocker[r.kito_blocker] ?? r.kito_blocker}</div>}
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  {editor && <button className="small primary" onClick={() => createTask(r, reason)}>{T("Take it", "Chukua")}</button>}
+                </div>
+              </div>
+            ))}</div>
+          )}
+        </section>
+      )}
+
+      {tab === "tasks" && (
+        <section className="card">
+          <h2>{T("Open tasks", "Kazi zilizo wazi")}</h2>
+          {open.length === 0 && snoozed.length === 0 ? <div className="empty">{T("No open tasks. Take one from the queue.", "Hakuna kazi wazi. Chukua moja kutoka foleni.")}</div> : (
+            <div className="queue">
+              {open.map((t) => <TaskCard key={t.id} t={t} r={rows.find((x) => x.id === t.conversation_id)} ws={ws} members={members} me={me} editor={editor} onChange={refresh} />)}
+              {snoozed.length > 0 && <h3>{T("Snoozed", "Zimeahirishwa")}</h3>}
+              {snoozed.map((t) => <TaskCard key={t.id} t={t} r={rows.find((x) => x.id === t.conversation_id)} ws={ws} members={members} me={me} editor={editor} onChange={refresh} />)}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "done" && (
+        <section className="card">
+          <h2>{T("Completed and dismissed", "Zilizokamilika na zilizoondolewa")}</h2>
+          {closed.length === 0 ? <div className="empty">{T("Nothing yet.", "Hakuna bado.")}</div> : (
+            <div className="scroll"><table>
+              <thead><tr><th>{T("Task", "Kazi")}</th><th>{T("Status", "Hali")}</th><th>{T("Closed", "Imefungwa")}</th><th>{T("Draft", "Rasimu")}</th></tr></thead>
+              <tbody>{closed.map((t) => <tr key={t.id}><td><a href={"#chats/ids=" + t.conversation_id}>{t.title}</a></td><td><span className={"pill " + (t.status === "done" ? "sold" : "lost")}>{t.status}</span></td><td className="small muted">{when(t.completed_at)}</td><td className="small muted">{t.draft_source ? `${t.draft_source}${t.draft_edited_at ? " · " + when(t.draft_edited_at) : ""}` : "–"}</td></tr>)}</tbody>
+            </table></div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: { t: Task; r?: Outcome; ws: Workspace; members: Member[]; me: string; editor: boolean; onChange: () => void; compact?: boolean }) {
+  const lang = ws.language;
+  const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
+  const [draft, setDraft] = useState(t.draft ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [kito, setKito] = useState<Draft | null>(null);
+  const [msgs, setMsgs] = useState<Msg[] | null>(null);
+  const [history, setHistory] = useState<{ action: string; at: string; details: any }[] | null>(null);
+  useEffect(() => setDraft(t.draft ?? ""), [t.id, t.draft]);
+
+  async function patch(p: Partial<Task>, okMsg?: string) {
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("follow_up_tasks").update(p).eq("id", t.id).eq("workspace_id", ws.id);
+    setBusy(false);
+    if (error) setErr(error.message); else { if (okMsg) setErr(okMsg); onChange(); }
+  }
+  async function askKito() {
+    setBusy(true); setErr(""); setKito(null);
+    try {
+      const d = await callFn<Draft>("kito", { workspace_id: ws.id, action: "draft_reply", conversation_id: t.conversation_id });
+      setKito(d);
+      const text = lang === "sw" ? d.draft_sw : d.draft_en;
+      setDraft(text);
+      await supabase.from("follow_up_tasks").update({ draft: text, draft_source: "kito" }).eq("id", t.id).eq("workspace_id", ws.id);
+      onChange();
+    } catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  }
+  async function showChat() {
+    if (msgs) { setMsgs(null); return; }
+    const { data } = await supabase.from("messages").select("id,direction,sent_at,body").eq("conversation_id", t.conversation_id).order("sent_at", { ascending: false }).limit(12);
+    setMsgs(((data as Msg[]) ?? []).reverse());
+  }
+  async function showHistory() {
+    if (history) { setHistory(null); return; }
+    const { data } = await supabase.from("task_events").select("action,at,details").eq("task_id", t.id).order("at", { ascending: false }).limit(20);
+    setHistory((data as any[]) ?? []);
+  }
+  const copy = async () => { try { await navigator.clipboard.writeText(draft); setErr(T("Copied. Paste it in WhatsApp and send it yourself.", "Imenakiliwa. Bandika WhatsApp na utume mwenyewe.")); } catch { setErr(T("Could not copy.", "Haikunakiliwa.")); } };
+  const snoozeFor = (days: number) => patch({ status: "snoozed", snoozed_until: new Date(Date.now() + days * 864e5).toISOString() });
+
+  return (
+    <div className="qitem">
+      <div>
+        <b>{t.title}</b>
+        <div className="small muted" style={{ marginTop: 3 }}>{t.status === "snoozed" ? `${T("snoozed until", "imeahirishwa hadi")} ${when(t.snoozed_until)}` : `${T("created", "imetengenezwa")} ${ago(t.created_at)}`} · {t.source === "queue" ? T("from queue", "kutoka foleni") : T("manual", "mkono")}</div>
+        {r && <div className="small" style={{ marginTop: 3 }}>{r.kito_summary ?? ""}</div>}
+        {!compact && <div className="small" style={{ marginTop: 4 }}><a href={"#chats/ids=" + t.conversation_id}>{T("Open chat →", "Fungua chat →")}</a> · <button className="small" style={{ padding: 0, border: 0, background: "none", color: "var(--accent)" }} onClick={showChat}>{msgs ? T("Hide last messages", "Ficha") : T("Last messages", "Ujumbe wa mwisho")}</button> · <button className="small" style={{ padding: 0, border: 0, background: "none", color: "var(--accent)" }} onClick={showHistory}>{history ? T("Hide history", "Ficha historia") : T("History", "Historia")}</button></div>}
+        {msgs && <div className="bubbles" style={{ maxHeight: 220 }}>{msgs.map((m) => <div key={m.id} className={"bub " + m.direction}><span className="t">{m.direction === "in" ? r?.contact_name ?? T("Customer", "Mteja") : ws.name} · {when(m.sent_at)}</span>{m.body ?? ""}</div>)}</div>}
+        {history && <div className="evidence">{history.length === 0 ? <span className="muted">–</span> : history.map((h, i) => <span key={i}><b>{h.action}</b> · {when(h.at)} {h.details ? <span className="muted">{JSON.stringify(h.details)}</span> : null}</span>)}</div>}
+        {editor && (
+          <label className="small muted" style={{ display: "block", marginTop: 6 }}>{T("Assigned to", "Imepewa")}
+            <select value={t.assigned_to ?? ""} disabled={busy} onChange={(e) => patch({ assigned_to: e.target.value || null })} style={{ marginLeft: 6, padding: "3px 8px" }}>
+              <option value="">{T("nobody", "hakuna")}</option>
+              {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.email}{m.user_id === me ? T(" (me)", " (mimi)") : ""}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      <div>
+        <div className="draft-label">{T("Draft — not sent", "Rasimu — haijatumwa")}{t.draft_source ? ` · ${t.draft_source === "kito" ? T("written by Kito", "imeandikwa na Kito") : t.draft_source === "edited" ? T("edited by you", "imehaririwa na wewe") : T("written by you", "imeandikwa na wewe")}` : ""}</div>
+        <textarea value={draft} disabled={!editor || busy} onChange={(e) => setDraft(e.target.value)} placeholder={T("Write the message you plan to send, or ask Kito for a draft.", "Andika ujumbe unaopanga kutuma, au muombe Kito rasimu.")} />
+        {kito && (
+          <div className="evidence">
+            <span><b>{T("Why", "Kwa nini")}:</b> {kito.why}</span>
+            {kito.grounded_on.length > 0 && <span><b>{T("Based on", "Kwa msingi wa")}:</b> {kito.grounded_on.map((q, i) => <q key={i}>{q}</q>).reduce((a: any[], x, i) => (i ? [...a, " · ", x] : [x]), [])}</span>}
+            {kito.missing.length > 0 && <span className="warnt"><b>{T("Fill in before sending", "Jaza kabla ya kutuma")}:</b> {kito.missing.join(", ")}</span>}
+            {!kito.profile_used && <span className="muted">{T("No business profile yet: prices and delivery are placeholders. Add it in Settings → Business.", "Hakuna wasifu wa biashara: bei na usafirishaji ni nafasi tupu. Ongeza kwenye Mipangilio.")}</span>}
+            <span className="muted">{lang === "sw" ? "English: " + kito.draft_en : "Kiswahili: " + kito.draft_sw}</span>
+          </div>
+        )}
+        {editor && (
+          <div className="row" style={{ gap: 6, marginTop: 6 }}>
+            <button className="small" disabled={busy} onClick={askKito}>{busy ? "…" : T("Ask Kito for a draft", "Muombe Kito rasimu")}</button>
+            <button className="small" disabled={busy || draft === (t.draft ?? "")} onClick={() => patch({ draft: draft || null }, T("Draft saved.", "Rasimu imehifadhiwa."))}>{T("Save draft", "Hifadhi rasimu")}</button>
+            <button className="small" disabled={!draft} onClick={copy}>{T("Copy", "Nakili")}</button>
+          </div>
+        )}
+        {err && <div className={"small " + (/saved|Copied|Imenakiliwa|imehifadhiwa/.test(err) ? "ok" : "err")}>{err}</div>}
+      </div>
+      {editor && (
+        <div className="row" style={{ gap: 6, flexDirection: "column", alignItems: "stretch" }}>
+          <button className="small primary" disabled={busy} onClick={() => patch({ status: "done" })}>{T("Done", "Imekamilika")}</button>
+          <button className="small" disabled={busy} onClick={() => snoozeFor(1)}>{T("Snooze 1 day", "Ahirisha siku 1")}</button>
+          <button className="small" disabled={busy} onClick={() => snoozeFor(3)}>{T("Snooze 3 days", "Ahirisha siku 3")}</button>
+          <button className="small" disabled={busy} onClick={() => patch({ status: "dismissed" })}>{T("Dismiss", "Ondoa")}</button>
+        </div>
+      )}
+    </div>
+  );
+}
