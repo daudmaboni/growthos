@@ -74,7 +74,7 @@ export default function Content({ ws }: { ws: Workspace }) {
       {err && <p className="err">{err}</p>}
       <div className="finding warn">
         <b>{T("Facebook / Instagram content is not connected", "Maudhui ya Facebook / Instagram hayajaunganishwa")}</b>
-        <span className="small">{T("The Meta app only has ad-reading and WhatsApp permissions, so post performance cannot be pulled automatically yet. Record posts here (or import them from a CSV export of Meta Business Suite) and GrowthOS will compare them with inquiries and confirmed sales. Nothing on this page is published to Meta.", "App ya Meta ina ruhusa za matangazo na WhatsApp tu, kwa hiyo utendaji wa machapisho hauwezi kuvutwa moja kwa moja bado. Rekodi machapisho hapa na GrowthOS italinganisha na maulizo na mauzo. Hakuna kinachochapishwa Meta kutoka hapa.")}</span>
+        <span className="small">{T("The Meta app only has ad-reading and WhatsApp permissions, so post performance cannot be pulled automatically yet. Record posts here (or import them from a CSV export of Meta Business Suite) and ItaOS will compare them with inquiries and confirmed sales. Nothing on this page is published to Meta.", "App ya Meta ina ruhusa za matangazo na WhatsApp tu, kwa hiyo utendaji wa machapisho hauwezi kuvutwa moja kwa moja bado. Rekodi machapisho hapa na ItaOS italinganisha na maulizo na mauzo. Hakuna kinachochapishwa Meta kutoka hapa.")}</span>
       </div>
 
       <section className="card">

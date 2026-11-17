@@ -4,7 +4,7 @@
 //
 // Two ways in:
 //  - Meta delivers directly (our own Meta app): signed with x-hub-signature-256.
-//  - A partner (360dialog) relays Meta's events while GrowthOS's own Tech Provider access is
+//  - A partner (360dialog) relays Meta's events while ItaOS's own Tech Provider access is
 //    pending: authenticated by a per-workspace secret in x-growthos-token (set by d360-connect).
 //    Those events can only land in that token's workspace.
 //

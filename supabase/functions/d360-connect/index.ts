@@ -1,5 +1,5 @@
 // Connects a workspace's WhatsApp number through 360dialog (a Meta-verified partner that supports
-// Coexistence). Bridge until GrowthOS has its own Tech Provider access; then reconnect with
+// Coexistence). Bridge until ItaOS has its own Tech Provider access; then reconnect with
 // Embedded Signup in meta-connect and this connection can be removed.
 //
 // The owner pastes their 360dialog API key. We point the number's webhook at wa-webhook with a
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const hash = await sha256Hex(token);
     const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wa-webhook`;
 
-    // 1) Point the number's events at GrowthOS. Done first: if the key is wrong nothing is saved.
+    // 1) Point the number's events at ItaOS. Done first: if the key is wrong nothing is saved.
     await d360("/v1/configs/webhook", apiKey, { method: "POST", body: JSON.stringify({ url, headers: { "x-growthos-token": token } }) });
 
     // 2) Best effort: learn the WABA id for labelling. Numbers register themselves on the first event.
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     if (findError) throw new Error("could not check existing connections");
     const externalId = wabaId ? `360dialog:${wabaId}` : existing?.external_id ?? `360dialog:${hash.slice(0, 12)}`;
     const { data: clash } = await db.from("connections").select("workspace_id").eq("provider", "whatsapp").eq("external_id", externalId).maybeSingle();
-    if (clash && clash.workspace_id !== ws) throw new Error("This WhatsApp account is already connected to another GrowthOS workspace.");
+    if (clash && clash.workspace_id !== ws) throw new Error("This WhatsApp account is already connected to another ItaOS workspace.");
 
     const secret = await storeToken(db, `360dialog:${ws}:${Date.now()}`, apiKey);
     const row = {

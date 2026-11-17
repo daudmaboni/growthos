@@ -1,4 +1,4 @@
-// Central, deterministic metric definitions for GrowthOS. Pure functions: no network, no AI.
+// Central, deterministic metric definitions for ItaOS. Pure functions: no network, no AI.
 // Every figure carries its provenance so the UI can say where a number came from.
 //
 // Cohort rules
@@ -41,7 +41,7 @@ export type FunnelMetrics = {
 export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
   spend: { en: "Ad spend reported by Meta for the ads in this period.", sw: "Matumizi ya matangazo kama Meta inavyoripoti kwa kipindi hiki." },
   platformConversations: { en: "Messaging conversations started, as reported by Meta Ads Manager.", sw: "Mazungumzo yaliyoanza kama Meta Ads Manager inavyoripoti." },
-  chats: { en: "WhatsApp chats whose first message is in this period (observed by GrowthOS).", sw: "Chats za WhatsApp zilizoanza kipindi hiki (zimeonekana na GrowthOS)." },
+  chats: { en: "WhatsApp chats whose first message is in this period (observed by ItaOS).", sw: "Chats za WhatsApp zilizoanza kipindi hiki (zimeonekana na ItaOS)." },
   adChats: { en: "Chats that carried a Meta ad referral (matched, not proof the ad caused anything).", sw: "Chats zilizokuja na referral ya tangazo (zimeunganishwa, si uthibitisho)." },
   replied: { en: "Chats where the business sent at least one message.", sw: "Chats ambazo biashara ilijibu angalau mara moja." },
   priced: { en: "Chats where a price was shared (rule-based detection).", sw: "Chats ambazo bei ilitolewa (kanuni za maneno)." },

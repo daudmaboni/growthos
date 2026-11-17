@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-/* GrowthOS motion kit — same recipe as the Amplo dashboard (GSAP 3).
+/* ItaOS motion kit — same recipe as the Amplo dashboard (GSAP 3).
    npm i gsap
    Every helper is a no-op when the user prefers reduced motion. */
 import gsap from "gsap";

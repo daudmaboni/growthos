@@ -71,7 +71,7 @@ export default function App() {
   return (
     <div className="shell" ref={shellRef}>
       <header className="topbar">
-        <div className="brand"><a className="home" href="#dashboard" aria-label="GrowthOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>GrowthOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
+        <div className="brand"><a className="home" href="#dashboard" aria-label="ItaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>ItaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <nav className="tabs" aria-label="Sections">
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
@@ -134,7 +134,7 @@ function Login() {
   return (
     <div className="center">
       <form className="card auth" ref={formRef} onSubmit={submit}>
-        <div className="row"><Logo size={44} /><h1>GrowthOS</h1></div>
+        <div className="row"><Logo size={44} /><h1>ItaOS</h1></div>
         <p className="muted" style={{ margin: 0 }}>See which ads bring paying customers, not just chats.</p>
         {sent ? <p className="ok">Check {email} for a sign-in link.</p> : (<>
           <label htmlFor="email"><b>Email</b></label>

@@ -1,6 +1,6 @@
 // Action Centre: the follow-up queue. Surfaces chats that need a reply or a follow-up, lets
 // staff assign / snooze / complete / dismiss tasks, and asks Kito for a DRAFT that a human
-// reviews and sends from their own phone. GrowthOS never sends WhatsApp messages.
+// reviews and sends from their own phone. ItaOS never sends WhatsApp messages.
 import { useEffect, useMemo, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
@@ -95,7 +95,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       </div>
       {err && <p className="err">{err}</p>}
       {!editor && <p className="small muted">{T("You have a viewer role: you can see the queue but not change tasks.", "Una nafasi ya kutazama tu: unaweza kuona foleni lakini si kubadilisha kazi.")}</p>}
-      <div className="finding"><b>{T("GrowthOS never sends messages.", "GrowthOS haitumi ujumbe kamwe.")}</b><span className="small">{T("Drafts here are suggestions. Copy one, edit it, and send it yourself from WhatsApp.", "Rasimu hapa ni mapendekezo. Nakili, hariri, na utume mwenyewe kutoka WhatsApp.")}</span></div>
+      <div className="finding"><b>{T("ItaOS never sends messages.", "ItaOS haitumi ujumbe kamwe.")}</b><span className="small">{T("Drafts here are suggestions. Copy one, edit it, and send it yourself from WhatsApp.", "Rasimu hapa ni mapendekezo. Nakili, hariri, na utume mwenyewe kutoka WhatsApp.")}</span></div>
 
       {tab === "queue" && (
         <section className="card">

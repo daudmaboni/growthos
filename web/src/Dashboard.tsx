@@ -184,7 +184,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
               {!ads.length && <tr><td colSpan={10} className="muted small">{T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.")}</td></tr>}
             </tbody>
           </table></div>
-          <p className="small muted" style={{ margin: 0 }}>{T("“Chats seen” are chats GrowthOS linked to the ad through WhatsApp’s ad referral: a matched link, not proof the ad caused a purchase. “Signals” are inferred payments (words, screenshots, Kito) and are not counted as sales. Cost per sale uses only paid orders recorded in GrowthOS and paid within the conversion window.", "“Chats seen” ni chats ambazo GrowthOS imeziunganisha na tangazo kupitia referral ya WhatsApp: ni uhusiano, si uthibitisho kuwa tangazo limesababisha ununuzi. “Dalili” ni malipo yaliyokisiwa (maneno, picha, Kito) na hayahesabiwi kama mauzo. Gharama kwa mauzo hutumia oda zilizolipwa na kurekodiwa GrowthOS ndani ya dirisha la uthibitisho.")}</p>
+          <p className="small muted" style={{ margin: 0 }}>{T("“Chats seen” are chats ItaOS linked to the ad through WhatsApp’s ad referral: a matched link, not proof the ad caused a purchase. “Signals” are inferred payments (words, screenshots, Kito) and are not counted as sales. Cost per sale uses only paid orders recorded in ItaOS and paid within the conversion window.", "“Chats seen” ni chats ambazo ItaOS imeziunganisha na tangazo kupitia referral ya WhatsApp: ni uhusiano, si uthibitisho kuwa tangazo limesababisha ununuzi. “Dalili” ni malipo yaliyokisiwa (maneno, picha, Kito) na hayahesabiwi kama mauzo. Gharama kwa mauzo hutumia oda zilizolipwa na kurekodiwa ItaOS ndani ya dirisha la uthibitisho.")}</p>
         </section>
       </>)}
     </div>

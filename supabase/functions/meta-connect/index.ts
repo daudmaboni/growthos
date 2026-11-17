@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   async function assertNotOwnedElsewhere(provider: "meta_ads" | "whatsapp", externalId: string) {
     const { data: existing, error } = await db.from("connections").select("workspace_id").eq("provider", provider).eq("external_id", externalId).maybeSingle();
     if (error) throw new Error("could not check existing connections");
-    if (existing && existing.workspace_id !== ws) throw new Error("This account is already connected to another GrowthOS workspace. Disconnect it there first.");
+    if (existing && existing.workspace_id !== ws) throw new Error("This account is already connected to another ItaOS workspace. Disconnect it there first.");
   }
 
   try {

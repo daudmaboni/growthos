@@ -1,5 +1,5 @@
 :root {
-  /* GrowthOS — Amplo-style dark dashboard: near-black canvas, soft raised cards, one green accent for money that worked. */
+  /* ItaOS — Amplo-style dark dashboard: near-black canvas, soft raised cards, one green accent for money that worked. */
   --paper: #0d0e10; --card: #16171a; --raised: #ffffff0b; --panel: #1b1c20; --ink: #f3f3f5; --ink-2: #d3d4da; --muted: #9b9ea8; --line: #ffffff13; --line-2: #ffffff24;
   --accent: #4ad48f; --accent-from: #6fe0a6; --accent-to: #2fbf78; --accent-soft: #4ad48f24; --accent-text: #8ee9bb; --accent-glow: #4ad48f61; --on-accent: #06201a;
   --good: #5fd39a; --good-soft: #5fd39a24; --warn: #f3b25a; --warn-soft: #f3b25a26; --bad: #ff8569; --bad-soft: #ff856924; --info: #6fd3dc; --info-soft: #6fd3dc24;
@@ -182,7 +182,7 @@ nav.subtabs a { padding: 7px 18px; }
 textarea { font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 9px 12px; max-width: 100%; }
 @media (max-width: 760px) { .qitem { grid-template-columns: 1fr; } }
 
-/* header: workspace name sits under "GrowthOS" so it is never cut to "Kay…" on phones */
+/* header: workspace name sits under "ItaOS" so it is never cut to "Kay…" on phones */
 .brand a.home { min-width: 0; }
 .brand-text { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 @media (max-width: 760px) {

@@ -48,7 +48,7 @@ export const FIELDS: Record<Kind, { key: string; en: string; sw: string; require
     { key: "product", en: "Product", sw: "Bidhaa", hint: "Optional" },
     { key: "customer_name", en: "Customer name", sw: "Jina la mteja", hint: "Used to suggest a chat match" },
     { key: "phone", en: "Customer phone", sw: "Simu ya mteja", hint: "Used only to find the chat in this workspace; never stored" },
-    { key: "conversation_id", en: "GrowthOS chat id", sw: "Kitambulisho cha chat", hint: "Optional, from a GrowthOS export" },
+    { key: "conversation_id", en: "ItaOS chat id", sw: "Kitambulisho cha chat", hint: "Optional, from a ItaOS export" },
     { key: "notes", en: "Notes", sw: "Maelezo", hint: "Optional" },
   ],
   expenses: [
@@ -81,7 +81,7 @@ const SYNONYMS: Record<string, string[]> = {
   product: ["product", "item", "items", "bidhaa", "sku", "description"],
   customer_name: ["customer", "customer_name", "customer name", "name", "jina", "mteja", "client", "buyer", "contact"],
   phone: ["phone", "simu", "whatsapp", "number", "msisdn", "mobile", "tel", "telephone", "phone_number", "phone number"],
-  conversation_id: ["conversation_id", "conversation id", "chat_id", "chat id", "growthos id"],
+  conversation_id: ["conversation_id", "conversation id", "chat_id", "chat id", "growthos id", "itaos id"],
   notes: ["notes", "note", "maelezo", "comment", "comments", "remarks"],
   note: ["note", "notes", "maelezo", "comment", "description", "remarks"],
   category: ["category", "aina", "type", "kind"],

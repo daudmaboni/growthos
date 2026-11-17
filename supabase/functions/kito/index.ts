@@ -1,4 +1,4 @@
-// Kito: GrowthOS's background AI. Reads chats that are new or changed and labels them:
+// Kito: ItaOS's background AI. Reads chats that are new or changed and labels them:
 // outcome, stage label, amount, objections, customer tags, a one-line summary and the next step.
 // Runs every 15 minutes (cron) or on demand from the app. Needs the ANTHROPIC_API_KEY secret.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -42,7 +42,7 @@ function transcript(msgs: { direction: string; sent_at: string; body: string | n
 }
 
 function prompt(chat: string, lastAt: string, lang: string, currency: string) {
-  return `You are Kito, an analyst inside GrowthOS. You read one WhatsApp sales chat between a small Tanzanian business (BIASHARA) and a customer (MTEJA) and label it. Chats are in Kiswahili, English or a mix.
+  return `You are Kito, an analyst inside ItaOS. You read one WhatsApp sales chat between a small Tanzanian business (BIASHARA) and a customer (MTEJA) and label it. Chats are in Kiswahili, English or a mix.
 
 Today is ${new Date().toISOString().slice(0, 10)}. The last message was sent ${lastAt.slice(0, 10)}. "(+26h)" means 26 hours passed before that message. "<Media omitted>" or "[image]" is a photo or screenshot, often a payment screenshot when it follows payment instructions.
 
@@ -153,7 +153,7 @@ const DRAFT_TOOL = {
 };
 
 function draftPrompt(chat: string, profile: string, customerName: string | null, nextStep: string | null) {
-  return `You are Kito, a sales coach inside GrowthOS. Write ONE short WhatsApp follow-up the business owner can send after reviewing it. It is a draft; a human decides whether to send it.
+  return `You are Kito, a sales coach inside ItaOS. Write ONE short WhatsApp follow-up the business owner can send after reviewing it. It is a draft; a human decides whether to send it.
 
 Business profile (the only facts you may state about products, prices, delivery and payment):
 ${profile}
@@ -213,7 +213,7 @@ async function contentIdeas(db: ReturnType<typeof admin>, ws: string, lang: stri
   for (const c of objections ?? []) for (const o of new Set([...(c.kito_objections ?? []), ...(c.objections ?? [])])) tally[o] = (tally[o] ?? 0) + 1;
   const topObjections = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} (${n} chats)`).join(", ") || "none recorded";
   const postLines = (posts ?? []).map((p) => `- ${p.format ?? "?"} | theme: ${p.theme ?? "?"} | hook: ${p.hook ?? "?"} | offer: ${p.offer ?? "-"} | reach ${p.reach ?? "?"} likes ${p.likes ?? "?"} comments ${p.comments ?? "?"} shares ${p.shares ?? "?"} saves ${p.saves ?? "?"}`).join("\n") || "(no posts recorded yet)";
-  const p = `You are Kito inside GrowthOS. Propose up to 6 content ideas for a small Tanzanian business as EDITABLE DRAFTS. Nothing you write is published automatically.
+  const p = `You are Kito inside ItaOS. Propose up to 6 content ideas for a small Tanzanian business as EDITABLE DRAFTS. Nothing you write is published automatically.
 
 Business profile (only source of product, price, delivery and payment facts):
 ${profileText(profile as Profile)}

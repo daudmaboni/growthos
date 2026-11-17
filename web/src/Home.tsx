@@ -22,7 +22,7 @@ export default function Home() {
     <div className="hp">
       <header className="hp-bar">
         <div className="hp-w hp-bar-in">
-          <a href="/" className="hp-logo" aria-label="GrowthOS home"><Logo size={30} /><span>GrowthOS</span></a>
+          <a href="/" className="hp-logo" aria-label="ItaOS home"><Logo size={30} /><span>ItaOS</span></a>
           <nav className="hp-nav" aria-label="Main">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
@@ -37,7 +37,7 @@ export default function Home() {
       {/* Full-screen mobile menu */}
       <div className={"hp-menu" + (menu ? " open" : "")} aria-hidden={!menu}>
         <div className="hp-w hp-bar-in">
-          <a href="/" className="hp-logo" onClick={go}><Logo size={30} /><span>GrowthOS</span></a>
+          <a href="/" className="hp-logo" onClick={go}><Logo size={30} /><span>ItaOS</span></a>
           <button className="hp-x" onClick={go} aria-label="Close menu">✕</button>
         </div>
         <nav>
@@ -56,7 +56,7 @@ export default function Home() {
           <div className="hp-w hp-hero-in">
             <div className="hp-hero-txt">
               <h1>Know which ads <u>actually</u> make you money</h1>
-              <p>Your ads bring chats on WhatsApp. GrowthOS shows you which of those chats became paying customers, and which ad brought them.</p>
+              <p>Your ads bring chats on WhatsApp. ItaOS shows you which of those chats became paying customers, and which ad brought them.</p>
               <a href={APP} className="hp-pill">Get started <span aria-hidden="true">→</span></a>
               <small>Works in Kiswahili and English</small>
             </div>
@@ -82,7 +82,7 @@ export default function Home() {
         <section className="hp-intro">
           <div className="hp-w">
             <h2>Built for businesses that sell on WhatsApp 🇹🇿</h2>
-            <p>If your customers find you through Facebook and Instagram ads, then talk to you on WhatsApp before they pay, GrowthOS was made for you.</p>
+            <p>If your customers find you through Facebook and Instagram ads, then talk to you on WhatsApp before they pay, ItaOS was made for you.</p>
           </div>
         </section>
 
@@ -119,7 +119,7 @@ export default function Home() {
           <Feature
             tone="blush"
             title="Know who to follow up with today"
-            text="Customers who got your Lipa namba but never paid are money left on the table. GrowthOS lists them for you, with a reply already written. You decide what to send."
+            text="Customers who got your Lipa namba but never paid are money left on the table. ItaOS lists them for you, with a reply already written. You decide what to send."
             art={
               <div className="hp-card-stack">
                 <div className="hp-fu-h">Follow up today <span>14</span></div>
@@ -150,7 +150,7 @@ export default function Home() {
           <div className="hp-w">
             <p className="hp-mission-k">Our mission</p>
             <h2>Help every business in Tanzania see where its sales <u>really</u> come from.</h2>
-            <p className="hp-mission-p">Too many good businesses spend on ads and hope. We think you should know. GrowthOS is built in Dar es Salaam by Pondi Technologies, for the way people here actually buy.</p>
+            <p className="hp-mission-p">Too many good businesses spend on ads and hope. We think you should know. ItaOS is built in Dar es Salaam by Pondi Technologies, for the way people here actually buy.</p>
           </div>
         </section>
 
@@ -177,7 +177,7 @@ export default function Home() {
 
       <footer className="hp-foot">
         <div className="hp-w">
-          <a href="/" className="hp-logo dark"><Logo size={28} /><span>GrowthOS</span></a>
+          <a href="/" className="hp-logo dark"><Logo size={28} /><span>ItaOS</span></a>
           <nav>
             <a href={APP}>Log in</a>
             <a href={APP}>Get started</a>
