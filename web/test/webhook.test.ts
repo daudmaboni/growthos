@@ -29,3 +29,28 @@ describe("safe errors and retry classification", () => {
     expect(isRetryable("WhatsApp number is not connected to a workspace")).toBe(false);
   });
 });
+
+import { normalizeEnvelope } from "../../supabase/functions/_shared/webhook";
+
+describe("provider envelopes (360dialog bridge)", () => {
+  const meta = { object: "whatsapp_business_account", entry: [{ id: "waba1", changes: [{ field: "messages", value: { metadata: { phone_number_id: "pn1" }, messages: [{ id: "m1" }] } }] }] };
+  it("passes Meta's own shape through unchanged", () => {
+    expect(normalizeEnvelope(meta).entry[0]).toEqual(meta.entry[0]);
+  });
+  it("maps 360dialog's event shape onto a Meta change", () => {
+    const e = normalizeEnvelope({ id: "ev1", event: "history", data: { id: "waba1", metadata: { phone_number_id: "pn1" }, history: [] } });
+    expect(e.entry[0].id).toBe("waba1");
+    expect(e.entry[0].changes[0].field).toBe("history");
+    expect(e.entry[0].changes[0].value.metadata.phone_number_id).toBe("pn1");
+  });
+  it("routes a flat payload only when the number is known", () => {
+    const flat = { contacts: [], messages: [{ id: "m1", from: "2557", type: "text" }] };
+    expect(normalizeEnvelope(flat).entry[0].changes[0].value.metadata).toBeUndefined();
+    const e = normalizeEnvelope(flat, { wabaId: "w", phoneNumberId: "pn9" });
+    expect(e.entry[0].changes[0].value.metadata.phone_number_id).toBe("pn9");
+  });
+  it("ignores bodies it does not understand", () => {
+    expect(normalizeEnvelope({ hello: 1 }).entry).toEqual([]);
+    expect(normalizeEnvelope(null).entry).toEqual([]);
+  });
+});

@@ -21,7 +21,7 @@ Nothing in this repository deploys itself. To put the MVP live (after review):
 2. **Edge Functions** — deploy the changed and new functions. `wa-webhook` must stay public to Meta (no JWT check); the others keep the default JWT check.
    ```
    supabase functions deploy wa-webhook --no-verify-jwt
-   supabase functions deploy ads-sync meta-connect kito kito-ask csv-import chat-import
+   supabase functions deploy ads-sync meta-connect kito kito-ask csv-import chat-import d360-connect
    supabase functions delete sales-import     # replaced by csv-import
    ```
    Ask Kito uses the same `ANTHROPIC_API_KEY` secret. Optional: `KITO_ASK_MODEL` (default `claude-sonnet-5-5`) and `KITO_ASK_HOURLY` (questions per person per hour, default 40).
@@ -91,6 +91,18 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
    - WhatsApp Web / Desktop on other devices gets logged out once. Link them again from the phone.
    - The phone keeps working exactly as before. GrowthOS only reads.
 5. Wait a few hours for the 6-month history to arrive. Then open **Dashboard** and **Chats**.
+
+## 3b. Bridge: connect WhatsApp through 360dialog (while Pondi's Meta verification is pending)
+
+Meta refuses Embedded Signup until the GrowthOS business is a verified Tech Provider. Until then, a number can come in through 360dialog, a Meta partner that supports Coexistence (the WhatsApp Business app keeps working on the phone; history sync, message echoes and ad referrals with `ctwa_clid` arrive the same way).
+
+1. Deploy `wa-webhook` (still `--no-verify-jwt`) and `d360-connect` (normal JWT check). No new secrets or migrations.
+2. Kayani (the number's owner) signs up at app.360dialog.com, Regular plan (about €49 per number per month, Meta fees passed through), and adds the number with **"Yes, Business app" → "Connect your existing WhatsApp Business app"**. Scan the QR on the phone and **allow chat history sharing**. The number must have been active on the Business app for at least 7 days. 360dialog says history sync for direct clients may need their support to switch on: message support before onboarding and ask for Coexistence history sync to be enabled.
+3. In the 360dialog hub, generate an API key for the number.
+4. GrowthOS → Connect → WhatsApp Business → **Use 360dialog** → paste the key. GrowthOS sets the number's webhook to `wa-webhook` with a secret `x-growthos-token` header (only its hash is stored; the API key goes to Vault). Don't change the webhook in 360dialog afterwards; pasting the key again rotates the secret.
+5. Send a test message to the number, and click a Click-to-WhatsApp ad from another phone. The number appears on the Connect page after the first event; the ad chat should show its ad on the dashboard.
+
+**Leaving the bridge later:** once Pondi is a Tech Provider, disconnect the number from 360dialog (WhatsApp Business app → Settings → Account → Business Platform → Disconnect), then use **Connect WhatsApp** (Embedded Signup). Chats already in GrowthOS stay; Meta allows the 6-month history sync once per onboarding, so expect to re-request it.
 
 ## Known limits of v0.1
 - Only people with a role on the Meta app can connect (development mode). Opening to other businesses needs Meta App Review + Tech Provider verification later.

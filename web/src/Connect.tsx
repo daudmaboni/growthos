@@ -19,6 +19,8 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
   const [tick, setTick] = useState(0);
+  const [d360Key, setD360Key] = useState("");
+  const [showD360, setShowD360] = useState(false);
   const [health, setHealth] = useState<Health[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const manager = canManage(ws);
@@ -58,6 +60,12 @@ export default function Connect({ ws }: { ws: Workspace }) {
     setMsg({ ok: `WhatsApp ${r.display_phone ?? ""} connected. History: ${r.syncs.history}. Chats from the last 6 months will appear over the next few hours.` });
   });
 
+  const connect360 = () => run("d360", async () => {
+    await callFn("d360-connect", { workspace_id: ws.id, api_key: d360Key });
+    setD360Key(""); setShowD360(false);
+    setMsg({ ok: "Connected through 360dialog. The number appears here when its first message arrives; chat history (if you shared it during 360dialog signup) follows over the next few hours." });
+  });
+
   const replay = () => run("replay", async () => {
     const r = await callFn<{ requeued: number; processed: number; checked: number }>("wa-webhook", { action: "replay", workspace_id: ws.id });
     setMsg({ ok: `Requeued ${r.requeued} events; ${r.processed} of ${r.checked} processed now. The rest retry on the next scheduled run.` });
@@ -67,6 +75,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const queued = health.find((h) => h.status === "pending");
   const adsConns = conns.filter((c) => c.provider === "meta_ads");
   const waConns = conns.filter((c) => c.provider === "whatsapp");
+  const d360Conns = waConns.filter((c) => c.external_id.startsWith("360dialog:"));
   const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card, :scope > .finding"), { stagger: 0.07 }); });
 
   return (
@@ -98,6 +107,29 @@ export default function Connect({ ws }: { ws: Workspace }) {
           <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectWa}>{busy === "wa" ? "Connecting…" : waConns.length ? "Connect another number" : "Connect WhatsApp"}</button>
         </div>
         <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. GrowthOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
+        {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
+        {manager && (
+          <div className="evidence">
+            <div className="row between"><b>Connect through 360dialog</b>
+              {!showD360 && <button className="small" disabled={!!busy} onClick={() => setShowD360(true)}>{d360Conns.length ? "Change API key" : "Use 360dialog"}</button>}
+            </div>
+            <span className="small muted">Use this while GrowthOS's own Meta approval is pending. 360dialog is a Meta partner: the number keeps working in the WhatsApp Business app, and GrowthOS receives the same chats and ad clicks.</span>
+            {showD360 && (
+              <>
+                <ol className="small" style={{ margin: "4px 0", paddingLeft: 18 }}>
+                  <li>Sign up at app.360dialog.com and add the number with <b>"Connect your existing WhatsApp Business app"</b> (Coexistence). Allow chat history sharing when the phone asks.</li>
+                  <li>In the 360dialog hub, generate an <b>API key</b> for that number.</li>
+                  <li>Paste it here. GrowthOS sets the webhook for you; don't point it anywhere else afterwards.</li>
+                </ol>
+                <div className="row">
+                  <input type="password" autoComplete="off" placeholder="360dialog API key" value={d360Key} onChange={(e) => setD360Key(e.target.value)} style={{ flex: 1 }} />
+                  <button className="primary" disabled={!!busy || d360Key.trim().length < 10} onClick={connect360}>{busy === "d360" ? "Connecting…" : "Connect"}</button>
+                  <button disabled={!!busy} onClick={() => { setShowD360(false); setD360Key(""); }}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {nums.length === 0 && <p className="small muted" style={{ margin: 0 }}>Not connected. Until it is, upload chat exports below; the dashboard labels those chats' sources as unknown unless the first message came from an ad.</p>}
         {nums.map((n) => (
           <div className="row between small" key={n.phone_number_id}>
@@ -133,11 +165,11 @@ export default function Connect({ ws }: { ws: Workspace }) {
 
 
 
-function StatusRow({ c }: { c: Conn }) {
+function StatusRow({ c, waitingText = "Waiting for first sync" }: { c: Conn; waitingText?: string }) {
   return (
     <div className="row between small">
       <span><span className={"status-dot " + (c.status === "active" ? "on" : "err")} /> {c.label ?? c.external_id} <span className="muted">({c.external_id})</span></span>
-      <span className={c.last_error ? "err" : "muted"}>{c.last_error ? `Error: ${c.last_error}${c.last_sync_at ? ` · last good sync ${when(c.last_sync_at)}` : ""}` : c.last_sync_at ? "Last successful sync " + when(c.last_sync_at) : "Waiting for first sync"}</span>
+      <span className={c.last_error ? "err" : "muted"}>{c.last_error ? `Error: ${c.last_error}${c.last_sync_at ? ` · last good sync ${when(c.last_sync_at)}` : ""}` : c.last_sync_at ? "Last successful sync " + when(c.last_sync_at) : waitingText}</span>
     </div>
   );
 }

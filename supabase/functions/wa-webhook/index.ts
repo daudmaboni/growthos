@@ -2,11 +2,17 @@
 // Handles: messages (customer → business, incl. CTWA referral), smb_message_echoes (sent from the
 // Business app on the phone), history (6-month backfill), smb_app_state_sync (contact names).
 //
+// Two ways in:
+//  - Meta delivers directly (our own Meta app): signed with x-hub-signature-256.
+//  - A partner (360dialog) relays Meta's events while GrowthOS's own Tech Provider access is
+//    pending: authenticated by a per-workspace secret in x-growthos-token (set by d360-connect).
+//    Those events can only land in that token's workspace.
+//
 // Durability: every verified change is saved to raw_events BEFORE Meta gets a 200. Processing
 // runs after the response and is idempotent; failed events are retried by the scheduled job
 // (bounded by max_attempts) or replayed on request by a workspace owner/admin.
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
-import { eventKey, safeError, isRetryable } from "../_shared/webhook.ts";
+import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, type Envelope } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
@@ -149,9 +155,8 @@ async function processStored(db: SupabaseClient, id: number) {
   }
 }
 
-async function persistChanges(raw: string) {
+async function persistChanges(body: Envelope | any) {
   const db = admin();
-  const body = JSON.parse(raw);
   const ids: number[] = [];
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
@@ -194,6 +199,56 @@ async function retryBatch(db: SupabaseClient, ws: string | null, limit: number) 
   return { processed, checked: rows.length };
 }
 
+/**
+ * 360dialog relay. The token identifies exactly one workspace connection. Numbers seen for the
+ * first time are registered to that workspace; a number owned by another workspace is refused.
+ */
+async function bridgeDelivery(req: Request, token: string) {
+  const db = admin();
+  const hash = await sha256Hex(token);
+  const { data: conn, error } = await db.from("connections").select("id,workspace_id,external_id,status")
+    .eq("provider", "whatsapp").eq("meta->>via", "360dialog").eq("meta->>webhook_token_hash", hash).maybeSingle();
+  if (error) return new Response("temporary lookup failure", { status: 500 });
+  if (!conn || conn.status === "revoked") return new Response("unknown token", { status: 401 });
+
+  let body: unknown;
+  try { body = JSON.parse(await req.text()); } catch { return new Response("bad json", { status: 400 }); }
+  const { data: own } = await db.from("wa_numbers").select("phone_number_id,waba_id,display_phone").eq("connection_id", conn.id);
+  const only = own?.length === 1 ? own[0] : null;
+  const env = normalizeEnvelope(body, only ? { wabaId: only.waba_id, phoneNumberId: only.phone_number_id, displayPhone: only.display_phone } : {});
+
+  const kept: Envelope = { entry: [] };
+  try {
+    for (const entry of env.entry) {
+      const changes = [];
+      for (const change of entry.changes) {
+        const pnid: string | undefined = change.value?.metadata?.phone_number_id;
+        if (!pnid) continue;
+        const { data: owner, error: ownerError } = await db.from("wa_numbers").select("workspace_id").eq("phone_number_id", pnid).maybeSingle();
+        if (ownerError) throw new Error("could not resolve WhatsApp workspace");
+        if (owner && owner.workspace_id !== conn.workspace_id) { console.error("bridge: number belongs to another workspace; dropped"); continue; }
+        if (!owner) {
+          const { error: insertError } = await db.from("wa_numbers").insert({
+            phone_number_id: pnid, workspace_id: conn.workspace_id, connection_id: conn.id,
+            waba_id: String(entry.id ?? conn.external_id), display_phone: change.value?.metadata?.display_phone_number ?? null, coexistence: true,
+          });
+          if (insertError && !/duplicate/i.test(insertError.message)) throw new Error("could not register WhatsApp number");
+        }
+        changes.push(change);
+      }
+      if (changes.length) kept.entry.push({ id: entry.id, changes });
+    }
+    await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active" }).eq("id", conn.id);
+    const saved = await persistChanges(kept);
+    // @ts-ignore EdgeRuntime is provided by Supabase
+    EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id).catch((e) => console.error("background processing", safeError(e))))));
+    return new Response("ok", { status: 200 });
+  } catch (e) {
+    console.error("bridge persistence failed", safeError(e));
+    return new Response("temporary persistence failure", { status: 500 }); // the partner retries
+  }
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -229,11 +284,15 @@ Deno.serve(async (req) => {
     catch { return json({ error: "replay failed part-way; remaining events stay queued for the scheduled retry" }, 500); }
   }
 
+  // ---- 360dialog relay (per-workspace token) ----
+  const bridgeToken = req.headers.get("x-growthos-token");
+  if (bridgeToken && !req.headers.get("x-hub-signature-256")) return await bridgeDelivery(req, bridgeToken);
+
   // ---- Meta delivery ----
   const raw = await req.text();
   if (!(await validSignature(raw, req.headers.get("x-hub-signature-256")))) return new Response("bad signature", { status: 401 });
   let saved: { db: SupabaseClient; ids: number[] };
-  try { saved = await persistChanges(raw); }
+  try { saved = await persistChanges(JSON.parse(raw)); }
   catch (e) {
     console.error("webhook persistence failed", safeError(e));
     return new Response("temporary persistence failure", { status: 500 }); // Meta will retry; nothing was acknowledged
