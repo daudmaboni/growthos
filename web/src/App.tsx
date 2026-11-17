@@ -127,7 +127,7 @@ function Login() {
       if (error) { shake(formRef.current); setErr(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message); }
       return;
     }
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } });
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + "/app" } });
     setBusy(false);
     if (error) setErr(/rate limit/i.test(error.message) ? "Too many emails sent. Wait an hour or sign in with your password." : error.message); else setSent(true);
   }
@@ -149,6 +149,7 @@ function Login() {
           </button>
           {err && <p className="err">{err}</p>}
         </>)}
+        <a href="/" className="small muted" style={{ textAlign: "center", textDecoration: "none" }}>← Back to home</a>
       </form>
     </div>
   );

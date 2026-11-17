@@ -3,3 +3,13 @@
   publish = "dist"
 [build.environment]
   NODE_VERSION = "20"
+
+# The app lives at /app (the homepage is /). Serve the single-page app for those paths.
+[[redirects]]
+  from = "/app"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/app/*"
+  to = "/index.html"
+  status = 200
