@@ -17,9 +17,13 @@
     #preloader.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
     #preloader .dots { display: flex; gap: 14px; }
     #preloader .dots span { width: 16px; height: 16px; border-radius: 50%; animation: pl-bounce .9s cubic-bezier(.45,0,.55,1) infinite; }
-    #preloader .dots span:nth-child(1) { background: #3b7bff; }
-    #preloader .dots span:nth-child(2) { background: #f0457a; animation-delay: .15s; }
-    #preloader .dots span:nth-child(3) { background: #ff9a2e; animation-delay: .3s; }
+    /* GrowthOS accent greens (same as the logo and buttons) */
+    #preloader .dots span:nth-child(1) { background: #6fe0a6; }
+    #preloader .dots span:nth-child(2) { background: #4ad48f; animation-delay: .15s; box-shadow: 0 0 18px -4px #4ad48f99; }
+    #preloader .dots span:nth-child(3) { background: #2fbf78; animation-delay: .3s; }
+    :root[data-theme="light"] #preloader .dots span:nth-child(1) { background: #1a8c5c; }
+    :root[data-theme="light"] #preloader .dots span:nth-child(2) { background: #12734a; box-shadow: none; }
+    :root[data-theme="light"] #preloader .dots span:nth-child(3) { background: #0f5f3d; }
     @keyframes pl-bounce { 0%, 100% { transform: translateY(9px); } 50% { transform: translateY(-13px); } }
     @media (prefers-reduced-motion: reduce) { #preloader .dots span { animation-duration: 2.4s; } }
   </style>
