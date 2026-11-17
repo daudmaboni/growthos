@@ -3,7 +3,7 @@
 The existing pilot has a live web app and Supabase project. Repository changes are not automatically deployed; apply the new migration and deploy the updated Edge Functions and web app before using the features described here.
 
 **Existing pilot endpoints**
-- Web app: https://growthos-tz.netlify.app (privacy policy: `/privacy.html`)
+- Web app: https://itaos.netlify.app (privacy policy: `/privacy.html`)
 - Database + server functions: Supabase project `growthos` (Frankfurt)
 - WhatsApp webhook URL: `https://jrdxeagnmunmatxtgmpk.supabase.co/functions/v1/wa-webhook`
 - Ads sync runs every 3 hours automatically once an ad account is connected
@@ -36,8 +36,8 @@ Existing members keep their `memberships.role`. Owners/admins can change setting
 ## 1. Supabase: sign-in link and secrets (5 min)
 
 **Authentication → URL Configuration**
-- Site URL: `https://growthos-tz.netlify.app`
-- Redirect URLs: add `https://growthos-tz.netlify.app/**`
+- Site URL: `https://itaos.netlify.app`
+- Redirect URLs: add `https://itaos.netlify.app/**`
 
 **Edge Functions → Secrets** (generate fresh values for the first two; never commit them. The last two come from step 2.)
 
@@ -57,13 +57,13 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
    (Don't put "WhatsApp" or "Facebook" in the name.)
 3. **Add products:** WhatsApp, Facebook Login for Business, Marketing API.
 4. **App settings → Basic**
-   - App domains: `growthos-tz.netlify.app`
-   - Privacy policy URL: `https://growthos-tz.netlify.app/privacy.html`
+   - App domains: `itaos.netlify.app`
+   - Privacy policy URL: `https://itaos.netlify.app/privacy.html`
    - Category: Business and pages. Add an icon.
    - Copy **App ID** and **App Secret** → put them in Supabase secrets (step 1).
 5. **Facebook Login for Business → Settings**
-   - Valid OAuth redirect URIs: `https://growthos-tz.netlify.app/`
-   - Allowed domains for the JavaScript SDK: `https://growthos-tz.netlify.app`
+   - Valid OAuth redirect URIs: `https://itaos.netlify.app/`
+   - Allowed domains for the JavaScript SDK: `https://itaos.netlify.app`
    - Login with the JavaScript SDK: **Yes**
 6. **Facebook Login for Business → Configurations → Create** (two configurations)
    - **"GrowthOS Ads"**: login variation *General*, token type *User access token*, permissions `ads_read`, `business_management`. Copy its **Configuration ID**.
@@ -80,7 +80,7 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
 
 ## 3. Connect Kayani (10 min, after the redeploy)
 
-1. Open https://growthos-tz.netlify.app → enter your email → open the sign-in link.
+1. Open https://itaos.netlify.app → enter your email → open the sign-in link.
 2. Create the workspace: `Kayani Herbs`.
 3. **Connections → Connect ad account** → log in → pick the Kayani ad account.
    The last 30 days of ads load within a minute.

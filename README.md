@@ -17,7 +17,7 @@ exports), links chats to ad referrals where available, shows where conversations
 | **Settings** | Business, **business profile** (products, prices, delivery, payment, tone, FAQs, constraints), appearance, **rules & rates** (exchange rate, follow-up hours, conversion window, timezone), account. |
 
 ## Structure
-- `web/` — Vite + React app (Netlify: growthos-tz)
+- `web/` — Vite + React app (Netlify: itaos — custom domain itaos.app)
   - `src/metrics.ts` — **the** metric definitions (pure, deterministic, unit-tested)
   - `src/diagnosis.ts` — weekly diagnosis rules (pure, unit-tested)
   - `src/csv.ts` — CSV parsing, column mapping, templates
