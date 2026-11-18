@@ -43,6 +43,8 @@ export default function App() {
     if (error) setWs(ws);
   };
   const isPlatformAdmin = useIsPlatformAdmin(session ? session.user.id : null);
+  // Sent here from /app/admin to sign in: skip drawing the dashboard and go straight back.
+  const [toAdmin] = useState(() => { try { return sessionStorage.getItem("itaos-after-login") === "/app/admin"; } catch { return false; } });
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function App() {
 
   if (session === undefined) return <div className="center muted">Loading…</div>;
   if (!session) return <Login />;
+  if (toAdmin) return <div className="center muted">Opening admin…</div>;
   if (ws === undefined) return <div className="center muted">Loading workspace…</div>;
   if (ws === null) return <CreateWorkspace onDone={setWs} />;
 
