@@ -425,3 +425,63 @@ button.dr-day:active:not(:disabled) { transform: none; }
   .dr-months .dr-month:first-child { display: none; }
   .dr-trigger .dr-dates { display: none; }
 }
+
+/* Customers page: time groups, loading cards, "show more", cleaner header */
+.cc-group { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 10px 2px -2px; display: flex; align-items: center; gap: 10px; }
+.cc-group::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.cc-list > div:first-child > .cc-group, .cc-list > .cc-group:first-child { margin-top: 0; }
+.cc-skel { min-height: 92px; border-radius: var(--r-lg); }
+button.cc-more { justify-self: center; margin-top: 6px; background: var(--card); }
+.chats-head h2 { font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px; }
+.chats-total { font-variant-numeric: tabular-nums; }
+.chips-tabs button { border-color: var(--line); box-shadow: var(--shadow-sm); }
+.chips-tabs button:hover:not(.on) { color: var(--ink); }
+.chips-tabs .cnt { font-variant-numeric: tabular-nums; }
+.cc { transition: box-shadow .25s var(--ease), border-color .25s var(--ease); box-shadow: var(--shadow-sm); }
+.cc:hover { box-shadow: var(--shadow); }
+.cc-name { font-size: 15.5px; letter-spacing: -0.01em; }
+.cc-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Connections → WhatsApp: the connected number first, setup details folded away */
+.wa-nums { display: grid; gap: 10px; }
+.wa-num { display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid var(--good); background: linear-gradient(135deg, var(--good-soft), transparent 70%); }
+.wa-num.bad { border-color: var(--bad); background: linear-gradient(135deg, var(--bad-soft), transparent 70%); }
+.wa-num-ico { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: #25d366; color: #fff; box-shadow: 0 8px 20px -10px #25d366; }
+.wa-num-main { display: grid; gap: 4px; min-width: 0; }
+.wa-num-phone { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
+.wa-num-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13.5px; }
+.pill-s { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12.5px; padding: 2px 10px 2px 8px; border-radius: 999px; }
+.pill-s.on { background: var(--good-soft); color: var(--good); } .pill-s.err { background: var(--bad-soft); color: var(--bad); }
+.pill-s .status-dot { margin: 0; }
+.wa-num-side { display: grid; gap: 4px; justify-items: start; color: var(--ink-2); }
+details.wa-setup > summary { cursor: pointer; list-style: none; }
+details.wa-setup > summary::-webkit-details-marker { display: none; }
+details.wa-setup > summary b::before { content: "▸"; display: inline-block; margin-right: 8px; color: var(--muted); transition: transform .2s var(--ease); }
+details.wa-setup[open] > summary b::before { transform: rotate(90deg); }
+details.wa-setup[open] { display: grid; gap: 8px; }
+@media (max-width: 640px) { .wa-num { grid-template-columns: 40px 1fr; } .wa-num-ico { width: 40px; height: 40px; } .wa-num-side { grid-column: 1 / -1; } .wa-num-phone { font-size: 20px; } }
+
+/* Top nav: frosted bar + the ponditech.com "liquid glass" pill under the current / hovered tab */
+nav.tabs.glass-tabs { position: relative; background: color-mix(in srgb, var(--card) 62%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(14px); backdrop-filter: saturate(1.6) blur(14px); border-color: var(--line-2); box-shadow: 0 1px 2px #14182410, 0 10px 30px -18px #14182440, inset 0 1px 0 #ffffff80; }
+nav.tabs.glass-tabs a { position: relative; z-index: 1; background: none; transition: color .25s var(--ease); }
+nav.tabs.glass-tabs a:hover { background: none; color: var(--ink); }
+nav.tabs.glass-tabs a.on { background: none; color: var(--ink); }
+.glass-tabs .glass { position: absolute; z-index: 0; top: 4px; left: 0; height: calc(100% - 8px); width: 0; border-radius: 999px; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, #fffffff2 0%, #ffffff8c 55%, #ffffffc7 100%); -webkit-backdrop-filter: blur(14px) saturate(190%); backdrop-filter: blur(14px) saturate(190%);
+  border: 1px solid #ffffffe6; box-shadow: 0 0 0 .5px #0b1f3a1a, 0 6px 18px -6px #0b1f3a38, 0 2px 4px -2px #0b1f3a1f, inset 0 1px 1px #fff, inset 0 -1px 2px #0b1f3a0f;
+  transition: transform .55s cubic-bezier(.34, 1.45, .5, 1), width .55s cubic-bezier(.34, 1.45, .5, 1), opacity .3s; }
+.glass-tabs .glass::before { content: ""; position: absolute; inset: 1px 12% auto; height: 45%; border-radius: 999px; background: linear-gradient(#fffffff2, #fff0); opacity: .7; }
+.glass-tabs .glass::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(120% 140% at var(--gx, 50%) 0%, var(--accent-soft), transparent 60%); }
+.glass-tabs .glass.on { opacity: 1; }
+:root:not([data-theme="light"]) .glass-tabs .glass { background: linear-gradient(180deg, #ffffff29 0%, #ffffff0f 60%, #ffffff1a 100%); border-color: #ffffff29; box-shadow: 0 0 0 .5px #00000099, 0 8px 22px -8px #000c, inset 0 1px 1px #ffffff47, inset 0 -1px 2px #00000059; }
+:root:not([data-theme="light"]) .glass-tabs .glass::before { background: linear-gradient(#ffffff38, #fff0); }
+:root:not([data-theme="light"]) nav.tabs.glass-tabs { box-shadow: 0 10px 30px -18px #000, inset 0 1px 0 #ffffff12; }
+@media (prefers-reduced-motion: reduce) { .glass-tabs .glass { transition: opacity .2s; } }
+
+/* Fill a missing setting right on the KPI card that needs it */
+.kpi-fix { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-2); }
+.kpi-set { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; }
+.kpi-set label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kpi-set label > span:first-child { white-space: nowrap; font-weight: 600; }
+.kpi-set input { width: 100%; min-width: 0; padding: 5px 8px; font-size: 13px; }
+.kpi-hint { grid-column: 1 / -1; line-height: 1.35; }

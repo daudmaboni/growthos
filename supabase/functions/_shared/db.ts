@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 import { analyze, Msg } from "./signals.ts";
+import { confirmTicks, TickMsg } from "./ticks.ts";
 
 export const GRAPH = `https://graph.facebook.com/${Deno.env.get("META_GRAPH_VERSION") ?? "v25.0"}`;
 
@@ -45,7 +46,7 @@ export async function storeToken(db: SupabaseClient, name: string, token: string
 /** Recompute signals for conversations and save them. */
 export async function reanalyze(db: SupabaseClient, conversationIds: string[]) {
   for (const id of [...new Set(conversationIds)]) {
-    const { data: msgs, error: readError } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", id).order("sent_at");
+    const { data: msgs, error: readError } = await db.from("messages").select("id,direction,sent_at,body,type,media").eq("conversation_id", id).order("sent_at");
     if (readError) throw new Error(`could not load messages for analysis: ${readError.message}`);
     if (!msgs?.length) continue;
     const a = analyze(msgs as Msg[]);
@@ -53,9 +54,13 @@ export async function reanalyze(db: SupabaseClient, conversationIds: string[]) {
       ...a,
       started_at: msgs[0].sent_at,
       last_message_at: msgs[msgs.length - 1].sent_at,
+      last_dir: msgs[msgs.length - 1].direction,
+      last_out_at: [...msgs].reverse().find((m) => m.direction === "out")?.sent_at ?? null,
       analyzed_at: new Date().toISOString(),
     }).eq("id", id);
     if (updateError) throw new Error(`could not save conversation analysis: ${updateError.message}`);
+    // The owner's "175,000✅" reply becomes a confirmed paid order (see ticks.ts).
+    await confirmTicks(db, id, msgs as TickMsg[]);
   }
 }
 

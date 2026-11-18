@@ -22,6 +22,29 @@ const inFilter = (r: Lite, f: Filter) =>
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? r.phone_number_id === "import" : r.phone_number_id !== "import");
 
+const PAGE = 100;
+
+/** Group heading for a chat's last message, in the workspace time zone. */
+export function timeGroup(iso: string | null, tz: string, T: Tr, now = new Date()): string {
+  if (!iso) return T("Older", "Zamani");
+  const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const a = Date.parse(day(new Date(iso)) + "T00:00:00Z"), b = Date.parse(day(now) + "T00:00:00Z");
+  const days = Math.round((b - a) / 864e5);
+  if (days <= 0) return T("Today", "Leo");
+  if (days === 1) return T("Yesterday", "Jana");
+  if (days < 7) return T("Earlier this week", "Wiki hii");
+  if (days < 30) return T("Earlier this month", "Mwezi huu");
+  return T("Older", "Zamani");
+}
+
+/** On Android, open the chat in WhatsApp Business (falls back to wa.me if it isn't installed). */
+export function waLink(phone: string) {
+  const web = `https://wa.me/${phone}`;
+  if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent))
+    return `intent://send/?phone=${phone}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+  return web;
+}
+
 const hashIds = () => {
   const m = location.hash.match(/#chats\/ids=([0-9a-f,-]+)/i);
   return m ? m[1].split(",").filter(Boolean).slice(0, 100) : null;
@@ -58,6 +81,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [src, setSrc] = useState<Source>("any");
   const [rows, setRows] = useState<Outcome[]>([]);
   const [lite, setLite] = useState<Lite[]>([]);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [limit, setLimit] = useState(PAGE);
   const [adNames, setAdNames] = useState<Record<string, string>>({});
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [tasks, setTasks] = useState<Record<string, Task>>({});
@@ -110,7 +135,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
   useEffect(() => {
     if (!quiet) setLoading(true);
     setQuiet(false); setErr("");
-    let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).order("last_message_at", { ascending: false }).limit(300);
+    let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).order("last_message_at", { ascending: false, nullsFirst: false }).limit(limit);
     if (filter !== "ids" && src === "import") q = q.eq("phone_number_id", "import");
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
     if (filter === "ids" && ids) q = q.in("id", ids);
@@ -119,8 +144,13 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else if (filter !== "all") q = q.eq("outcome", filter);
     supabase.from("kito_runs").select("id,trigger,ran_at,checked,failed,remaining,note").eq("workspace_id", ws.id).order("ran_at", { ascending: false }).limit(20)
       .then(({ data }) => setRuns((data as Run[]) ?? []));
-    supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(2000)
-      .then(({ data }) => setLite((data as Lite[]) ?? []));
+    // Tab counts are worked out in the database (the browser can only read 1,000 rows at a time).
+    supabase.rpc("chat_counts", { p_ws: ws.id, p_src: src }).then(({ data, error }) => {
+      if (!error && data) { setCounts(data as Record<string, number>); return; }
+      setCounts(null);
+      supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(1000)
+        .then(({ data }) => setLite((data as Lite[]) ?? []));
+    });
     Promise.all([
       q,
       supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id),
@@ -140,7 +170,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       setTasks(Object.fromEntries(((t.data ?? []) as Task[]).map((task) => [task.conversation_id, task])));
       setLoading(false);
     });
-  }, [ws.id, filter, ids, tick, src]);
+  }, [ws.id, filter, ids, tick, src, limit]);
 
   async function runKito(quiet = false) {
     setRechecking(true); setNote(quiet ? T("Kito is reading new chats…", "Kito anasoma chat mpya…") : T("Kito is reading the chats…", "Kito anasoma chat…"));
@@ -176,7 +206,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
     setRechecking(false);
   }
   async function deleteImported() {
-    const list = lite.filter((r) => r.phone_number_id === "import").map((r) => r.id);
+    const { data: imp } = await supabase.from("conversations").select("id").eq("workspace_id", ws.id).eq("phone_number_id", "import").limit(1000);
+    const list = (imp ?? []).map((r) => r.id as string);
     if (!list.length) return;
     if (!confirm(T(`Delete all ${list.length} imported chats and their messages? Recorded sales are kept. This cannot be undone.`,
       `Futa chat ${list.length} zote zilizoingizwa pamoja na ujumbe wake? Mauzo yaliyorekodiwa yatabaki. Haiwezi kurudishwa.`))) return;
@@ -192,10 +223,13 @@ export default function Chats({ ws }: { ws: Workspace }) {
     enterRows(select(root, ".cc"), { delay: 0.1, stagger: 0.04 });
   }, [loading, filter]);
 
-  const pick = (f: Filter) => { setIds(null); setFilter(f); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
+  const pick = (f: Filter) => { setIds(null); setFilter(f); setLimit(PAGE); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
   const pool = lite.filter((r) => inSource(r, src));
-  const count = (f: Filter) => pool.filter((r) => inFilter(r, f)).length;
-  const imported = lite.filter((r) => r.phone_number_id === "import").length;
+  const count = (f: Filter) => counts ? Number(counts[f] ?? 0) : pool.filter((r) => inFilter(r, f)).length;
+  const imported = counts ? Number(counts.imported ?? 0) : lite.filter((r) => r.phone_number_id === "import").length;
+  const total = counts ? Number(counts.all ?? 0) : lite.length;
+  const shownTotal = filter === "ids" ? rows.length : count(filter);
+  const tz = ws.timezone || "Africa/Dar_es_Salaam";
   const tabs: [Filter, string, string][] = [
     ["all", T("All", "Wote"), T("Every customer", "Wateja wote")],
     ["follow", T("Follow up", "Wafuatilie"), T("Interested — talk to them again", "Wana hamu — waongeleshe tena")],
@@ -212,7 +246,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     <section className="card chats" ref={pageRef}>
       <div className="chats-head">
         <div>
-          <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(lite.length)}</span>{live && <span className="live-dot" title={T("Live: updates by itself when a message arrives", "Hai: inajisasisha ujumbe ukiingia")}>{T("Live", "Hai")}</span>}</h2>
+          <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(total)}</span>{live && <span className="live-dot" title={T("Live: updates by itself when a message arrives", "Hai: inajisasisha ujumbe ukiingia")}>{T("Live", "Hai")}</span>}</h2>
           <span className="small muted">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
         <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
@@ -228,7 +262,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
             </button>
           ))}
         </div>
-        <select className="chats-src" value={src} aria-label={T("Where from", "Wametoka wapi")} onChange={(e) => { setSrc(e.target.value as Source); if (filter === "ids") pick("all"); }}>
+        <select className="chats-src" value={src} aria-label={T("Where from", "Wametoka wapi")} onChange={(e) => { setSrc(e.target.value as Source); setLimit(PAGE); if (filter === "ids") pick("all"); }}>
           <option value="any">{T("From: everywhere", "Kutoka: kote")}</option>
           <option value="live">{T("From: WhatsApp", "Kutoka: WhatsApp")}</option>
           <option value="import">{T(`From: uploaded files (${imported})`, `Kutoka: faili zilizopakiwa (${imported})`)}</option>
@@ -245,10 +279,26 @@ export default function Chats({ ws }: { ws: Workspace }) {
       {note && <p className="small muted" style={{ margin: 0 }}>{note}</p>}
       {err && <p className="err small" style={{ margin: 0 }}>{err}</p>}
 
-      {loading ? <p className="muted">{T("Loading…", "Inapakia…")}</p> : rows.length === 0 ? <div className="empty">{emptyText}</div> : (
+      {loading ? <div className="cc-list" aria-busy="true">{[0, 1, 2, 3].map((i) => <div className="skeleton cc-skel" key={i} />)}</div>
+        : rows.length === 0 ? <div className="empty">{err ? T("Couldn't load the chats. Try again in a moment.", "Imeshindwa kupakia chat. Jaribu tena baada ya muda.") : emptyText}</div> : (
         <div className="cc-list">
-          {rows.map((r) => <Card key={r.id} r={r} ws={ws} T={T} adName={r.ad_id ? adNames[r.ad_id] : undefined} phone={phoneOf(phones[r.contact_id])}
-            task={tasks[r.id]} onChange={refresh} startOpen={filter === "ids" && rows.length <= 3} />)}
+          {rows.map((r, i) => {
+            // Newest first, grouped by when they last wrote (the follow-up list is sorted by priority instead).
+            const g = filter === "follow" ? null : timeGroup(r.last_message_at, tz, T);
+            const head = g && (i === 0 || timeGroup(rows[i - 1].last_message_at, tz, T) !== g);
+            return (
+              <div key={r.id} style={{ display: "contents" }}>
+                {head && <h3 className="cc-group">{g}</h3>}
+                <Card r={r} ws={ws} T={T} adName={r.ad_id ? adNames[r.ad_id] : undefined} phone={phoneOf(phones[r.contact_id])}
+                  task={tasks[r.id]} onChange={refresh} startOpen={filter === "ids" && rows.length <= 3} />
+              </div>
+            );
+          })}
+          {filter !== "ids" && rows.length >= limit && rows.length < shownTotal && (
+            <button className="cc-more" onClick={() => { setQuiet(true); setLimit((n) => n + PAGE); }}>
+              {T(`Show ${Math.min(PAGE, shownTotal - rows.length)} more`, `Onyesha ${Math.min(PAGE, shownTotal - rows.length)} zaidi`)} <span className="muted">· {fmt(rows.length)} {T("of", "kati ya")} {fmt(shownTotal)}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -327,7 +377,7 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
   const main = !editor ? null
     : st.key === "check" ? <button className="small primary" disabled={busy} onClick={() => { setConfirming(true); setOpen(true); }}>{T("Check payment", "Hakiki malipo")}</button>
     : st.key === "bought" || st.key === "lost" ? null
-    : phone ? <a className="btn small primary" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">{st.key === "waiting" ? T("Reply on WhatsApp ↗", "Mjibu WhatsApp ↗") : T("Message on WhatsApp ↗", "Mtumie ujumbe WhatsApp ↗")}</a>
+    : phone ? <a className="btn small primary" href={waLink(phone)} target="_blank" rel="noopener noreferrer">{st.key === "waiting" ? T("Reply on WhatsApp ↗", "Mjibu WhatsApp ↗") : T("Message on WhatsApp ↗", "Mtumie ujumbe WhatsApp ↗")}</a>
     : null;
 
   return (
@@ -386,7 +436,7 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
               <OrderList ws={ws} conversationId={r.id} onChange={onChange} />
             </div>
             {editor && !task && !confirmed && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
-            {phone && <a className="small" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">{T("Open in WhatsApp ↗", "Fungua WhatsApp ↗")}</a>}
+            {phone && <a className="small" href={waLink(phone)} target="_blank" rel="noopener noreferrer">{T("Open in WhatsApp ↗", "Fungua WhatsApp ↗")}</a>}
             <details className="cc-why">
               <summary className="small muted">{T("How itaOS decided this", "itaOS imeamuaje hili")}</summary>
               <div className="small muted" style={{ display: "grid", gap: 4, marginTop: 6 }}>

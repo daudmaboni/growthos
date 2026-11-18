@@ -1,6 +1,7 @@
+import type { ReactNode, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
-import { Workspace, fmt, pct, dur, L, amt, money, ago, localDay } from "./lib";
+import { Workspace, fmt, pct, dur, L, amt, money, ago, localDay, supabase, canManage } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
 import DateRange from "./DateRange";
@@ -9,7 +10,7 @@ import { Metric, delta, DEFINITIONS } from "./metrics";
 import { diagnose } from "./diagnosis";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
 
-export default function Dashboard({ ws }: { ws: Workspace }) {
+export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Workspace) => void }) {
   const [range, setRangeState] = useState<RangeSel>(() => loadRange("dashboard", { key: "last_7" }));
   const setRange = (r: RangeSel) => { setRangeState(r); saveRange("dashboard", r); };
   const lang = ws.language;
@@ -87,11 +88,14 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
         <div className="kpis">
           <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(mx.spend.value, adCur)} n={mx.spend.value} f={(x) => money(x, adCur)} s={`${fmt(mx.platformConversations.value)} ${T("chats (Meta)", "chats (Meta)")}`} d={delta(mx.spend, prev.spend)} src={mx.spend.provenance} title={D("spend")} />
           <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(mx.costPerPlatformConversation.value, adCur)} n={mx.costPerPlatformConversation.value} f={(x) => money(x, adCur)} s={T("As in Ads Manager", "Kama Ads Manager")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
-          <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(mx.costPerQualifiedInquiry.value, adCur)} s={mx.costPerQualifiedInquiry.value == null ? T("No ad chats with a price yet", "Bado hakuna chat za tangazo zilizopewa bei") : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
-          <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(mx.costPerAttributedSale.value, adCur)} n={mx.costPerAttributedSale.value} f={(x) => money(x, adCur)} s={`${mx.attributedAdSales.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}`} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
+          <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(mx.costPerQualifiedInquiry.value, adCur)} s={mx.costPerQualifiedInquiry.value == null ? (mx.adChats.value ? T(`${fmt(mx.adChats.value)} chats came from ads; none got a price yet`, `Chat ${fmt(mx.adChats.value)} zimetoka matangazo; hakuna iliyopewa bei bado`) : T("No chats linked to an ad in this period. Only new chats that start from an ad click can be linked.", "Hakuna chat iliyounganishwa na tangazo kipindi hiki. Chat mpya zinazoanza kwa kubofya tangazo ndizo huunganishwa.")) : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
+          <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(mx.costPerAttributedSale.value, adCur)} n={mx.costPerAttributedSale.value} f={(x) => money(x, adCur)} s={mx.attributedAdSales.value ? `${mx.attributedAdSales.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}` : T("No paid order from an ad chat yet. Your ✅ messages now record sales automatically.", "Bado hakuna oda kutoka chat ya tangazo. Ujumbe wako wa ✅ sasa unarekodi mauzo wenyewe.")} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
           <Kpi k={T("Revenue", "Mapato")} v={money(mx.revenue.value, ws.currency)} n={mx.revenue.value} f={(x) => money(x, ws.currency)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")} />
-          <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio") : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(mx.attributedRevenue.value, ws.currency) + T(" attributed revenue", " mapato yaliyounganishwa")} src="matched" title={D("returnOnAdSpend")} />
-          <Kpi k={T("Contribution", "Faida ya mchango")} v={money(mx.contribution.value, ws.currency)} s={mx.contribution.value == null ? (mx.contribution.note === "needs exchange rate" ? T("Needs the exchange rate", "Inahitaji kiwango cha kubadilisha") : mx.contribution.note === "no paid orders in period" ? T("No paid orders this period", "Hakuna oda zilizolipwa") : T("Set cost per order in Settings or import expenses", "Weka gharama kwa oda au uingize matumizi")) : T("after ad spend and costs", "baada ya matangazo na gharama")} src="derived" title={D("contribution")} />
+          <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio") : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(mx.attributedRevenue.value, ws.currency) + T(" attributed revenue", " mapato yaliyounganishwa")} src="matched" title={D("returnOnAdSpend")}
+            fix={mx.returnOnAdSpend.note === "needs exchange rate" ? <SetNumber ws={ws} onWs={onWs} field="fx_rate" label={T(`1 ${adCur} =`, `1 ${adCur} =`)} unit={ws.currency} placeholder="2,600" hint={T("Use your bank's rate. You can change it later in Settings.", "Tumia kiwango cha benki yako. Unaweza kubadilisha baadaye kwenye Mipangilio.")} T={T} /> : null} />
+          <Kpi k={T("Contribution", "Faida ya mchango")} v={money(mx.contribution.value, ws.currency)} s={mx.contribution.value == null ? (mx.contribution.note === "needs exchange rate" ? T("Needs the exchange rate", "Inahitaji kiwango cha kubadilisha") : mx.contribution.note === "no paid orders in period" ? T("No paid orders this period", "Hakuna oda zilizolipwa") : T("Set cost per order in Settings or import expenses", "Weka gharama kwa oda au uingize matumizi")) : T("after ad spend and costs", "baada ya matangazo na gharama")} src="derived" title={D("contribution")}
+            fix={mx.contribution.note === "needs exchange rate" ? <span className="small muted">{T("Set the exchange rate on the card before this one.", "Weka kiwango cha kubadilisha kwenye kadi iliyotangulia.")}</span>
+              : mx.contribution.note === "needs cost per order or expenses" ? <SetNumber ws={ws} onWs={onWs} field="unit_cost" label={T("Cost per order", "Gharama kwa oda")} unit={ws.currency} placeholder="40,000" hint={T("What one order costs you (product + delivery), before ads.", "Oda moja inakugharimu kiasi gani (bidhaa + usafiri), kabla ya matangazo.")} T={T} /> : null} />
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(mx.medianFirstReply.value)} s={`${mx.over1h.value} ${T("waited over 1 h", "zilisubiri > saa 1")}${mx.noReply.value ? ` · ${mx.noReply.value} ${T("no reply", "hazikujibiwa")}` : ""}`} cls={mx.medianFirstReply.value != null && mx.medianFirstReply.value > 900 ? "flag" : ""} src="observed" />
           <Kpi k={T("Warm, waiting for follow-up", "Wenye nia, wanasubiri ufuatiliaji")} v={fmt(mx.warmNoFollowUp.value)} n={mx.warmNoFollowUp.value} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${mx.warmNoFollowUp.n} ${T("warm", "wenye nia")} · ${T("rule", "kanuni")}: ${ws.follow_up_hours} h`} cls={mx.warmNoFollowUp.value ? "flag" : "ok"} src="inferred" />
         </div>
@@ -208,7 +212,7 @@ function Cov({ label, ok, note }: { label: string; ok: boolean; note: string }) 
 }
 
 /** KPI tile. Pass `n` + `f` to count the value up on load instead of showing `v` at once. */
-function Kpi({ k, v, s, cls = "", n, f, d, invert, src, title }: { k: string; v: string; s?: string; cls?: string; n?: number | null; f?: (x: number) => string; d?: number | null; invert?: boolean; src?: string; title?: string }) {
+function Kpi({ k, v, s, cls = "", n, f, d, invert, src, title, fix }: { k: string; v: string; s?: string; cls?: string; n?: number | null; f?: (x: number) => string; d?: number | null; invert?: boolean; src?: string; title?: string; fix?: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => { if (n != null && isFinite(n) && f) countTo(ref.current, n, f, { duration: 1.2, delay: 0.3 }); }, [n, f]);
   const good = d == null ? null : invert ? d < 0 : d > 0;
@@ -217,7 +221,32 @@ function Kpi({ k, v, s, cls = "", n, f, d, invert, src, title }: { k: string; v:
       <span className="k">{src && <SourceBadge p={src as any} lang="en" compact />}<span className="kt">{k}</span></span>
       <span className="v" ref={ref}>{v}</span>
       <span className="s">{d != null && <span className={"delta " + (good ? "down" : "up")}>{d > 0 ? "↑" : "↓"} {Math.abs(Math.round(d * 100))}%</span>}{s && <span>{s}</span>}</span>
+      {fix && <div className="kpi-fix">{fix}</div>}
     </div>
+  );
+}
+
+/** A missing setting, filled in right on the card that needs it. */
+function SetNumber({ ws, onWs, field, label, unit, placeholder, hint, T }: { ws: Workspace; onWs?: (w: Workspace) => void; field: "fx_rate" | "unit_cost"; label: string; unit: string; placeholder: string; hint: string; T: (en: string, sw: string) => string }) {
+  const [v, setV] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (!canManage(ws)) return <span className="small muted">{T("Ask the owner to set this in Settings.", "Mwombe mmiliki aweke hili kwenye Mipangilio.")}</span>;
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const n = Number(v.replace(/[^\d.]/g, ""));
+    if (!(n > 0)) return setErr(T("Enter a number.", "Weka namba."));
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("workspaces").update({ [field]: n }).eq("id", ws.id);
+    setBusy(false);
+    if (error) setErr(error.message); else onWs?.({ ...ws, [field]: n });
+  }
+  return (
+    <form className="kpi-set" onSubmit={save}>
+      <label className="small"><span>{label}</span><input inputMode="decimal" placeholder={placeholder} value={v} onChange={(e) => setV(e.target.value)} aria-label={label} /><span className="muted">{unit}</span></label>
+      <button className="small primary" disabled={busy || !v.trim()}>{busy ? "…" : T("Save", "Hifadhi")}</button>
+      <span className="small muted kpi-hint">{err ? <span className="err">{err}</span> : hint}</span>
+    </form>
   );
 }
 

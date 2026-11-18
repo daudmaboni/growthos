@@ -140,14 +140,44 @@ export default function Connect({ ws }: { ws: Workspace }) {
           <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectWa}>{busy === "wa" ? "Connecting…" : waConns.length ? "Connect another number" : "Connect WhatsApp"}</button>
         </div>
         <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. itaOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
-        {dhConns.map((c) => dhLinked.includes(c)
-          ? <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from Meta via Dualhook" />
-          : <div key={c.id} className="row between small"><span><span className="status-dot warn" /> {c.label ?? "WhatsApp via Dualhook"} <span className="warnt">· not linked yet</span></span><span className="muted">Paste the webhook URL and verify token into Dualhook, then connect the number there</span></div>)}
+        {nums.length > 0 && (
+          <div className="wa-nums">
+            {nums.map((n) => {
+              const c = conns.find((x) => x.id === n.connection_id);
+              const via = c?.external_id.startsWith("dualhook:") ? "Dualhook" : c?.external_id.startsWith("360dialog:") ? "360dialog" : "Meta";
+              const ok = !c || (c.status === "active" && !c.last_error);
+              const hist = n.history_status === "complete" ? ["on", "History imported"] : n.history_status === "receiving" ? ["warn", "Importing history…"] : n.history_status === "declined" ? ["err", "History not shared"] : ["", "History: waiting for Meta"];
+              return (
+                <div className={"wa-num" + (ok ? "" : " bad")} key={n.phone_number_id}>
+                  <div className="wa-num-ico" aria-hidden>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.8-1.4.1-.2 0-.3 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2s.9 2.5 1 2.7c.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z" /></svg>
+                  </div>
+                  <div className="wa-num-main">
+                    <div className="wa-num-phone num">{prettyPhone(n.display_phone ?? n.phone_number_id)}</div>
+                    <div className="wa-num-meta">
+                      <span className={"pill-s " + (ok ? "on" : "err")}><span className={"status-dot " + (ok ? "on" : "err")} />{ok ? "Connected" : "Needs attention"}</span>
+                      <span className="muted">via {via}</span>
+                      {c?.last_sync_at && <span className="muted">· last message {ago(c.last_sync_at)}</span>}
+                    </div>
+                    {c?.last_error && <span className="small err">{c.last_error}</span>}
+                  </div>
+                  <div className="wa-num-side small">
+                    <span><span className={"status-dot " + hist[0]} /> {hist[1]}</span>
+                    {via === "Dualhook" && <span><span className={"status-dot " + (dhKeyLast4 ? "on" : "warn")} /> {dhKeyLast4 ? "Reads payment screenshots" : "Screenshots: add key below"}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {dhConns.filter((c) => !dhLinked.includes(c)).map((c) => (
+          <div key={c.id} className="row between small"><span><span className="status-dot warn" /> {c.label ?? "WhatsApp via Dualhook"} <span className="warnt">· not linked yet</span></span><span className="muted">Paste the webhook URL and verify token into Dualhook, then connect the number there</span></div>
+        ))}
         {manager && (
-          <div className="evidence">
-            <div className="row between"><b>Connect through Dualhook</b>
-              {!dh && !dhConns.length && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Use Dualhook"}</button>}
-            </div>
+          <details className="evidence wa-setup" open={!dhLinked.length || !dhKeyLast4 || !!dh}>
+            <summary className="row between"><b>{dhLinked.length ? "Dualhook settings" : "Connect through Dualhook"}</b>
+              {!dh && !dhConns.length && <button className="small" disabled={!!busy} onClick={(e) => { e.preventDefault(); connectDualhook(); }}>{busy === "dh" ? "Creating…" : "Use Dualhook"}</button>}
+            </summary>
             <span className="small muted">Use this while itaOS's own Meta approval is pending. Dualhook is a Meta Tech Provider: the number keeps working in the WhatsApp Business app, and Meta sends chats, ad clicks and history straight to itaOS.</span>
             {dhLinked.length > 0 && (
               <div className="dh-key">
@@ -190,7 +220,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
                 <button className="small danger" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Replace webhook URL"}</button>
               </details>
             )}
-          </div>
+          </details>
         )}
         {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
         {manager && (d360Conns.length > 0 || dhConns.length === 0) && (
@@ -216,21 +246,15 @@ export default function Connect({ ws }: { ws: Workspace }) {
           </div>
         )}
         {nums.length === 0 && <p className="small muted" style={{ margin: 0 }}>Not connected. Until it is, upload chat exports below; the dashboard labels those chats' sources as unknown unless the first message came from an ad.</p>}
-        {nums.map((n) => (
-          <div className="row between small" key={n.phone_number_id}>
-            <span><span className="status-dot on" /> {n.display_phone ?? n.phone_number_id}</span>
-            <span className="muted">History: {n.history_status ?? (dhConns.length || d360Conns.length ? "waiting for Meta" : "not requested")}{n.history_requested_at ? ` (requested ${when(n.history_requested_at)})` : ""}</span>
-          </div>
-        ))}
         {(health.length > 0 || nums.length > 0) && (
-          <div className="evidence">
-            <div className="row between"><b>Webhook events</b>{manager && (failed?.events || processing?.events) ? <button className="small" disabled={!!busy} onClick={replay}>{busy === "replay" ? "Replaying…" : "Replay failed events"}</button> : null}</div>
+          <details className="evidence wa-setup" open={!!failed?.events}>
+            <summary className="row between"><b>Message delivery <span className="small muted" style={{ fontWeight: 500 }}>· {health.find((h) => h.status === "processed")?.events.toLocaleString("en-US") ?? 0} received{failed?.events ? <span className="err"> · {failed.events} failed</span> : ""}</span></b>{manager && (failed?.events || processing?.events) ? <button className="small" disabled={!!busy} onClick={(e) => { e.preventDefault(); replay(); }}>{busy === "replay" ? "Replaying…" : "Replay failed events"}</button> : null}</summary>
             {health.length === 0 ? <span className="small muted">No events received yet.</span> : health.map((h) => (
               <span className="small" key={h.status}><span className={"status-dot " + (h.status === "processed" ? "on" : h.status === "failed" ? "err" : "")} /> {h.status}: {h.events}{h.newest ? ` · latest ${ago(h.newest)}` : ""}{h.exhausted ? ` · ${h.exhausted} gave up after repeated failures (replay to retry)` : ""}</span>
             ))}
             {queued && queued.events > 0 && <span className="small muted">Pending events are picked up by the scheduled job within 3 hours.</span>}
             <span className="small muted">Every event Meta delivers is stored before it is acknowledged, then processed. Failed ones are retried automatically up to 8 times; replaying resets that counter. Counts only — message content never leaves the server here.</span>
-          </div>
+          </details>
         )}
       </section>
       <ImportChats ws={ws} />
@@ -278,6 +302,14 @@ function CopyField({ value, onError }: { value: string; onError: () => void }) {
       </button>
     </div>
   );
+}
+
+/** "255635855825" → "+255 635 855 825" */
+function prettyPhone(p: string) {
+  const d = p.replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("255")) return `+255 ${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}`;
+  if (d.length === 10 && d.startsWith("0")) return `+255 ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
+  return d.length > 8 ? "+" + d : p;
 }
 
 function StatusRow({ c, waitingText = "Waiting for first sync" }: { c: Conn; waitingText?: string }) {

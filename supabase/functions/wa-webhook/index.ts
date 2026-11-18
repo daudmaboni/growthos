@@ -15,6 +15,7 @@
 // (bounded by max_attempts) or replayed on request by a workspace owner/admin.
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
 import { captureMedia, dualhookKey } from "../_shared/media.ts";
+import { confirmTicks, type TickMsg } from "../_shared/ticks.ts";
 import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, type Envelope } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
@@ -357,6 +358,21 @@ Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("CRON_SECRET");
   if (cronSecret && req.headers.get("x-cron-secret") === cronSecret) {
     const body = await req.json().catch(() => ({}));
+    if (body.action === "scan_ticks") {
+      // One-off / repair: turn existing ✅ messages into orders (same rules as live messages).
+      const db = admin();
+      let q = db.from("messages").select("conversation_id").eq("direction", "out").or("body.like.%✅%,body.like.%✔%,body.like.%☑%").limit(5000);
+      if (body.workspace_id) q = q.eq("workspace_id", String(body.workspace_id));
+      const { data, error } = await q;
+      if (error) return json({ error: error.message }, 500);
+      const ids = [...new Set((data ?? []).map((r) => r.conversation_id))];
+      let orders = 0;
+      for (const id of ids) {
+        const { data: msgs } = await db.from("messages").select("id,direction,sent_at,body,type,media").eq("conversation_id", id).order("sent_at").limit(5000);
+        orders += await confirmTicks(db, id, (msgs ?? []) as TickMsg[]);
+      }
+      return json({ conversations: ids.length, orders_created: orders });
+    }
     if (body.action !== "retry_failed") return new Response("forbidden", { status: 403 });
     try { return json(await retryBatch(admin(), null, 50)); }
     catch { return new Response("retry failed", { status: 500 }); }

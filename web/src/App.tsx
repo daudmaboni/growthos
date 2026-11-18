@@ -91,7 +91,7 @@ export default function App() {
     <div className="shell" ref={shellRef}>
       <header className="topbar">
         <div className="brand"><a className="home" href="#dashboard" aria-label="itaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>itaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
-        <nav className="tabs" aria-label="Sections">
+        <GlassTabs view={view}>
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
           <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>
@@ -99,7 +99,7 @@ export default function App() {
           <a href="#chats" className={view === "chats" ? "on" : ""}>Chats<NavBadge badge={chatsBadge(badges, ws.language === "sw")} /></a>
           <a href="#content" className={view === "content" ? "on" : ""}>{ws.language === "sw" ? "Maudhui" : "Content"}</a>
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
-        </nav>
+        </GlassTabs>
         <div className="actions">
           <div className="seg" role="group" aria-label="Language">
             {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
@@ -110,7 +110,7 @@ export default function App() {
         </div>
       </header>
       <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
-      {view === "dashboard" && <Dashboard ws={ws} />}
+      {view === "dashboard" && <Dashboard ws={ws} onWs={setWs} />}
       {view === "kito" && <Kito ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
@@ -210,6 +210,38 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
 
 const ORDER: View[] = ["dashboard", "kito", "chats"];
 const SLOTS = ORDER.length + 1; // + More
+
+/** Top tabs with the ponditech.com "liquid glass" pill: it rests on the current page and glides
+ *  to whichever tab the pointer is over. */
+function GlassTabs({ view, children }: { view: string; children: import("react").ReactNode }) {
+  const nav = useRef<HTMLElement>(null);
+  const glass = useRef<HTMLSpanElement>(null);
+  const hovering = useRef(false);
+  const place = (a: HTMLElement | null) => {
+    const g = glass.current; if (!g) return;
+    if (!a) { g.classList.remove("on"); return; }
+    g.style.width = a.offsetWidth + "px";
+    g.style.transform = `translateX(${a.offsetLeft - 4}px)`;
+    g.classList.add("on");
+  };
+  const current = () => nav.current?.querySelector<HTMLElement>("a.on") ?? null;
+  useEffect(() => {
+    if (!hovering.current) place(current());
+    const onResize = () => place(current());
+    window.addEventListener("resize", onResize);
+    document.fonts?.ready.then(onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [view]);
+  return (
+    <nav className="tabs glass-tabs" aria-label="Sections" ref={nav}
+      onMouseOver={(e) => { const a = (e.target as HTMLElement).closest("a"); if (a) { hovering.current = true; place(a as HTMLElement); } }}
+      onMouseMove={(e) => { const a = (e.target as HTMLElement).closest("a"); if (a && glass.current) { const r = a.getBoundingClientRect(); glass.current.style.setProperty("--gx", (((e.clientX - r.left) / r.width) * 100).toFixed(0) + "%"); } }}
+      onMouseLeave={() => { hovering.current = false; glass.current?.style.setProperty("--gx", "50%"); place(current()); }}>
+      <span className="glass" ref={glass} aria-hidden />
+      {children}
+    </nav>
+  );
+}
 
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
 export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badges?: Badges }) {
