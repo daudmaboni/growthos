@@ -45,8 +45,7 @@ export default function App() {
     if (error) setWs(ws);
   };
   const isPlatformAdmin = useIsPlatformAdmin(session ? session.user.id : null);
-  // Sent here from /app/admin to sign in: skip drawing the dashboard and go straight back.
-  const [toAdmin] = useState(() => { try { return sessionStorage.getItem("itaos-after-login") === "/app/admin"; } catch { return false; } });
+  const [staffOnly, setStaffOnly] = useState(false); // a Pondi staff account with no business of its own
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -57,19 +56,15 @@ export default function App() {
     return () => { sub.subscription.unsubscribe(); window.removeEventListener("hashchange", onHash); };
   }, []);
 
-  // Signed in after being sent here from /app/admin: go back there.
-  useEffect(() => {
-    if (!session) return;
-    try {
-      const next = sessionStorage.getItem("itaos-after-login");
-      if (next) { sessionStorage.removeItem("itaos-after-login"); if (next === "/app/admin") location.replace(next); }
-    } catch { /* storage unavailable */ }
-  }, [session]);
-
   useEffect(() => {
     if (!session) { setWs(undefined); return; }
     supabase.from("workspaces").select(WS_COLUMNS).order("created_at").limit(1).then(async ({ data }) => {
       let w: Workspace | null = (data?.[0] as unknown as Workspace) ?? null;
+      if (!w) {
+        const { data: staff } = await supabase.rpc("is_platform_admin");
+        if (staff === true) { setStaffOnly(true); setWs(null); return; }
+      }
+      setStaffOnly(false);
       // New accounts carry the business name from "Create account": set the workspace up for them.
       if (!w && typeof session.user.user_metadata?.business_name === "string" && session.user.user_metadata.business_name.trim()) {
         w = await createFromSignup(session.user.user_metadata.business_name.trim(), session.user.user_metadata.language === "en" ? "en" : "sw");
@@ -85,8 +80,8 @@ export default function App() {
   if (session === undefined) return <div className="center muted">Loading…</div>;
   if (!session) return <AuthScreen />;
   if (recovering) return <SetNewPassword email={session.user.email ?? ""} onDone={() => setRecovering(false)} />;
-  if (toAdmin) return <div className="center muted">Opening admin…</div>;
   if (ws === undefined) return <div className="center muted">{tr(initialLang(), "wait")}</div>;
+  if (ws === null && staffOnly) return <StaffAccountNotice />;
   if (ws === null) return <CreateWorkspace onDone={setWs} />;
 
   return (
@@ -138,6 +133,19 @@ function GearIcon() {
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </svg>
+  );
+}
+
+function StaffAccountNotice() {
+  const lang = initialLang();
+  return (
+    <div className="center">
+      <div className="card auth">
+        <div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div>
+        <p style={{ margin: 0 }}>{tr(lang, "staffAccount")}</p>
+        <button type="button" className="primary" onClick={async () => { await supabase.auth.signOut({ scope: "local" }); location.href = "/app/admin"; }}>{tr(lang, "openStaff")}</button>
+      </div>
+    </div>
   );
 }
 

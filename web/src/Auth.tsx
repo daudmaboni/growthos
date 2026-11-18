@@ -37,6 +37,9 @@ const T = {
   terms: { en: "By creating an account you agree to our", sw: "Kwa kufungua akaunti unakubali" },
   termsLink: { en: "terms", sw: "masharti yetu" },
   home: { en: "← Back to home", sw: "← Rudi mwanzo" },
+  staff: { en: "Pondi staff? Staff sign-in", sw: "Mfanyakazi wa Pondi? Ingia hapa" },
+  staffAccount: { en: "This is a Pondi staff account. Staff sign in on the staff page.", sw: "Hii ni akaunti ya wafanyakazi wa Pondi. Wafanyakazi huingia kwenye ukurasa wa wafanyakazi." },
+  openStaff: { en: "Go to staff sign-in", sw: "Nenda kwa wafanyakazi" },
   // results
   checkTitle: { en: "Check your email", sw: "Angalia barua pepe yako" },
   checkSignup: { en: "We sent a confirmation link to {e}. Open it to finish creating your account. Your business will be ready when you come back.", sw: "Tumetuma kiungo cha uthibitisho kwa {e}. Kifungue ili kumaliza kufungua akaunti. Biashara yako itakuwa tayari ukirudi." },
@@ -234,7 +237,10 @@ export function AuthScreen() {
         {mode === "signin" && <button type="button" className="link-btn small" onClick={() => go("link")}>{t("useLink")}</button>}
         {mode === "signup" && <p className="muted small" style={{ margin: 0 }}>{t("terms")} <a href="https://ponditech.com/#terms" target="_blank" rel="noreferrer">{t("termsLink")}</a>.</p>}
         {!tabbed && <button type="button" className="link-btn small" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
-        <a href="/" className="small muted" style={{ textAlign: "center", textDecoration: "none" }}>{t("home")}</a>
+        <div className="auth-foot">
+          <a href="/" className="small muted">{t("home")}</a>
+          <a href="/app/admin" className="small muted">{t("staff")}</a>
+        </div>
       </form>
     </div>
   );

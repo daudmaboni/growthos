@@ -132,7 +132,7 @@ function useHashView(): [View, (v: View) => void] {
 }
 
 /* ================= page ================= */
-export default function Admin({ supabase, backHref }: { supabase: SupabaseClient; backHref?: string }) {
+export default function Admin({ supabase, backHref, onSignOut }: { supabase: SupabaseClient; backHref?: string; onSignOut?: () => void }) {
   const isAdmin = useIsPlatformAdmin(supabase);
   const [view, setView] = useHashView();
   const [openWs, setOpenWs] = useState<string | null>(null);
@@ -147,8 +147,8 @@ export default function Admin({ supabase, backHref }: { supabase: SupabaseClient
   if (isAdmin === null) return <Frame><p className="ia-blank">Checking your access…</p></Frame>;
   if (!isAdmin) return (
     <Frame><div className="ia-blank"><h2>This page is for Pondi admins</h2>
-      <p>Your account doesn't have platform admin access. Go back to your workspace to keep working.</p>
-      {backHref && <a className="ia-btn primary" href={backHref}>Back to ItaOS</a>}</div></Frame>
+      <p>This account doesn't have staff access. Sign out and sign in with your Pondi staff account.</p>
+      {onSignOut && <button className="ia-btn primary" onClick={onSignOut}>Sign out</button>}</div></Frame>
   );
 
   const rows = ws.data ?? [];
@@ -170,7 +170,8 @@ export default function Admin({ supabase, backHref }: { supabase: SupabaseClient
         <div className="ia-side-foot">
           <button className="ia-refresh" onClick={refresh} disabled={loading}>{ICON.refresh}{loading ? 'Refreshing' : 'Refresh'}</button>
           <span>Updated {ov.data ? ago(ov.data.generated_at) : '…'}</span>
-          {backHref && <a className="ia-back" href={backHref}>Back to ItaOS</a>}
+          {backHref && <a className="ia-back" href={backHref}>Open business app</a>}
+          {onSignOut && <button className="ia-back ia-signout" onClick={onSignOut}>Sign out</button>}
           <span className="ia-co">Pondi Technologies</span>
         </div>
       </aside>
@@ -735,7 +736,7 @@ const CSS = `
 .ia-refresh{display:flex;align-items:center;gap:8px;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff!important;border-radius:10px;padding:8px;margin-bottom:6px;font-weight:600}
 .ia-refresh:hover:not(:disabled){background:rgba(255,255,255,.14)}.ia-refresh:disabled{opacity:.6}
 .ia-co{color:#6E79A3}.ia-back{color:#C9D0E6;text-decoration:none;font-weight:600}.ia-back:hover{color:#fff;text-decoration:underline}
-.ia-blank .ia-btn{display:inline-block;margin-top:14px;text-decoration:none}
+.ia-blank .ia-btn{display:inline-block;margin-top:14px;text-decoration:none}.ia-signout{background:none;border:0;padding:0;text-align:left;font:inherit;font-weight:600;cursor:pointer}
 
 /* main */
 .ia-main{padding:34px clamp(20px,3.5vw,48px) 60px;min-width:0;max-width:1400px}
