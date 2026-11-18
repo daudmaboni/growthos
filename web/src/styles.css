@@ -366,3 +366,12 @@ button.danger:hover:not(:disabled) { background: var(--bad); color: #fff; }
 .dh-key { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--card); border: 1px solid var(--line); }
 .profile-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 12px; border-radius: var(--r-md); background: var(--raised); }
 .profile-facts > span { display: grid; gap: 2px; }
+
+/* Copy buttons: confirm on the button itself */
+button.copy-btn { min-width: 86px; }
+button.copy-btn.done, button.copy-btn.done:hover:not(:disabled) { background: var(--good-soft); border-color: var(--good); color: var(--good); animation: copy-pop .35s var(--ease); }
+button.copy-btn.fail, button.copy-btn.fail:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); animation: copy-shake .3s; }
+input.copy-flash { border-color: var(--good) !important; box-shadow: 0 0 0 3px var(--good-soft); transition: box-shadow .2s, border-color .2s; }
+@keyframes copy-pop { 0% { transform: scale(.92); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes copy-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { button.copy-btn.done, button.copy-btn.fail { animation: none; } }

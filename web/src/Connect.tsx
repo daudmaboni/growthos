@@ -1,5 +1,5 @@
 import { enterCards, usePageEnter, select } from "./motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, canManage, when, ago } from "./lib";
 import { loginForAds, embeddedSignup, metaConfigured } from "./meta";
 import ImportChats from "./ImportChats";
@@ -90,7 +90,6 @@ export default function Connect({ ws }: { ws: Workspace }) {
     const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "backfill_media" });
     setMsg(r.images_failed && !r.images_saved ? { err: `Could not fetch images: ${r.last_error ?? "unknown error"}` } : { ok: `${r.images_saved} image${r.images_saved === 1 ? "" : "s"} fetched and read${r.images_failed ? `, ${r.images_failed} failed` : ""}.` });
   });
-  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => setMsg({ ok: "Copied." }), () => setMsg({ err: "Copy failed. Select the text and copy it by hand." }));
 
   const replay = () => run("replay", async () => {
     const r = await callFn<{ requeued: number; processed: number; checked: number }>("wa-webhook", { action: "replay", workspace_id: ws.id });
@@ -163,9 +162,9 @@ export default function Connect({ ws }: { ws: Workspace }) {
                   <li>In Dualhook, start a new connection and choose <b>Webhook Override</b>. Paste these two values <b>before</b> you open Meta's signup window:</li>
                 </ol>
                 <label className="small">Webhook URL</label>
-                <div className="row"><input readOnly value={dh.webhook_url} style={{ flex: 1 }} onFocus={(e) => e.target.select()} /><button className="small" onClick={() => copy(dh.webhook_url)}>Copy</button></div>
+                <CopyField value={dh.webhook_url} onError={() => setMsg({ err: "Copy failed. Select the text and copy it by hand." })} />
                 <label className="small">Verify token</label>
-                <div className="row"><input readOnly value={dh.verify_token} style={{ flex: 1 }} onFocus={(e) => e.target.select()} /><button className="small" onClick={() => copy(dh.verify_token)}>Copy</button></div>
+                <CopyField value={dh.verify_token} onError={() => setMsg({ err: "Copy failed. Select the text and copy it by hand." })} />
                 <ol className="small" start={2} style={{ margin: "4px 0", paddingLeft: 18 }}>
                   <li>Continue in Dualhook: choose <b>"Connect your existing WhatsApp Business app"</b>, scan the QR on the phone and <b>allow chat history sharing</b>.</li>
                   <li>The number appears here with its first message; the last 6 months of chats follow over a few hours.</li>
@@ -240,6 +239,36 @@ export default function Connect({ ws }: { ws: Workspace }) {
 }
 
 
+
+/** Read-only field + Copy button that visibly confirms the copy on the button itself. */
+function CopyField({ value, onError }: { value: string; onError: () => void }) {
+  const [state, setState] = useState<"idle" | "done" | "fail">("idle");
+  const timer = useRef<number>();
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const copy = async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(value); ok = true; }
+    catch {
+      // Fallback for browsers without the async clipboard API.
+      const el = inputRef.current;
+      if (el) { el.focus(); el.select(); try { ok = document.execCommand("copy"); } catch { ok = false; } }
+    }
+    setState(ok ? "done" : "fail");
+    if (!ok) onError();
+    navigator.vibrate?.(ok ? 12 : [20, 40, 20]);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setState("idle"), 1800);
+  };
+  return (
+    <div className="row">
+      <input ref={inputRef} readOnly value={value} className={state === "done" ? "copy-flash" : ""} style={{ flex: 1 }} onFocus={(e) => e.target.select()} />
+      <button type="button" className={`small copy-btn ${state}`} onClick={copy} aria-live="polite">
+        {state === "done" ? "Copied ✓" : state === "fail" ? "Failed" : "Copy"}
+      </button>
+    </div>
+  );
+}
 
 function StatusRow({ c, waitingText = "Waiting for first sync" }: { c: Conn; waitingText?: string }) {
   return (
