@@ -1,6 +1,6 @@
 // Ask Kito: any question about the business, in Kiswahili or English. Kito answers from the
 // workspace's own data and shows the chats, ads and numbers behind the answer, with buttons to act.
-// Read only: Kito never sends WhatsApp messages or changes anything.
+// Kito never sends WhatsApp messages. It can PREPARE a chat delete; only the owner's click runs it.
 import { useEffect, useRef, useState } from "react";
 import { enterCards, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, L, ago, money, fmt, canEdit } from "./lib";
@@ -15,7 +15,9 @@ type Block =
   | { kind: "chats"; title: string; items: ChatItem[] }
   | { kind: "ads"; title: string; items: AdItem[]; spend_currency?: string }
   | { kind: "table"; title: string; columns: string[]; labels: string[]; rows: unknown[][]; total: number; chat_ids?: string[] }
-  | { kind: "stats"; title: string; items: { label: string; value: unknown }[] };
+  | { kind: "stats"; title: string; items: { label: string; value: unknown }[] }
+  | { kind: "delete_chats"; title: string; chat_ids: string[]; count: number; by_origin: Record<string, number>; messages: number; with_orders: number;
+      sample: { name: string | null; origin: string; last_message_at: string | null }[]; allowed: boolean; request: string };
 type Query = { purpose: string; sql: string; rows: number; error: string | null };
 export type Answer = { id: string | null; created_at: string; question: string; answer: string; blocks: Block[]; caveats: string[]; follow_ups: string[]; queries: Query[] };
 type Turn = { question: string; answer?: Answer; error?: string; pending?: boolean };
@@ -120,7 +122,7 @@ export default function Kito({ ws }: { ws: Workspace }) {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(q); } }} />
         <button className="primary" disabled={busy || q.trim().length < 2}>{busy ? T("Thinking…", "Anafikiri…") : T("Ask", "Uliza")}</button>
       </form>
-      <p className="small muted" style={{ margin: 0 }}>{T("Kito only reads. It never sends messages or changes your data. Confirmed sales come from recorded orders only.", "Kito anasoma tu. Hatumi ujumbe wala kubadilisha data yako. Mauzo yaliyothibitishwa ni oda zilizorekodiwa tu.")}</p>
+      <p className="small muted" style={{ margin: 0 }}>{T("Kito reads your data and never sends messages. It can prepare a delete, but nothing is deleted until you press Delete. Confirmed sales come from recorded orders only.", "Kito anasoma data yako na hatumi ujumbe. Anaweza kuandaa kufuta, lakini hakuna kinachofutwa mpaka ubonyeze Futa. Mauzo yaliyothibitishwa ni oda zilizorekodiwa tu.")}</p>
     </div>
   );
 }
@@ -178,6 +180,7 @@ function Prose({ text }: { text: string }) {
 function BlockView({ b, ws }: { b: Block; ws: Workspace }) {
   if (b.kind === "chats") return <ChatsBlock b={b} ws={ws} />;
   if (b.kind === "ads") return <AdsBlock b={b} ws={ws} />;
+  if (b.kind === "delete_chats") return <DeleteBlock b={b} ws={ws} />;
   if (b.kind === "stats") return (
     <div className="kito-block">
       {b.title && <h3>{b.title}</h3>}
@@ -317,6 +320,57 @@ function AdsBlock({ b, ws }: { b: Extract<Block, { kind: "ads" }>; ws: Workspace
       </div>
       <span className="small muted">{T("Last 30 days. Paid sales are orders matched to chats from the ad (an estimate, not proof).", "Siku 30 zilizopita. Mauzo ni oda zilizounganishwa na chat za tangazo (makisio, si uthibitisho).")}</span>
       <a className="small" href="#dashboard">{T("See all ads on the Dashboard", "Ona matangazo yote kwenye Dashboard")} →</a>
+    </div>
+  );
+}
+
+const ORIGIN: Record<string, [string, string]> = {
+  live: ["live WhatsApp", "WhatsApp hai"], export: ["uploaded chat export", "chat export zilizopakiwa"], csv: ["CSV import", "CSV"],
+};
+
+function DeleteBlock({ b, ws }: { b: Extract<Block, { kind: "delete_chats" }>; ws: Workspace }) {
+  const T = (en: string, sw: string) => (ws.language === "sw" ? sw : en);
+  const [state, setState] = useState<"ready" | "busy" | "done" | "cancelled">("ready");
+  const [res, setRes] = useState<{ deleted: number; messages: number; orders_unlinked: number } | null>(null);
+  const [err, setErr] = useState("");
+  const origins = Object.entries(b.by_origin).map(([o, n]) => `${n} ${T(ORIGIN[o]?.[0] ?? o, ORIGIN[o]?.[1] ?? o)}`).join(" · ");
+  const live = b.by_origin.live ?? 0;
+
+  async function run() {
+    const msg = T(`Delete ${b.count} chats and ${b.messages} messages for good? This cannot be undone.`, `Futa chat ${b.count} na ujumbe ${b.messages} kabisa? Haiwezi kurudishwa.`)
+      + (live ? "\n\n" + T(`${live} of them came through your live WhatsApp connection and cannot be fetched again.`, `${live} kati yake zilikuja kupitia WhatsApp hai na haziwezi kupatikana tena.`) : "");
+    if (!confirm(msg)) return;
+    setState("busy"); setErr("");
+    const { data, error } = await supabase.rpc("delete_chats", { p_ws: ws.id, p_ids: b.chat_ids, p_via: "kito", p_request: b.request });
+    if (error) { setErr(error.message); setState("ready"); return; }
+    setRes(data as any); setState("done");
+  }
+
+  return (
+    <div className="kito-block kito-danger">
+      <h3>{b.title || T("Delete chats", "Futa chat")} <span className="muted">· {b.count}</span></h3>
+      {state === "done" && res ? (
+        <p className="ok" style={{ margin: 0 }}>{T(`Deleted ${res.deleted} chats and ${res.messages} messages.`, `Chat ${res.deleted} na ujumbe ${res.messages} vimefutwa.`)}
+          {res.orders_unlinked > 0 && " " + T(`${res.orders_unlinked} recorded orders were kept, now without a chat.`, `Oda ${res.orders_unlinked} zimebaki, sasa bila chat.`)}</p>
+      ) : state === "cancelled" ? (
+        <p className="small muted" style={{ margin: 0 }}>{T("Cancelled. Nothing was deleted.", "Imesitishwa. Hakuna kilichofutwa.")}</p>
+      ) : (<>
+        <div className="small">{T("Nothing is deleted yet.", "Bado hakuna kilichofutwa.")} {origins} · {b.messages} {T("messages", "ujumbe")}</div>
+        {live > 0 && <div className="small warnt">{T(`${live} of these came through the live WhatsApp connection. Once deleted they cannot be fetched again.`, `${live} kati ya hizi zilikuja kupitia WhatsApp hai. Zikifutwa haziwezi kupatikana tena.`)}</div>}
+        {b.with_orders > 0 && <div className="small muted">{T(`${b.with_orders} have recorded orders. The orders stay (your sales numbers don't change); they just lose the link to the chat.`, `${b.with_orders} zina oda zilizorekodiwa. Oda zitabaki (mauzo hayabadiliki); zitapoteza tu kiungo cha chat.`)}</div>}
+        <div className="kito-del-list">
+          {b.sample.map((c, i) => <span key={i} className="chip">{c.name ?? T("Customer", "Mteja")}<span className="muted"> · {T(ORIGIN[c.origin]?.[0] ?? c.origin, ORIGIN[c.origin]?.[1] ?? c.origin)}</span></span>)}
+          {b.count > b.sample.length && <span className="small muted">+{b.count - b.sample.length} {T("more", "zaidi")}</span>}
+        </div>
+        {b.allowed ? (
+          <div className="row" style={{ gap: 6 }}>
+            <button className="small danger" disabled={state === "busy"} onClick={run}>{state === "busy" ? T("Deleting…", "Inafuta…") : T(`Delete ${b.count} chats`, `Futa chat ${b.count}`)}</button>
+            <a className="btn small" href={"#chats/ids=" + b.chat_ids.slice(0, 100).join(",")}>{T("Review them first", "Zikague kwanza")}</a>
+            <button className="small" disabled={state === "busy"} onClick={() => setState("cancelled")}>{T("Cancel", "Ghairi")}</button>
+          </div>
+        ) : <div className="small muted">{T("Only the owner or an admin can delete chats.", "Mmiliki au admin pekee ndiye anaweza kufuta chat.")}</div>}
+        {err && <p className="err small" style={{ margin: 0 }}>{err}</p>}
+      </>)}
     </div>
   );
 }
