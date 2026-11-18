@@ -78,11 +78,18 @@ export default function Chats({ ws }: { ws: Workspace }) {
   // Live: new WhatsApp messages, Kito's labels and recorded sales appear without reloading.
   useEffect(() => {
     let timer: number | undefined, kitoTimer: number | undefined;
-    const bump = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { setQuiet(true); refresh(); window.dispatchEvent(new Event("itaos:live")); }, 800); };
+    // At most one reload every 5 s: a newly connected number backfills thousands of rows at once.
+    let last = 0;
+    const bump = () => {
+      if (timer) return;
+      const wait = Math.max(800, 5000 - (Date.now() - last));
+      timer = window.setTimeout(() => { timer = undefined; last = Date.now(); setQuiet(true); refresh(); window.dispatchEvent(new Event("itaos:live")); }, wait);
+    };
     const ch = supabase.channel("chats-" + ws.id)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, bump)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, (p: any) => {
+        if (p?.new?.origin === "history") return; // old chats being backfilled, not new messages
         bump();
         // Let Kito read the new message shortly after it lands (it only reads changed chats).
         window.clearTimeout(kitoTimer); kitoTimer = window.setTimeout(() => { callFn("kito", { workspace_id: ws.id }).then(() => { setQuiet(true); refresh(); }).catch(() => {}); }, 20000);

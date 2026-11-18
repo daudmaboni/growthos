@@ -112,20 +112,34 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
       }
       for (const th of h.threads ?? []) {
         const conv = await conversationFor(ctx, th.id);
-        for (const m of th.messages ?? []) {
-          await saveMessage(ctx, conv.id, m, m.from === th.id ? "in" : "out", "history");
+        // Backfill arrives in thousands of messages: one bulk write per thread, not one per message.
+        const rows = (th.messages ?? []).filter((m: any) => m?.id && m.type !== "reaction" && m.type !== "unsupported").map((m: any) => ({
+          id: m.id, workspace_id: ctx.ws, conversation_id: conv.id, direction: m.from === th.id ? "in" : "out", origin: "history",
+          sent_at: new Date(Number(m.timestamp) * 1000).toISOString(), type: m.type, body: textOf(m), raw: m,
+        }));
+        for (let i = 0; i < rows.length; i += 500) {
+          const { error } = await db.from("messages").upsert(rows.slice(i, i + 500), { onConflict: "id", ignoreDuplicates: true });
+          if (error) throw new Error("could not save message");
         }
+        if (rows.length) ctx.touched.push(conv.id);
       }
       const progress = Number(h.metadata?.progress ?? 0);
       const { error } = await db.from("wa_numbers").update({ history_status: progress >= 100 ? "complete" : "receiving" }).eq("phone_number_id", pnid);
       if (error) throw new Error("could not save history progress");
     }
   } else if (field === "smb_app_state_sync") {
+    // The phone's whole address book syncs here (thousands of names): one bulk write per event.
+    const byId = new Map<string, { workspace_id: string; wa_id: string; name: string | null }>();
     for (const s of value.state_sync ?? []) {
       if (s.type === "contact" && s.contact?.phone_number && s.action !== "remove") {
-        const { error } = await db.from("contacts").upsert({ workspace_id: ctx.ws, wa_id: s.contact.phone_number.replace(/\D/g, ""), name: s.contact.full_name ?? s.contact.first_name ?? null }, { onConflict: "workspace_id,wa_id" });
-        if (error) throw new Error("could not save contact name");
+        const wa_id = String(s.contact.phone_number).replace(/\D/g, "");
+        if (wa_id) byId.set(wa_id, { workspace_id: ctx.ws, wa_id, name: s.contact.full_name ?? s.contact.first_name ?? null });
       }
+    }
+    const rows = [...byId.values()];
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await db.from("contacts").upsert(rows.slice(i, i + 500), { onConflict: "workspace_id,wa_id" });
+      if (error) throw new Error("could not save contact name");
     }
   }
   // Signals are recomputed from the full message history, so a partial earlier run is repaired here.
@@ -160,9 +174,21 @@ async function processStored(db: SupabaseClient, id: number) {
   }
 }
 
+
+/** Bulk backfill (history, address-book sync) is left for the scheduled drain, which works through it
+ *  one event at a time. Processing hundreds of those at once on arrival is what overloaded the database. */
+const BULK_FIELDS = new Set(["history", "smb_app_state_sync"]);
+async function processInBackground(db: SupabaseClient, saved: { id: number; field: string }[]) {
+  for (const e of saved) {
+    if (BULK_FIELDS.has(e.field)) continue;
+    await processStored(db, e.id).catch((err) => console.error("background processing", safeError(err)));
+  }
+}
+
 async function persistChanges(body: Envelope | any) {
   const db = admin();
   const ids: number[] = [];
+  const events: { id: number; field: string }[] = [];
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value ?? {};
@@ -180,15 +206,15 @@ async function persistChanges(body: Envelope | any) {
         status: "pending", received_at: new Date().toISOString(),
       }, { onConflict: "provider,event_key", ignoreDuplicates: true }).select("id");
       if (insertError) throw new Error("could not persist WhatsApp event");
-      if (inserted?.length) { ids.push(inserted[0].id); continue; }
+      if (inserted?.length) { ids.push(inserted[0].id); events.push({ id: inserted[0].id, field: change.field }); continue; }
 
       // Provider retry of a change we already hold: only skip it if it was fully processed.
       const { data: existing, error } = await db.from("raw_events").select("id,processed_at,status").eq("provider", "whatsapp").eq("event_key", key).single();
       if (error || !existing) throw new Error("could not recover saved WhatsApp event");
-      if (!existing.processed_at && existing.status !== "processing") ids.push(existing.id);
+      if (!existing.processed_at && existing.status !== "processing") { ids.push(existing.id); events.push({ id: existing.id, field: change.field }); }
     }
   }
-  return { db, ids };
+  return { db, ids, events };
 }
 
 async function retryBatch(db: SupabaseClient, ws: string | null, limit: number) {
@@ -199,9 +225,14 @@ async function retryBatch(db: SupabaseClient, ws: string | null, limit: number) 
   const [a, b] = await Promise.all([retryable, stale]);
   if (a.error || b.error) throw new Error("retry query failed");
   const rows = [...(a.data ?? []), ...(b.data ?? [])].slice(0, limit);
-  let processed = 0;
-  for (const row of rows) if (await processStored(db, row.id)) processed++;
-  return { processed, checked: rows.length };
+  let processed = 0, checked = 0;
+  const deadline = Date.now() + 100_000; // stay well inside the function's time limit; the rest waits for the next run
+  for (const row of rows) {
+    if (Date.now() > deadline) break;
+    checked++;
+    if (await processStored(db, row.id)) processed++;
+  }
+  return { processed, checked };
 }
 
 type Via = "360dialog" | "dualhook";
@@ -282,7 +313,7 @@ async function bridgeDelivery(req: Request, via: Via, token: string) {
     await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active", ...wabaPatch }).eq("id", conn.id);
     const saved = await persistChanges(kept);
     // @ts-ignore EdgeRuntime is provided by Supabase
-    EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id).catch((e) => console.error("background processing", safeError(e))))));
+    EdgeRuntime.waitUntil(processInBackground(saved.db, saved.events));
     return new Response("ok", { status: 200 });
   } catch (e) {
     console.error("bridge persistence failed", safeError(e));
@@ -341,13 +372,13 @@ Deno.serve(async (req) => {
   // ---- Meta delivery ----
   const raw = await req.text();
   if (!(await validSignature(raw, req.headers.get("x-hub-signature-256")))) return new Response("bad signature", { status: 401 });
-  let saved: { db: SupabaseClient; ids: number[] };
+  let saved: { db: SupabaseClient; ids: number[]; events: { id: number; field: string }[] };
   try { saved = await persistChanges(JSON.parse(raw)); }
   catch (e) {
     console.error("webhook persistence failed", safeError(e));
     return new Response("temporary persistence failure", { status: 500 }); // Meta will retry; nothing was acknowledged
   }
   // @ts-ignore EdgeRuntime is provided by Supabase
-  EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id).catch((e) => console.error("background processing", safeError(e))))));
+  EdgeRuntime.waitUntil(processInBackground(saved.db, saved.events));
   return new Response("ok", { status: 200 });
 });
