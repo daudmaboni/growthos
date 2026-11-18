@@ -87,7 +87,7 @@ export default function App() {
   return (
     <div className="shell" ref={shellRef}>
       <header className="topbar">
-        <div className="brand"><a className="home" href="#dashboard" aria-label="ItaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>ItaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
+        <div className="brand"><a className="home" href="#dashboard" aria-label="itaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>itaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <nav className="tabs" aria-label="Sections">
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
@@ -141,7 +141,7 @@ function StaffAccountNotice() {
   return (
     <div className="center">
       <div className="card auth">
-        <div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div>
+        <div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div>
         <p style={{ margin: 0 }}>{tr(lang, "staffAccount")}</p>
         <button type="button" className="primary" onClick={async () => { await supabase.auth.signOut({ scope: "local" }); location.href = "/app/admin"; }}>{tr(lang, "openStaff")}</button>
       </div>
@@ -189,7 +189,7 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   return (
     <div className="center">
       <form className="card auth" ref={formRef} onSubmit={submit}>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
+        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
         <h2 style={{ margin: 0 }}>{tr(lang, "wsTitle")}</h2>
         <label htmlFor="wsname" className="small muted">{tr(lang, "wsBody")}</label>
         <input id="wsname" required autoComplete="organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr(lang, "businessPh")} />

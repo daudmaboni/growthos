@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-/** ItaOS mark: the "ita." wordmark on a rounded tile. Three colourways that interchange:
+/** itaOS mark: the "ita." wordmark on a rounded tile. Three colourways that interchange:
  *  white (default, light theme), navy (dark theme), yellow. The tile slowly cycles through
  *  them and flips to the next one on hover or tap. Reduced-motion users get no cycling. */
 type Variant = "white" | "navy" | "yellow";

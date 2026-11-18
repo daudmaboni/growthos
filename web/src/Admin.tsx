@@ -1,4 +1,4 @@
-// ItaOS — Pondi platform admin (/admin)
+// itaOS — Pondi platform admin (/admin)
 // Reads only the admin_* RPCs (migrations 0012_platform_admin, 0013_admin_activity).
 // Every RPC re-checks platform_admins server-side; hiding this page is UX, not security.
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -85,7 +85,7 @@ export function healthOf(w: WsRow): Health {
 const STEPS: { key: string; label: string; done: (w: WsRow) => boolean; hint: string }[] = [
   { key: 'meta', label: 'Connect Meta Ads', done: (w) => w.meta_status === 'active', hint: 'Ad account linked and syncing' },
   { key: 'wa', label: 'Go live on WhatsApp', done: (w) => w.wa_status === 'active', hint: 'Number connected through Meta' },
-  { key: 'chat', label: 'First customer chat', done: (w) => w.conversations > 0, hint: 'At least one conversation in ItaOS' },
+  { key: 'chat', label: 'First customer chat', done: (w) => w.conversations > 0, hint: 'At least one conversation in itaOS' },
   { key: 'sale', label: 'First recorded sale', done: (w) => w.orders > 0, hint: 'A paid order recorded or imported' },
 ];
 const stuckAt = (w: WsRow) => { const i = STEPS.findIndex((s) => !s.done(w)); return i === -1 ? STEPS.length : i; };
@@ -239,7 +239,7 @@ function Today({ ov, rows, act, errors, onOpen, goErrors }:
       <header className="ia-hero">
         <p className="ia-date">{today}</p>
         <h1>
-          {rows.length ? plural(rows.length, 'business', 'businesses') : 'No businesses'} on ItaOS.{' '}
+          {rows.length ? plural(rows.length, 'business', 'businesses') : 'No businesses'} on itaOS.{' '}
           <span className={needs ? 'ia-need' : 'ia-calm'}>{needs === 0 ? 'Nothing needs you right now.' : needs === 1 ? 'One thing needs a look.' : `${needs} things need a look.`}</span>
         </h1>
       </header>
@@ -404,7 +404,7 @@ function Businesses({ rows, act, loading, onOpen }: { rows: WsRow[]; act: Activi
 
   return (
     <div>
-      <header className="ia-pagehead"><h1>Businesses</h1><p>Everyone using ItaOS, sorted so problems come first.</p></header>
+      <header className="ia-pagehead"><h1>Businesses</h1><p>Everyone using itaOS, sorted so problems come first.</p></header>
       <div className="ia-tools">
         <label className="ia-search">{ICON.search}<input placeholder="Find a business or owner email" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <div className="ia-seg" role="radiogroup" aria-label="Filter">
@@ -604,7 +604,7 @@ function Drawer({ supabase, id, row, onClose, onChanged }:
                   </div></div>
                 <label className="ia-field"><span>Plan</span><input value={plan} onChange={(e) => setPlan(e.target.value)} placeholder="pilot" /></label>
                 <label className="ia-field wide"><span>Private note</span>
-                  <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only Pondi admins can see this, e.g. how they found ItaOS or what they're paying" /></label>
+                  <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only Pondi admins can see this, e.g. how they found itaOS or what they're paying" /></label>
               </div>
               {confirmSuspend && <p className="ia-confirm">Suspend {w.name}? Press Save again to confirm.</p>}
               <div className="ia-actions">

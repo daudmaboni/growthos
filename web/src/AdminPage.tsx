@@ -9,7 +9,7 @@ export default function AdminPage() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    document.title = "ItaOS Staff";
+    document.title = "itaOS Staff";
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
@@ -38,7 +38,7 @@ function StaffSignIn() {
       setBusy(false);
       return setErr(/invalid login/i.test(error.message) ? "Wrong email or password."
         : /not confirmed/i.test(error.message) ? "This staff account isn't confirmed yet. Confirm it in Supabase → Authentication → Users."
-        : /failed to fetch|network/i.test(error.message) ? "Couldn't reach ItaOS. Check your internet connection." : error.message);
+        : /failed to fetch|network/i.test(error.message) ? "Couldn't reach itaOS. Check your internet connection." : error.message);
     }
     // Only platform admins may stay signed in here.
     const { data: ok } = await supabase.rpc("is_platform_admin");
@@ -56,7 +56,7 @@ function StaffSignIn() {
       <form className="st-card" onSubmit={submit} noValidate>
         <div className="st-brand"><span className="st-mark">ita.</span><span>Staff</span></div>
         <h1>Pondi staff sign-in</h1>
-        <p className="st-sub">For the ItaOS team only. Business owners sign in on the <a href="/app">main sign-in page</a>.</p>
+        <p className="st-sub">For the itaOS team only. Business owners sign in on the <a href="/app">main sign-in page</a>.</p>
         <label className="st-field"><span>Staff email</span>
           <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="hello@ponditech.com" autoFocus /></label>
         <label className="st-field"><span>Password</span>

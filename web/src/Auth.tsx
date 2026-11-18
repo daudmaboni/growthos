@@ -32,7 +32,7 @@ const T = {
   resetBody: { en: "Enter the email you signed up with. We'll send a link to set a new password.", sw: "Weka barua pepe uliyojisajili nayo. Tutakutumia kiungo cha kuweka nenosiri jipya." },
   back: { en: "Back to sign in", sw: "Rudi kuingia" },
   wait: { en: "Please wait…", sw: "Subiri kidogo…" },
-  noAccount: { en: "New to ItaOS?", sw: "Mgeni kwenye ItaOS?" },
+  noAccount: { en: "New to itaOS?", sw: "Mgeni kwenye itaOS?" },
   haveAccount: { en: "Already have an account?", sw: "Tayari una akaunti?" },
   terms: { en: "By creating an account you agree to our", sw: "Kwa kufungua akaunti unakubali" },
   termsLink: { en: "terms", sw: "masharti yetu" },
@@ -48,7 +48,7 @@ const T = {
   checkTitle: { en: "Check your email", sw: "Angalia barua pepe yako" },
   checkSignup: { en: "We sent a confirmation link to {e}. Open it to finish creating your account. Your business will be ready when you come back.", sw: "Tumetuma kiungo cha uthibitisho kwa {e}. Kifungue ili kumaliza kufungua akaunti. Biashara yako itakuwa tayari ukirudi." },
   checkLink: { en: "We sent a sign-in link to {e}. Open it on this phone or computer.", sw: "Tumetuma kiungo cha kuingia kwa {e}. Kifungue kwenye simu au kompyuta hii." },
-  checkReset: { en: "If {e} has an ItaOS account, a reset link is on its way. Open it to set a new password.", sw: "Kama {e} ina akaunti ya ItaOS, kiungo cha kubadilisha kiko njiani. Kifungue uweke nenosiri jipya." },
+  checkReset: { en: "If {e} has an itaOS account, a reset link is on its way. Open it to set a new password.", sw: "Kama {e} ina akaunti ya itaOS, kiungo cha kubadilisha kiko njiani. Kifungue uweke nenosiri jipya." },
   spam: { en: "Not there after a minute? Check Spam or Promotions.", sw: "Hukioni baada ya dakika moja? Angalia Spam au Promotions." },
   resend: { en: "Send it again", sw: "Tuma tena" },
   resent: { en: "Sent again.", sw: "Imetumwa tena." },
@@ -56,13 +56,13 @@ const T = {
   wrong: { en: "Wrong email or password.", sw: "Barua pepe au nenosiri si sahihi." },
   unconfirmed: { en: "Confirm your email first. We can send the confirmation link again.", sw: "Thibitisha barua pepe yako kwanza. Tunaweza kutuma kiungo cha uthibitisho tena." },
   exists: { en: "An account with this email already exists. Sign in instead.", sw: "Akaunti yenye barua pepe hii tayari ipo. Ingia badala yake." },
-  noSuchAccount: { en: "No ItaOS account uses this email. Check the spelling or create an account.", sw: "Hakuna akaunti ya ItaOS yenye barua pepe hii. Hakiki tahajia au fungua akaunti." },
+  noSuchAccount: { en: "No itaOS account uses this email. Check the spelling or create an account.", sw: "Hakuna akaunti ya itaOS yenye barua pepe hii. Hakiki tahajia au fungua akaunti." },
   short: { en: "Use at least 8 characters for your password.", sw: "Tumia angalau herufi 8 kwa nenosiri." },
   needName: { en: "Enter your business name.", sw: "Weka jina la biashara yako." },
   needEmail: { en: "Enter a valid email address, like you@business.co.tz.", sw: "Weka barua pepe sahihi, mf. wewe@biashara.co.tz." },
   needPassword: { en: "Enter your password.", sw: "Weka nenosiri lako." },
   rate: { en: "Too many emails were sent just now. Wait a few minutes, or sign in with your password.", sw: "Barua pepe nyingi zimetumwa sasa hivi. Subiri dakika chache, au ingia kwa nenosiri." },
-  offline: { en: "Couldn't reach ItaOS. Check your internet connection and try again.", sw: "Imeshindwa kufikia ItaOS. Hakiki intaneti yako ujaribu tena." },
+  offline: { en: "Couldn't reach itaOS. Check your internet connection and try again.", sw: "Imeshindwa kufikia itaOS. Hakiki intaneti yako ujaribu tena." },
   linkExpired: { en: "That email link has expired or was already used. Sign in, or ask for a new link.", sw: "Kiungo hicho kimeisha muda au kimeshatumika. Ingia, au omba kiungo kipya." },
   // set new password
   setTitle: { en: "Set a new password", sw: "Weka nenosiri jipya" },
@@ -210,7 +210,7 @@ export function AuthScreen() {
     return (
       <div className="center">
         <form className="card auth" ref={formRef} onSubmit={(e) => e.preventDefault()}>
-          <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
+          <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
           <div className="auth-mail" aria-hidden="true">✉</div>
           <h2 style={{ margin: 0 }}>{t("checkTitle")}</h2>
           <p style={{ margin: 0 }}>{t(body, { e: sent.email })}</p>
@@ -228,7 +228,7 @@ export function AuthScreen() {
   return (
     <div className="center">
       <form className="card auth" ref={formRef} onSubmit={submit} noValidate>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
+        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
         {tabbed ? (
           <>
             <p className="muted" style={{ margin: 0 }}>{t("tagline")}</p>
@@ -306,7 +306,7 @@ export function SetNewPassword({ email, onDone }: { email: string; onDone: () =>
   return (
     <div className="center">
       <form className="card auth" ref={formRef} onSubmit={submit} noValidate>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
+        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
         <h2 style={{ margin: 0 }}>{tr(lang, "setTitle")}</h2>
         <p className="muted small" style={{ margin: 0 }}>{tr(lang, "setBody", { e: email })}</p>
         <div className="auth-field"><label htmlFor="npw"><b>{tr(lang, "newPassword")}</b></label>

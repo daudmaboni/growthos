@@ -92,7 +92,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
             <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectAds}>{busy === "ads" ? "Connecting…" : adsConns.length ? "Add / reconnect ad account" : "Connect ad account"}</button>
           </div>
         </div>
-        <p className="small muted" style={{ margin: 0 }}>Read-only. ItaOS reads spend and chats started per ad every 3 hours. It never changes your ads.</p>
+        <p className="small muted" style={{ margin: 0 }}>Read-only. itaOS reads spend and chats started per ad every 3 hours. It never changes your ads.</p>
         {accounts && (
           <div className="card" style={{ background: "var(--paper)" }}>
             <h3>Choose the ad account</h3>
@@ -106,20 +106,20 @@ export default function Connect({ ws }: { ws: Workspace }) {
         <div className="row between"><h2>WhatsApp Business</h2>
           <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectWa}>{busy === "wa" ? "Connecting…" : waConns.length ? "Connect another number" : "Connect WhatsApp"}</button>
         </div>
-        <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. ItaOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
+        <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. itaOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
         {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
         {manager && (
           <div className="evidence">
             <div className="row between"><b>Connect through 360dialog</b>
               {!showD360 && <button className="small" disabled={!!busy} onClick={() => setShowD360(true)}>{d360Conns.length ? "Change API key" : "Use 360dialog"}</button>}
             </div>
-            <span className="small muted">Use this while ItaOS's own Meta approval is pending. 360dialog is a Meta partner: the number keeps working in the WhatsApp Business app, and ItaOS receives the same chats and ad clicks.</span>
+            <span className="small muted">Use this while itaOS's own Meta approval is pending. 360dialog is a Meta partner: the number keeps working in the WhatsApp Business app, and itaOS receives the same chats and ad clicks.</span>
             {showD360 && (
               <>
                 <ol className="small" style={{ margin: "4px 0", paddingLeft: 18 }}>
                   <li>Sign up at app.360dialog.com and add the number with <b>"Connect your existing WhatsApp Business app"</b> (Coexistence). Allow chat history sharing when the phone asks.</li>
                   <li>In the 360dialog hub, generate an <b>API key</b> for that number.</li>
-                  <li>Paste it here. ItaOS sets the webhook for you; don't point it anywhere else afterwards.</li>
+                  <li>Paste it here. itaOS sets the webhook for you; don't point it anywhere else afterwards.</li>
                 </ol>
                 <div className="row">
                   <input type="password" autoComplete="off" placeholder="360dialog API key" value={d360Key} onChange={(e) => setD360Key(e.target.value)} style={{ flex: 1 }} />

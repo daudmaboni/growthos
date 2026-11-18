@@ -48,7 +48,7 @@ export const FIELDS: Record<Kind, { key: string; en: string; sw: string; require
     { key: "product", en: "Product", sw: "Bidhaa", hint: "Optional" },
     { key: "customer_name", en: "Customer name", sw: "Jina la mteja", hint: "Used to suggest a chat match" },
     { key: "phone", en: "Customer phone", sw: "Simu ya mteja", hint: "Used only to find the chat in this workspace; never stored" },
-    { key: "conversation_id", en: "ItaOS chat id", sw: "Kitambulisho cha chat", hint: "Optional, from a ItaOS export" },
+    { key: "conversation_id", en: "itaOS chat id", sw: "Kitambulisho cha chat", hint: "Optional, from a itaOS export" },
     { key: "notes", en: "Notes", sw: "Maelezo", hint: "Optional" },
   ],
   expenses: [
