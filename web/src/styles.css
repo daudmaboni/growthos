@@ -124,7 +124,7 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .bub.out { justify-self: end; background: var(--accent-soft); }
 .bub .t { display: block; font-size: 11.5px; color: var(--muted); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--muted); }
-.status-dot.on { background: var(--good); } .status-dot.err { background: var(--bad); }
+.status-dot.on { background: var(--good); } .status-dot.warn { background: var(--warn); } .status-dot.err { background: var(--bad); }
 details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13.5px; }
 .empty { padding: 22px; text-align: center; color: var(--muted); border: 1.5px dashed var(--line-2); border-radius: var(--r-lg); }
 @media (max-width: 480px) { .big { font-size: 28px; } .hero h2 { font-size: 22px; } .fstep { grid-template-columns: 96px 1fr 70px; } }

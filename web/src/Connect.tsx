@@ -9,7 +9,7 @@ type Health = { status: string; events: number; oldest: string | null; newest: s
 type Batch = { id: string; kind: string; file_name: string | null; created_count: number; skipped_count: number; rejected_count: number; created_at: string };
 
 type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
-type Num = { phone_number_id: string; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
+type Num = { phone_number_id: string; connection_id: string | null; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
 
 export default function Connect({ ws }: { ws: Workspace }) {
   const [conns, setConns] = useState<Conn[]>([]);
@@ -28,7 +28,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
 
   useEffect(() => {
     supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id).then(({ data }) => setConns((data as Conn[]) ?? []));
-    supabase.from("wa_numbers").select("phone_number_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id).then(({ data }) => setNums((data as Num[]) ?? []));
+    supabase.from("wa_numbers").select("phone_number_id,connection_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id).then(({ data }) => setNums((data as Num[]) ?? []));
     supabase.rpc("webhook_health", { p_ws: ws.id }).then(({ data }) => setHealth((data as Health[]) ?? []));
     supabase.from("import_batches").select("id,kind,file_name,created_count,skipped_count,rejected_count,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(10).then(({ data }) => setBatches((data as Batch[]) ?? []));
   }, [ws.id, tick]);
@@ -68,7 +68,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
   });
 
   const connectDualhook = () => run("dh", async () => {
-    if (dhConns.length && prompt("This cuts off WhatsApp until you paste the new URL and token into Dualhook. Type REPLACE to continue.") !== "REPLACE") return;
+    if (dhLinked.length && prompt("This cuts off WhatsApp until you paste the new URL and token into Dualhook. Type REPLACE to continue.") !== "REPLACE") return;
     const r = await callFn<{ webhook_url: string; verify_token: string }>("dualhook-connect", { workspace_id: ws.id });
     setDh(r);
   });
@@ -102,6 +102,8 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const waConns = conns.filter((c) => c.provider === "whatsapp");
   const d360Conns = waConns.filter((c) => c.external_id.startsWith("360dialog:"));
   const dhConns = waConns.filter((c) => c.external_id.startsWith("dualhook:"));
+  // A Dualhook row exists as soon as "Use Dualhook" is pressed; it is only linked once Meta's first message registers a number to it.
+  const dhLinked = dhConns.filter((c) => nums.some((n) => n.connection_id === c.id));
   const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card, :scope > .finding"), { stagger: 0.07 }); });
 
   return (
@@ -138,14 +140,16 @@ export default function Connect({ ws }: { ws: Workspace }) {
           <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectWa}>{busy === "wa" ? "Connecting…" : waConns.length ? "Connect another number" : "Connect WhatsApp"}</button>
         </div>
         <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. itaOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
-        {dhConns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from Meta via Dualhook" />)}
+        {dhConns.map((c) => dhLinked.includes(c)
+          ? <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from Meta via Dualhook" />
+          : <div key={c.id} className="row between small"><span><span className="status-dot warn" /> {c.label ?? "WhatsApp via Dualhook"} <span className="warnt">· not linked yet</span></span><span className="muted">Paste the webhook URL and verify token into Dualhook, then connect the number there</span></div>)}
         {manager && (
           <div className="evidence">
             <div className="row between"><b>Connect through Dualhook</b>
               {!dh && !dhConns.length && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Use Dualhook"}</button>}
             </div>
             <span className="small muted">Use this while itaOS's own Meta approval is pending. Dualhook is a Meta Tech Provider: the number keeps working in the WhatsApp Business app, and Meta sends chats, ad clicks and history straight to itaOS.</span>
-            {dhConns.length > 0 && (
+            {dhLinked.length > 0 && (
               <div className="dh-key">
                 <b className="small">Payment screenshots {dhKeyLast4 ? <span className="ok small">· key saved (…{dhKeyLast4})</span> : <span className="warnt small">· not set up</span>}</b>
                 <span className="small muted">To read the images customers send, itaOS downloads them through Dualhook. In Dualhook open <b>Connection → Overview → Outbound API key</b>, create a key (it starts with <code>dh_live_</code>) and paste it here. Images from the last 7 days are fetched right away.</span>
@@ -173,7 +177,13 @@ export default function Connect({ ws }: { ws: Workspace }) {
                 <div className="row"><button onClick={() => setDh(null)}>Done</button></div>
               </>
             )}
-            {!dh && dhConns.length > 0 && (
+            {!dh && dhConns.length > 0 && dhLinked.length === 0 && (
+              <div className="row" style={{ alignItems: "center" }}>
+                <span className="small muted" style={{ flex: 1 }}>Lost the URL or token? itaOS can't show them again, but you can make new ones. Nothing is connected yet, so nothing breaks.</span>
+                <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Get a new URL and token"}</button>
+              </div>
+            )}
+            {!dh && dhLinked.length > 0 && (
               <details className="small">
                 <summary className="muted">Advanced: replace the webhook URL</summary>
                 <span className="small err" style={{ display: "block", margin: "6px 0" }}>Only do this if the URL was leaked. The current URL stops working immediately, and no WhatsApp messages reach itaOS until you paste the new URL and token into Dualhook (Webhook Override → Change).</span>
