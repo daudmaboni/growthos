@@ -158,11 +158,21 @@ function Login() {
 function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [lost, setLost] = useState(false);
   const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.06 }); });
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setErr("");
+    e.preventDefault(); setErr(""); setBusy(true);
+    // Make sure the sign-in is still there (some phone browsers drop it after opening the email link).
+    let { data: { session } } = await supabase.auth.getSession();
+    if (!session) session = (await supabase.auth.refreshSession()).data.session;
+    if (!session) { setBusy(false); setLost(true); return; }
     const { data: id, error } = await supabase.rpc("create_workspace", { p_name: name.trim() });
-    if (error) return setErr(error.message);
+    if (error) {
+      setBusy(false);
+      if (error.code === "42501" || /permission denied|not signed in|JWT/i.test(error.message)) { setLost(true); return; }
+      return setErr("Couldn't create the workspace. Please try again.");
+    }
     const { data } = await supabase.from("workspaces").select(WS_COLUMNS).eq("id", id).single();
     onDone({ ...(data as unknown as Workspace), role: "owner" });
   }
@@ -172,8 +182,13 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
         <h2>Name your business</h2>
         <label htmlFor="wsname" className="small muted">This is the workspace your ads and WhatsApp connect to.</label>
         <input id="wsname" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kayani Herbs" />
-        <button className="primary">Create workspace</button>
-        {err && <p className="err">{err}</p>}
+        {lost ? (<>
+          <p className="err">Your email is confirmed, but this browser lost your sign-in. Please sign in again to continue.</p>
+          <button type="button" className="primary" onClick={() => supabase.auth.signOut({ scope: "local" })}>Sign in again</button>
+        </>) : (<>
+          <button className="primary" disabled={busy}>{busy ? "Creating…" : "Create workspace"}</button>
+          {err && <p className="err">{err}</p>}
+        </>)}
       </form>
     </div>
   );
