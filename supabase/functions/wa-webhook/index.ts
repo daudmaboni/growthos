@@ -153,6 +153,21 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
   }
   // Signals are recomputed from the full message history, so a partial earlier run is repaired here.
   if (ctx.touched.length) await reanalyze(db, ctx.touched);
+  // A customer just wrote: have Kito read those chats now (not at the next 15-minute run).
+  if (field === "messages" && ctx.touched.length) wakeKito(ctx.touched);
+}
+
+/** Ask Kito to read these chats right away. Fire-and-forget: the webhook never waits for the AI. */
+function wakeKito(ids: string[]) {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (!secret) return;
+  const call = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/kito`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-cron-secret": secret, Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}` },
+    body: JSON.stringify({ conversation_ids: [...new Set(ids)].slice(0, 20) }),
+  }).then((r) => r.body?.cancel()).catch((e) => console.error("wake kito", String(e?.message ?? e).slice(0, 120)));
+  // @ts-ignore EdgeRuntime is provided by Supabase
+  try { EdgeRuntime.waitUntil(call); } catch { /* outside the edge runtime: the promise still runs */ }
 }
 
 /** Claim one saved event and process it. Returns true when it is now processed. */

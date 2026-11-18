@@ -593,3 +593,7 @@ button.wa-kito:hover:not(:disabled) { background: var(--wa-dot); }
 .wa-compose.open { justify-content: stretch; }
 .wa-compose-row textarea { background: var(--wa-input, #ffffff); min-width: 0; }
 :root:not([data-theme="light"]) .wa-compose-row textarea { --wa-input: #2a3942; }
+.cc-reading { color: var(--accent); font-weight: 600; animation: kito-pulse 1.6s ease-in-out infinite; opacity: 1 !important; }
+@keyframes kito-pulse { 50% { opacity: .55; } }
+.wa-sum.stale, .cc-next.stale { opacity: .5; }
+.wa-special { font-style: italic; color: var(--wa-meta); }

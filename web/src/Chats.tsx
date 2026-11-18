@@ -72,7 +72,11 @@ function statusOf(r: Outcome, T: Tr, currency: string): Status {
   return { key: "new", icon: "●", tone: "info", text: T("Just started talking", "Ndio ameanza kuongea") };
 }
 
-const interest = (r: Outcome): "hot" | "warm" | "cold" | null => r.kito_temp ?? (r.warm ? "warm" : null);
+/** Kito's reading is older than the chat's last message (the customer wrote again since). */
+const kitoStale = (r: Outcome) => !!r.last_message_at && (r.kito_checked_at
+  ? Date.parse(r.last_message_at) > Date.parse(r.kito_checked_at)
+  : Date.now() - Date.parse(r.last_message_at) < 3600e3);   // new chat Kito hasn't read yet
+const interest = (r: Outcome): "hot" | "warm" | "cold" | null => (kitoStale(r) ? null : r.kito_temp) ?? (r.warm ? "warm" : null);
 const phoneOf = (waId: string | undefined) => (waId && /^\+?\d{9,15}$/.test(waId) ? waId.replace(/\D/g, "") : null);
 
 export default function Chats({ ws }: { ws: Workspace }) {
@@ -343,7 +347,7 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome;
   const temp = interest(r);
   const confirmed = Number(r.paid_orders) > 0;
   const name = nameOf(r, T);
-  const why = r.kito_temp ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
+  const why = r.kito_temp && !kitoStale(r) ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
   const main = !editor ? null
     : st.key === "check" ? <button className="small primary" onClick={() => onOpen(true)}>{T("Check payment", "Hakiki malipo")}</button>
     : st.key === "bought" || st.key === "lost" ? null
@@ -362,8 +366,9 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome;
           </div>
           <div className="small muted cc-from">{fromOf(r, T, adName)}</div>
           <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
-          {r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
-          {r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
+          {kitoStale(r) ? <div className="cc-sum cc-reading">✦ {T("Kito is reading the new messages…", "Kito anasoma ujumbe mpya…")}</div>
+            : r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
+          {!kitoStale(r) && r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
           {task && <div className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")}</div>}
         </div>
         <div className="cc-act" onClick={(e) => e.stopPropagation()}>
@@ -406,7 +411,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
     const b = el.getBoundingClientRect();
     if (b.top < 0 || b.bottom > window.innerHeight) window.scrollBy({ top: b.top - 12, behavior: "smooth" });
   }, []);
-  const why = r.kito_temp ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
+  const why = r.kito_temp && !kitoStale(r) ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
 
   async function loadMsgs() {
     const { data } = await supabase.from("messages").select("id,direction,sent_at,body,origin,type,media").eq("conversation_id", r.id).order("sent_at", { ascending: false }).limit(1000);
@@ -477,7 +482,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
                     {sep && <div className="wa-day"><span>{dayLabel(k)}</span></div>}
                     <div className={"wa-msg " + m.direction + (tail ? " tail" : "")}>
                       <div className="wa-bub">
-                        {m.media?.path ? <MediaView m={m} T={T} /> : <span className="wa-text">{m.body ?? ""}</span>}
+                        {m.media?.path ? <MediaView m={m} T={T} /> : <span className={"wa-text" + (special(m) ? " wa-special" : "")}>{special(m) ?? m.body ?? ""}</span>}
                         <span className="wa-meta">{m.origin === "itaos" && <span className="wa-via" title={T("Sent from itaOS", "Imetumwa kutoka itaOS")}>itaOS · </span>}{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden>✓✓</span>}</span>
                       </div>
                     </div>
@@ -492,8 +497,9 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
           <div className="wa-card">
             <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
             <span className="small muted">{fromOf(r, T, adName)}</span>
-            {r.kito_summary && <p className="wa-sum">{r.kito_summary}</p>}
-            {r.kito_next && st.key !== "bought" && <p className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
+            {kitoStale(r) && <p className="wa-sum cc-reading">✦ {T("New messages since Kito's last read. Kito is reading them now; this updates by itself.", "Kuna ujumbe mpya tangu Kito asome. Kito anausoma sasa; hii itajisasisha yenyewe.")}</p>}
+            {r.kito_summary && <p className={"wa-sum" + (kitoStale(r) ? " stale" : "")}>{r.kito_summary}</p>}
+            {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
           </div>
           {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); onChange(); }} />}
           {editor && !confirmed && st.key !== "check" && !recording && (
@@ -530,6 +536,20 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
       </div>
     </div>
   );
+}
+
+/** WhatsApp gives no text for some messages: show what they are instead of "[errors]". */
+function special(m: Msg): string | null {
+  const b = (m.body ?? "").trim();
+  if (m.type === "audio" || b === "[voice note]") return "🎤 Voice message";
+  if (m.type === "errors" || b === "[errors]" || m.type === "unsupported") return "⚠ Message WhatsApp didn't share (e.g. a poll, view-once or a newer message type)";
+  if (m.type === "sticker" || b === "[sticker]") return "🙂 Sticker";
+  if (m.type === "video" && b === "[video]") return "🎬 Video";
+  if (m.type === "image" && b === "[image]") return "🖼 Photo (not saved)";
+  if (m.type === "document" && b === "[document]") return "📄 Document (not saved)";
+  if (m.type === "location" || b === "[location]") return "📍 Location";
+  if (m.type === "contacts" || b === "[contacts]") return "👤 Contact card";
+  return null;
 }
 
 /** Reply box at the bottom of the chat, like WhatsApp's. Sends from the business's own number through
