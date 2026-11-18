@@ -814,7 +814,7 @@ function Drawer({ supabase, id, row, onClose, onChanged, onDeleted }:
                 {d.kito.errors_30d > 0 && <span className="ia-bad"> {plural(d.kito.errors_30d, 'question')} failed.</span>}</p>
               {d.kito.runs.length > 0 && (
                 <ul className="ia-runs">
-                  {d.kito.runs.map((r, i) => <li key={i}><time>{ago(r.ran_at)}</time><span>Read {plural(r.checked, 'chat')}{r.failed ? `, ${r.failed} failed` : ''}{r.remaining ? `, ${r.remaining} left` : ''}</span><small>{r.trigger === 'auto' ? 'every 15 min / new message' : 'started by owner'}</small></li>)}
+                  {d.kito.runs.map((r, i) => <li key={i}><time>{ago(r.ran_at)}</time><span>Read {plural(r.checked, 'chat')}{r.failed ? `, ${r.failed} failed` : ''}{r.remaining ? `, ${r.remaining} left` : ''}</span><small>{r.trigger === 'auto' ? 'automatic, every 15 min' : 'started by owner'}</small></li>)}
                 </ul>
               )}
             </section>
