@@ -37,7 +37,8 @@ const T = {
   terms: { en: "By creating an account you agree to our", sw: "Kwa kufungua akaunti unakubali" },
   termsLink: { en: "terms", sw: "masharti yetu" },
   home: { en: "← Back to home", sw: "← Rudi mwanzo" },
-  google: { en: "Continue with Google", sw: "Endelea na Google" },
+  google: { en: "Sign in with Google", sw: "Ingia kwa Google" },
+  googleUp: { en: "Sign up with Google", sw: "Jisajili kwa Google" },
   or: { en: "or with email", sw: "au kwa barua pepe" },
   inApp: { en: "Google sign-in doesn't work inside WhatsApp, Instagram or Facebook. Open this page in Chrome or Safari, or use your email below.", sw: "Kuingia kwa Google hakufanyi kazi ndani ya WhatsApp, Instagram au Facebook. Fungua ukurasa huu kwenye Chrome au Safari, au tumia barua pepe hapa chini." },
   providerOff: { en: "Google sign-in isn't available right now. Use your email instead.", sw: "Kuingia kwa Google hakupatikani sasa hivi. Tumia barua pepe badala yake." },
@@ -122,9 +123,10 @@ function useGoogleEnabled(): boolean {
   return on;
 }
 
+/** Google's official "G" mark from /google-g.svg (from Google's sign-in branding kit); hidden until that file exists. */
 function GoogleMark() {
-  // Neutral mark (not Google's logo): a simple "G" in a circle.
-  return <span className="auth-g" aria-hidden="true">G</span>;
+  const [ok, setOk] = useState(true);
+  return ok ? <img className="auth-g" src="/google-g.svg" alt="" aria-hidden="true" width={20} height={20} onError={() => setOk(false)} /> : null;
 }
 
 /* ---------- sign in / create account ---------- */
@@ -237,7 +239,7 @@ export function AuthScreen() {
               <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
             </div>
             {googleOn && (<>
-              <button type="button" className="auth-google" disabled={busy} onClick={google}><GoogleMark />{t("google")}</button>
+              <button type="button" className="auth-google" disabled={busy} onClick={google}><GoogleMark /><span>{mode === "signup" ? t("googleUp") : t("google")}</span></button>
               {IN_APP && <p className="muted small" style={{ margin: 0 }}>{t("inApp")}</p>}
               <div className="auth-or"><span>{t("or")}</span></div>
             </>)}
