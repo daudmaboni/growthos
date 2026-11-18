@@ -81,7 +81,7 @@ const SYNONYMS: Record<string, string[]> = {
   product: ["product", "item", "items", "bidhaa", "sku", "description"],
   customer_name: ["customer", "customer_name", "customer name", "name", "jina", "mteja", "client", "buyer", "contact"],
   phone: ["phone", "simu", "whatsapp", "number", "msisdn", "mobile", "tel", "telephone", "phone_number", "phone number"],
-  conversation_id: ["conversation_id", "conversation id", "chat_id", "chat id", "growthos id", "itaos id"],
+  conversation_id: ["conversation_id", "conversation id", "chat_id", "chat id", "itaos id"],
   notes: ["notes", "note", "maelezo", "comment", "comments", "remarks"],
   note: ["note", "notes", "maelezo", "comment", "description", "remarks"],
   category: ["category", "aina", "type", "kind"],

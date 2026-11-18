@@ -67,7 +67,7 @@ tasks(task_id, chat_id, title, status 'open'|'snoozed'|'done'|'dismissed', due_a
 
 function system(ws: { name: string; currency: string; timezone: string; language: string; fx_rate: number | null }) {
   const now = new Date().toLocaleString("en-GB", { timeZone: ws.timezone, dateStyle: "full", timeStyle: "short" });
-  return `You are Kito, the analyst inside ItaOS for "${ws.name}", a small business in Tanzania that sells through Meta ads → WhatsApp chats → payment.
+  return `You are Kito, the analyst inside itaOS for "${ws.name}", a small business in Tanzania that sells through Meta ads → WhatsApp chats → payment.
 The owner asks you anything about their business. You answer from THEIR DATA by running SQL, never from guesses.
 
 Now: ${now} (${ws.timezone}). Currency: ${ws.currency}. ${ws.fx_rate ? `Ad spend is converted with ${ws.fx_rate} ${ws.currency} per ad-account unit.` : "No exchange rate is set, so ad spend stays in the ad account currency."}

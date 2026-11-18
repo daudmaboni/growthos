@@ -4,9 +4,9 @@
 //
 // Two ways in:
 //  - Meta delivers directly (our own Meta app): signed with x-hub-signature-256.
-//  - A partner relays Meta's events while ItaOS's own Tech Provider access is pending. Those
+//  - A partner relays Meta's events while itaOS's own Tech Provider access is pending. Those
 //    events can only land in the workspace their secret belongs to:
-//      · 360dialog: per-workspace secret in the x-growthos-token header (set by d360-connect).
+//      · 360dialog: per-workspace secret in the x-itaos-token header (set by d360-connect).
 //      · Dualhook (Webhook Override): Meta posts directly, signed with Dualhook's app secret, to
 //        /wa-webhook/dh/<secret> (set by dualhook-connect). The path secret replaces the signature.
 //
@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
   }
 
   // ---- 360dialog relay (per-workspace token) ----
-  const bridgeToken = req.headers.get("x-growthos-token");
+  const bridgeToken = req.headers.get("x-itaos-token");
   if (bridgeToken && !req.headers.get("x-hub-signature-256")) return await bridgeDelivery(req, "360dialog", bridgeToken);
 
   // ---- Meta delivery ----

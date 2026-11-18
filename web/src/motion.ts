@@ -133,7 +133,7 @@ export function enterShell(root: HTMLElement | null) {
 
 export function switchTheme(next: "light" | "dark", fromEl?: HTMLElement | null) {
   const html = document.documentElement;
-  const apply = () => { html.dataset.theme = next; try { localStorage.setItem("growthos-theme", next); } catch { /* storage unavailable */ } };
+  const apply = () => { html.dataset.theme = next; try { localStorage.setItem("itaos-theme", next); } catch { /* storage unavailable */ } };
   const svt = (document as any).startViewTransition as undefined | ((cb: () => void) => { ready: Promise<void> });
   if (html.dataset.theme === next) return;
   if (!svt || reduced.matches) { apply(); return; }

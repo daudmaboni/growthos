@@ -1,6 +1,6 @@
-# GrowthOS
+# itaOS
 
-Ads → WhatsApp → paid. GrowthOS reads a business's Meta ad spend and its WhatsApp chats (Coexistence or uploaded
+Ads → WhatsApp → paid. itaOS reads a business's Meta ad spend and its WhatsApp chats (Coexistence or uploaded
 exports), links chats to ad referrals where available, shows where conversations stall, and reports results using
 **orders the business has confirmed or imported**, never inferred signals alone.
 

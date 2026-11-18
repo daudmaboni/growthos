@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
   const db = admin();
   const { data: w } = await db.from("workspaces").select("send_enabled").eq("id", ws).maybeSingle();
   if (w && w.send_enabled === false) return json({ error: "Sending from itaOS is turned off for this business (Settings)." }, 403);
+  const { data: st } = await db.from("workspace_admin_state").select("status").eq("workspace_id", ws).maybeSingle();
+  if (st?.status === "suspended") return json({ error: "This itaOS account is paused. Contact Pondi Technologies (hello@ponditech.com)." }, 403);
   const { data: conv } = await db.from("conversations").select("id,phone_number_id,contacts(wa_id)").eq("id", convId).eq("workspace_id", ws).maybeSingle();
   if (!conv) return json({ error: "Chat not found." }, 404);
   const to = String((conv as any).contacts?.wa_id ?? "").replace(/\D/g, "");

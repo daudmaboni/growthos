@@ -29,7 +29,7 @@ export default function ImportCsv({ ws, onImported }: { ws: Workspace; onImporte
   function reset() { setFile(null); setGrid([]); setMap({}); setCheck(null); setLinks({}); setDone(null); setErr(""); }
   function downloadTemplate() {
     const url = URL.createObjectURL(new Blob([template(kind, ws.currency)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = `growthos-${kind}-template.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = `itaOS-${kind}-template.csv`; a.click(); URL.revokeObjectURL(url);
   }
   async function pick(f?: File) {
     reset(); if (!f) return;

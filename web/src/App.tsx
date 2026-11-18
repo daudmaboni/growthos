@@ -29,7 +29,7 @@ export default function App() {
   const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
-    try { return localStorage.getItem("growthos-theme") === "dark" ? "dark" : "light"; } catch { return "light"; } // light is the default
+    try { return localStorage.getItem("itaos-theme") === "dark" ? "dark" : "light"; } catch { return "light"; } // light is the default
   });
   useEffect(() => { document.documentElement.dataset.theme = theme; }, []);
   const themeBtn = useRef<HTMLButtonElement>(null);
@@ -47,6 +47,7 @@ export default function App() {
   };
   const isPlatformAdmin = useIsPlatformAdmin(session ? session.user.id : null);
   const [staffOnly, setStaffOnly] = useState(false); // a Pondi staff account with no business of its own
+  const [paused, setPaused] = useState(false); // Pondi set this business to "suspended" in admin
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -70,7 +71,14 @@ export default function App() {
       if (!w && typeof session.user.user_metadata?.business_name === "string" && session.user.user_metadata.business_name.trim()) {
         w = await createFromSignup(session.user.user_metadata.business_name.trim(), session.user.user_metadata.language === "en" ? "en" : "sw");
       }
-      if (w) { const { data: role } = await supabase.rpc("member_role", { ws: w.id }); w.role = (role as Role) ?? "viewer"; }
+      if (w) {
+        const [{ data: role }, { data: status }] = await Promise.all([
+          supabase.rpc("member_role", { ws: w.id }),
+          supabase.rpc("workspace_status", { p_ws: w.id }), // errors (older database) count as active
+        ]);
+        w.role = (role as Role) ?? "viewer";
+        setPaused(status === "suspended");
+      }
       setWs(w);
     });
   }, [session]);
@@ -86,6 +94,7 @@ export default function App() {
   if (ws === undefined) return <div className="center muted">{tr(initialLang(), "wait")}</div>;
   if (ws === null && staffOnly) return <StaffAccountNotice />;
   if (ws === null) return <CreateWorkspace onDone={setWs} />;
+  if (paused) return <PausedNotice name={ws.name} sw={ws.language === "sw"} />;
 
   return (
     <div className="shell" ref={shellRef}>
@@ -136,6 +145,21 @@ function GearIcon() {
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </svg>
+  );
+}
+
+function PausedNotice({ name, sw }: { name: string; sw: boolean }) {
+  return (
+    <div className="center">
+      <div className="card auth">
+        <div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div>
+        <p style={{ margin: 0 }}>
+          {sw ? `Akaunti ya ${name} imesimamishwa kwa muda. Wasiliana na Pondi Technologies (hello@ponditech.com) ili kuiwasha tena.`
+              : `${name}'s itaOS account is paused. Contact Pondi Technologies (hello@ponditech.com) to turn it back on.`}
+        </p>
+        <button type="button" className="primary" onClick={() => { void supabase.auth.signOut({ scope: "local" }); }}>{sw ? "Toka" : "Sign out"}</button>
+      </div>
+    </div>
   );
 }
 

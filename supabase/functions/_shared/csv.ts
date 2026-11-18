@@ -79,7 +79,7 @@ export function validateOrder(r: OrderRow, i: number, currency: string): Validat
   const discount = r.discount == null || String(r.discount).trim() === "" ? 0 : parseAmount(r.discount);
   if (discount == null || discount < 0 || discount > amount) return { index: i, ok: false, reason: "discount must be between 0 and the amount" };
   const conversation_id = clean(r.conversation_id);
-  if (conversation_id && !UUID.test(conversation_id)) return { index: i, ok: false, reason: "conversation_id is not a valid ItaOS chat id" };
+  if (conversation_id && !UUID.test(conversation_id)) return { index: i, ok: false, reason: "conversation_id is not a valid itaOS chat id" };
   const ref = clean(r.ref, 120);
   const dedupe_key = ref ? "ref:" + ref.toLowerCase() : "auto:" + [date.toISOString().slice(0, 10), amount, (clean(r.customer_name) ?? "").toLowerCase(), (clean(r.product) ?? "").toLowerCase()].join("|");
   return { index: i, ok: true, dedupe_key, row: { ...r, ref, amount, discount, date: date.toISOString(), currency: cur, status, fulfillment: fulfillment ?? "not_applicable", product: clean(r.product), customer_name: clean(r.customer_name, 120), notes: clean(r.notes, 500), conversation_id, phone: clean(r.phone, 40) } };

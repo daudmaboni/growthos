@@ -1,4 +1,4 @@
--- GrowthOS MVP: durable webhook retries, workspace-safe links, and confirmed-sale reporting.
+-- itaOS MVP: durable webhook retries, workspace-safe links, and confirmed-sale reporting.
 
 -- Make it impossible for a member to link a sale to another workspace's conversation.
 alter table public.conversations

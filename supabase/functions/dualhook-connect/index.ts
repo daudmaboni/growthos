@@ -1,5 +1,5 @@
 // Connects a workspace's WhatsApp number through Dualhook (a Meta Tech Provider with Coexistence
-// and "Webhook Override"). Bridge until ItaOS has its own Tech Provider access.
+// and "Webhook Override"). Bridge until itaOS has its own Tech Provider access.
 //
 // With Webhook Override, Meta itself sends messages / smb_message_echoes / history /
 // smb_app_state_sync to the URL we hand out, in Meta's normal envelope. Meta signs those with

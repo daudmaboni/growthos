@@ -1,4 +1,4 @@
--- GrowthOS MVP: roles, confirmed orders as the sales source of truth (with audit trail),
+-- itaOS MVP: roles, confirmed orders as the sales source of truth (with audit trail),
 -- CSV import batches and expenses, bounded webhook retries with a controlled replay path,
 -- follow-up task history, the business profile, and a content-intelligence foundation.
 -- Forward-only. Existing rows in public.sales are copied into public.orders; the old table

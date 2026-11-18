@@ -1,10 +1,10 @@
-# GrowthOS — go-live setup (Kayani pilot)
+# itaOS — go-live setup (Kayani pilot)
 
 The existing pilot has a live web app and Supabase project. Repository changes are not automatically deployed; apply the new migration and deploy the updated Edge Functions and web app before using the features described here.
 
 **Existing pilot endpoints**
 - Web app: https://itaos.netlify.app (privacy policy: `/privacy.html`)
-- Database + server functions: Supabase project `growthos` (Frankfurt)
+- Database + server functions: Supabase project ref `jrdxeagnmunmatxtgmpk` (Frankfurt; the project itself is still named `growthos` in the Supabase dashboard)
 - WhatsApp webhook URL: `https://jrdxeagnmunmatxtgmpk.supabase.co/functions/v1/wa-webhook`
 - Ads sync runs every 3 hours automatically once an ad account is connected
 - The scheduled all-workspace `ads-sync` request must include `{"action":"sync_all","days":30}` and the current `x-cron-secret` header. Each scheduled run also retries up to 50 saved WhatsApp events that are pending or failed.
@@ -53,7 +53,7 @@ Existing members keep their `memberships.role`. Owners/admins can change setting
 You need to be an admin of the Kayani Herbs Business Portfolio.
 
 1. Go to developers.facebook.com → **My Apps → Create App**.
-2. Use case: **Other** → app type **Business**. Name: `GrowthOS`. Business portfolio: **Kayani Herbs**.
+2. Use case: **Other** → app type **Business**. Name: `itaOS`. Business portfolio: **Kayani Herbs**.
    (Don't put "WhatsApp" or "Facebook" in the name.)
 3. **Add products:** WhatsApp, Facebook Login for Business, Marketing API.
 4. **App settings → Basic**
@@ -66,8 +66,8 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
    - Allowed domains for the JavaScript SDK: `https://itaos.netlify.app`
    - Login with the JavaScript SDK: **Yes**
 6. **Facebook Login for Business → Configurations → Create** (two configurations)
-   - **"GrowthOS Ads"**: login variation *General*, token type *User access token*, permissions `ads_read`, `business_management`. Copy its **Configuration ID**.
-   - **"GrowthOS WhatsApp"**: login variation *WhatsApp Embedded Signup*, permissions `whatsapp_business_management`, `whatsapp_business_messaging`. Copy its **Configuration ID**.
+   - **"itaOS Ads"**: login variation *General*, token type *User access token*, permissions `ads_read`, `business_management`. Copy its **Configuration ID**.
+   - **"itaOS WhatsApp"**: login variation *WhatsApp Embedded Signup*, permissions `whatsapp_business_management`, `whatsapp_business_messaging`. Copy its **Configuration ID**.
 7. **WhatsApp → Configuration → Webhook**
    - Callback URL: `https://jrdxeagnmunmatxtgmpk.supabase.co/functions/v1/wa-webhook`
    - Verify token: the newly generated `META_VERIFY_TOKEN` value saved in Supabase (do not copy it into repository files).
@@ -89,7 +89,7 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
    - The phone must run WhatsApp Business app version 2.24.17 or newer, and the number must have been in use for at least 7 days.
    - The history import can only happen once, within 24 hours of connecting. Don't skip it.
    - WhatsApp Web / Desktop on other devices gets logged out once. Link them again from the phone.
-   - The phone keeps working exactly as before. GrowthOS only reads.
+   - The phone keeps working exactly as before. itaOS only reads.
 5. Wait a few hours for the 6-month history to arrive. Then open **Dashboard** and **Chats**.
 
 ## 3a. Bridge: connect WhatsApp through Dualhook (chosen bridge, while Pondi's Meta verification is pending)
@@ -110,15 +110,15 @@ Meta signs override traffic with Dualhook's app secret, which we don't have, so 
 
 ## 3b. Bridge: connect WhatsApp through 360dialog (while Pondi's Meta verification is pending)
 
-Meta refuses Embedded Signup until the GrowthOS business is a verified Tech Provider. Until then, a number can come in through 360dialog, a Meta partner that supports Coexistence (the WhatsApp Business app keeps working on the phone; history sync, message echoes and ad referrals with `ctwa_clid` arrive the same way).
+Meta refuses Embedded Signup until the itaOS business is a verified Tech Provider. Until then, a number can come in through 360dialog, a Meta partner that supports Coexistence (the WhatsApp Business app keeps working on the phone; history sync, message echoes and ad referrals with `ctwa_clid` arrive the same way).
 
 1. Deploy `wa-webhook` (still `--no-verify-jwt`) and `d360-connect` (normal JWT check). No new secrets or migrations.
 2. Kayani (the number's owner) signs up at app.360dialog.com, Regular plan (about €49 per number per month, Meta fees passed through), and adds the number with **"Yes, Business app" → "Connect your existing WhatsApp Business app"**. Scan the QR on the phone and **allow chat history sharing**. The number must have been active on the Business app for at least 7 days. 360dialog says history sync for direct clients may need their support to switch on: message support before onboarding and ask for Coexistence history sync to be enabled.
 3. In the 360dialog hub, generate an API key for the number.
-4. GrowthOS → Connect → WhatsApp Business → **Use 360dialog** → paste the key. GrowthOS sets the number's webhook to `wa-webhook` with a secret `x-growthos-token` header (only its hash is stored; the API key goes to Vault). Don't change the webhook in 360dialog afterwards; pasting the key again rotates the secret.
+4. itaOS → Connect → WhatsApp Business → **Use 360dialog** → paste the key. itaOS sets the number's webhook to `wa-webhook` with a secret `x-itaos-token` header (only its hash is stored; the API key goes to Vault). Don't change the webhook in 360dialog afterwards; pasting the key again rotates the secret.
 5. Send a test message to the number, and click a Click-to-WhatsApp ad from another phone. The number appears on the Connect page after the first event; the ad chat should show its ad on the dashboard.
 
-**Leaving the bridge later:** once Pondi is a Tech Provider, disconnect the number from 360dialog (WhatsApp Business app → Settings → Account → Business Platform → Disconnect), then use **Connect WhatsApp** (Embedded Signup). Chats already in GrowthOS stay; Meta allows the 6-month history sync once per onboarding, so expect to re-request it.
+**Leaving the bridge later:** once Pondi is a Tech Provider, disconnect the number from 360dialog (WhatsApp Business app → Settings → Account → Business Platform → Disconnect), then use **Connect WhatsApp** (Embedded Signup). Chats already in itaOS stay; Meta allows the 6-month history sync once per onboarding, so expect to re-request it.
 
 ## Known limits of v0.1
 - Only people with a role on the Meta app can connect (development mode). Opening to other businesses needs Meta App Review + Tech Provider verification later.

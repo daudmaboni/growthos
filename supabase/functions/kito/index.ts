@@ -1,4 +1,4 @@
-// Kito: ItaOS's background AI. Reads chats that are new or changed and labels them:
+// Kito: itaOS's background AI. Reads chats that are new or changed and labels them:
 // outcome, stage label, amount, objections, customer tags, a one-line summary and the next step.
 // Runs every 15 minutes (cron), right after a customer message (wa-webhook), or on demand from the app.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -47,7 +47,7 @@ function agoText(iso: string) {
 }
 
 function prompt(chat: string, lastAt: string, lang: string, currency: string) {
-  return `You are Kito, an analyst inside ItaOS. You read one WhatsApp sales chat between a small Tanzanian business (BIASHARA) and a customer (MTEJA) and label it. Chats are in Kiswahili, English or a mix.
+  return `You are Kito, an analyst inside itaOS. You read one WhatsApp sales chat between a small Tanzanian business (BIASHARA) and a customer (MTEJA) and label it. Chats are in Kiswahili, English or a mix.
 
 Now is ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC. The last message was sent ${lastAt.slice(0, 16).replace("T", " ")} UTC, ${agoText(lastAt)}. "(+26h)" means 26 hours passed before that message. "<Media omitted>" or "[image]" is a photo or screenshot that could not be read. "[picha ya malipo] …" is a payment receipt/screenshot the customer sent, already read by itaOS (provider · amount · transaction code · payee · time): treat it as strong evidence the customer paid, but it is not confirmed until the owner records the order. "[picha] …" is an image that is not a receipt.
 
@@ -99,11 +99,15 @@ const TOOL = {
   },
 };
 
+// Cutting text (slice) can split an emoji in half; a lone half is invalid JSON for the AI API
+// ("unexpected end of hex escape"), which failed whole Kito runs. Drop any lone halves.
+const wellFormed = (s: string) => s.replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
+
 async function call(payload: Record<string, unknown>) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1500, ...payload }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 1500, ...payload }, (_k, v) => (typeof v === "string" ? wellFormed(v) : v)),
   });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, body };
@@ -160,7 +164,7 @@ const DRAFT_TOOL = {
 };
 
 function draftPrompt(chat: string, profile: string, customerName: string | null, nextStep: string | null) {
-  return `You are Kito, a sales coach inside ItaOS. Write ONE short WhatsApp follow-up the business owner can send after reviewing it. It is a draft; a human decides whether to send it.
+  return `You are Kito, a sales coach inside itaOS. Write ONE short WhatsApp follow-up the business owner can send after reviewing it. It is a draft; a human decides whether to send it.
 
 Business profile (the only facts you may state about products, prices, delivery and payment):
 ${profile}
@@ -220,7 +224,7 @@ async function contentIdeas(db: ReturnType<typeof admin>, ws: string, lang: stri
   for (const c of objections ?? []) for (const o of new Set([...(c.kito_objections ?? []), ...(c.objections ?? [])])) tally[o] = (tally[o] ?? 0) + 1;
   const topObjections = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} (${n} chats)`).join(", ") || "none recorded";
   const postLines = (posts ?? []).map((p) => `- ${p.format ?? "?"} | theme: ${p.theme ?? "?"} | hook: ${p.hook ?? "?"} | offer: ${p.offer ?? "-"} | reach ${p.reach ?? "?"} likes ${p.likes ?? "?"} comments ${p.comments ?? "?"} shares ${p.shares ?? "?"} saves ${p.saves ?? "?"}`).join("\n") || "(no posts recorded yet)";
-  const p = `You are Kito inside ItaOS. Propose up to 6 content ideas for a small Tanzanian business as EDITABLE DRAFTS. Nothing you write is published automatically.
+  const p = `You are Kito inside itaOS. Propose up to 6 content ideas for a small Tanzanian business as EDITABLE DRAFTS. Nothing you write is published automatically.
 
 Business profile (only source of product, price, delivery and payment facts):
 ${profileText(profile as Profile)}

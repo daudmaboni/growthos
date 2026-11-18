@@ -1,4 +1,4 @@
--- GrowthOS v0.1 — core schema
+-- itaOS v0.1 — core schema
 -- Tenancy: every business-owned row carries workspace_id; RLS allows members only.
 -- Source facts (raw_events) are append-only; normalized tables are derived from them.
 
@@ -261,7 +261,7 @@ from public.conversations c
 join public.contacts ct on ct.id = c.contact_id
 left join public.sales s on s.conversation_id = c.id;
 
--- Per-ad performance: platform spend + GrowthOS-observed chats and confirmed sales
+-- Per-ad performance: platform spend + itaOS-observed chats and confirmed sales
 create or replace function public.ad_performance(p_ws uuid, p_from date, p_to date)
 returns table (ad_id text, ad_name text, campaign_name text, spend numeric, platform_conversations bigint,
                chats bigint, priced bigint, sold bigint, revenue numeric, cost_per_sale numeric)
