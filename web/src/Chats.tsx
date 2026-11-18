@@ -434,6 +434,23 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   const [amount, setAmount] = useState("");
   const [code, setCode] = useState("");
   useEffect(() => { if (!code && receipt?.txn_code) setCode(receipt.txn_code); }, [receipt?.txn_code]);
+  // Fraud checks: the same receipt sent in another chat, or already used for a recorded sale.
+  const [reused, setReused] = useState<{ otherChats: number; usedInSale: boolean }>({ otherChats: 0, usedInSale: false });
+  useEffect(() => {
+    const c = receipt?.txn_code; if (!c) return;
+    Promise.all([
+      supabase.from("messages").select("conversation_id").eq("workspace_id", ws.id).eq("direction", "in").ilike("body", `%${c.replace(/[%_]/g, "")}%`).neq("conversation_id", r.id).limit(50),
+      supabase.from("orders").select("id").eq("workspace_id", ws.id).eq("external_ref", "txn:" + c.toUpperCase()).limit(1),
+    ]).then(([m, o]) => setReused({ otherChats: new Set((m.data ?? []).map((x: any) => x.conversation_id)).size, usedInSale: !!o.data?.length }));
+  }, [receipt?.txn_code, r.id]);
+  const receiptDay = (() => {   // "14/08/2026, 04:52 Pm" → Date (day first, as Tanzanian receipts print it)
+    const m = receipt?.paid_at?.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/); if (!m) return null;
+    const y = Number(m[3].length === 2 ? "20" + m[3] : m[3]); const d = new Date(Date.UTC(y, Number(m[2]) - 1, Number(m[1])));
+    return isNaN(d.getTime()) ? null : d;
+  })();
+  const sentAt = rc ? Date.parse(rc.sent_at) : Date.now();
+  const daysOld = receiptDay ? Math.floor((sentAt - receiptDay.getTime()) / 864e5) : null;
+  const notDone = !!receipt?.notes && /(kuchakatwa|processing|pending|inasubiri|not (yet )?complete|failed|imeshindwa)/i.test(receipt.notes);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => { if (!amount && guess) setAmount(Math.round(Number(guess)).toLocaleString("en-US")); }, [guess]);
@@ -470,6 +487,10 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
           {receipt.paid_to && <span>{T("Paid to", "Imelipwa kwa")}: {receipt.paid_to}</span>}
           {receipt.paid_at && <span>{T("Time on receipt", "Muda kwenye risiti")}: {receipt.paid_at}</span>}
           {priced && receipt.amount && Math.round(receipt.amount) !== priced && <span className="warnt">⚠ {T(`Amount differs from the price you sent (${money(priced, ws.currency)}).`, `Kiasi ni tofauti na bei uliyotuma (${money(priced, ws.currency)}).`)}</span>}
+          {daysOld != null && daysOld >= 2 && <span className="err">⚠ {T(`This receipt is dated ${daysOld} days before the customer sent it. It may be an old screenshot.`, `Risiti hii ni ya siku ${daysOld} kabla mteja hajaituma. Inaweza kuwa picha ya zamani.`)}</span>}
+          {reused.usedInSale && <span className="err">⚠ {T("This transaction code is already recorded for another sale.", "Namba hii ya muamala tayari imerekodiwa kwa mauzo mengine.")}</span>}
+          {reused.otherChats > 0 && <span className="err">⚠ {T(`The same receipt was also sent in ${reused.otherChats} other chat${reused.otherChats > 1 ? "s" : ""}.`, `Risiti hiyo hiyo imetumwa pia kwenye chat ${reused.otherChats} nyingine.`)}</span>}
+          {notDone && <span className="warnt">⚠ {T("The receipt doesn't show the payment as completed.", "Risiti haionyeshi kwamba malipo yamekamilika.")}</span>}
           {receipt.confidence === "low" && <span className="warnt">⚠ {T("Hard to read — check carefully.", "Haisomeki vizuri — kagua kwa makini.")}</span>}
           {receipt.notes && <span className="muted">{receipt.notes}</span>}
         </div>
