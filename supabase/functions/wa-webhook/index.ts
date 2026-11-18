@@ -243,8 +243,23 @@ async function bridgeDelivery(req: Request, via: Via, token: string) {
     for (const entry of env.entry) {
       const changes = [];
       for (const change of entry.changes) {
-        const pnid: string | undefined = change.value?.metadata?.phone_number_id;
-        if (!pnid) continue;
+        let pnid: string | undefined = change.value?.metadata?.phone_number_id;
+        // Some deliveries (e.g. WABA-level override traffic) omit metadata. With one known number
+        // on this connection, it can only be that number.
+        if (!pnid && only) {
+          change.value = { ...(change.value ?? {}), metadata: { ...(change.value?.metadata ?? {}), phone_number_id: only.phone_number_id } };
+          pnid = only.phone_number_id;
+        }
+        if (!pnid) {
+          // Keep it rather than drop it: saved as failed so it can be inspected and replayed.
+          console.error("bridge: change without phone_number_id", change.field, Object.keys(change.value ?? {}).join(","));
+          const key = await eventKey(entry.id, change);
+          await db.from("raw_events").upsert({
+            provider: "whatsapp", event_key: key, field: change.field, payload: change, workspace_id: conn.workspace_id,
+            status: "failed", error: "no phone_number_id", last_error: "no phone_number_id", received_at: new Date().toISOString(),
+          }, { onConflict: "provider,event_key", ignoreDuplicates: true });
+          continue;
+        }
         const { data: owner, error: ownerError } = await db.from("wa_numbers").select("workspace_id").eq("phone_number_id", pnid).maybeSingle();
         if (ownerError) throw new Error("could not resolve WhatsApp workspace");
         if (owner && owner.workspace_id !== conn.workspace_id) { console.error("bridge: number belongs to another workspace; dropped"); continue; }
