@@ -1,11 +1,17 @@
-import { enterCards, enterRows, usePageEnter, select } from "./motion";
+// Chats: one card per customer, written so anyone can read it at a glance.
+// Each card answers three questions: who is this, where do things stand, and what should I do now.
+// The technical detail (which rule or Kito reading decided the label) is still there, tucked away.
+import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useState } from "react";
-import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage } from "./lib";
+import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
 import { OrderForm, OrderList, inferredFrom } from "./Orders";
 
 type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "ids";
 type Source = "any" | "live" | "import";
+type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
+type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string };
 type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; phone_number_id: string };
+type Tr = (en: string, sw: string) => string;
 
 /** Same rules as the database filters below, used to count each tab. */
 const inFilter = (r: Lite, f: Filter) =>
@@ -14,30 +20,57 @@ const inFilter = (r: Lite, f: Filter) =>
   : f === "signals" ? Number(r.paid_orders) === 0 && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? r.phone_number_id === "import" : r.phone_number_id !== "import");
-type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
-type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string };
 
 const hashIds = () => {
   const m = location.hash.match(/#chats\/ids=([0-9a-f,-]+)/i);
   return m ? m[1].split(",").filter(Boolean).slice(0, 100) : null;
 };
 
+/** "3 min ago" / "dakika 3 zilizopita" */
+function agoT(iso: string | null, T: Tr) {
+  if (!iso) return "";
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return T("just now", "sasa hivi");
+  if (m < 60) return T(`${m} min ago`, `dakika ${m} zilizopita`);
+  if (m < 48 * 60) { const h = Math.round(m / 60); return T(`${h} h ago`, `saa ${h} zilizopita`); }
+  const d = Math.round(m / 1440); return T(`${d} days ago`, `siku ${d} zilizopita`);
+}
+
+type Status = { key: string; text: string; tone: "good" | "warn" | "bad" | "info" | "muted"; icon: string };
+/** Where this customer stands, in one plain sentence. Order matters: the most useful truth wins. */
+function statusOf(r: Outcome, T: Tr, currency: string): Status {
+  if (Number(r.paid_orders) > 0) return { key: "bought", icon: "✓", tone: "good", text: T("Bought", "Amenunua") + (r.sale_amount != null ? ` · ${money(Number(r.sale_amount), currency)}` : "") };
+  if (inferredFrom(r)) return { key: "check", icon: "!", tone: "warn", text: T("Says they paid — check your money came in", "Anasema amelipa — hakikisha pesa imeingia") };
+  if (r.outcome === "lost") return { key: "lost", icon: "×", tone: "muted", text: T("Didn't buy", "Hakununua") };
+  if (r.last_dir === "in") return { key: "waiting", icon: "●", tone: "bad", text: T("Waiting for your reply", "Anasubiri umjibu") };
+  if (r.pay_instructions) return { key: "paynum", icon: "●", tone: "info", text: T("Has your payment number, hasn't paid yet", "Ana namba ya malipo, bado hajalipa") };
+  if (r.price_shared) return { key: "priced", icon: "●", tone: "info", text: T("Got the price, still deciding", "Amepata bei, bado anaamua") };
+  return { key: "new", icon: "●", tone: "info", text: T("Just started talking", "Ndio ameanza kuongea") };
+}
+
+const interest = (r: Outcome): "hot" | "warm" | "cold" | null => r.kito_temp ?? (r.warm ? "warm" : null);
+const phoneOf = (waId: string | undefined) => (waId && /^\+?\d{9,15}$/.test(waId) ? waId.replace(/\D/g, "") : null);
+
 export default function Chats({ ws }: { ws: Workspace }) {
   const [ids, setIds] = useState<string[] | null>(hashIds());
   const [filter, setFilter] = useState<Filter>(ids ? "ids" : "all");
-  const [rows, setRows] = useState<Outcome[]>([]);
   const [src, setSrc] = useState<Source>("any");
+  const [rows, setRows] = useState<Outcome[]>([]);
   const [lite, setLite] = useState<Lite[]>([]);
-  const [deleting, setDeleting] = useState(false);
   const [adNames, setAdNames] = useState<Record<string, string>>({});
+  const [phones, setPhones] = useState<Record<string, string>>({});
+  const [tasks, setTasks] = useState<Record<string, Task>>({});
+  const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [tasks, setTasks] = useState<Record<string, Task>>({});
   const [autoDone, setAutoDone] = useState(false);
+  const [rechecking, setRechecking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const lang = ws.language;
-  const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
+  const T: Tr = (en, sw) => (lang === "sw" ? sw : en);
+  const refresh = () => setTick((t) => t + 1);
 
   useEffect(() => {
     const onHash = () => { const i = hashIds(); setIds(i); if (i) setFilter("ids"); };
@@ -62,13 +95,16 @@ export default function Chats({ ws }: { ws: Workspace }) {
       q,
       supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id),
       supabase.from("follow_up_tasks").select("*").eq("workspace_id", ws.id).in("status", ["open", "snoozed"]),
-    ]).then(([c, a, t]) => {
+    ]).then(async ([c, a, t]) => {
       if (c.error) setErr(c.error.message);
       let list = (c.data as Outcome[]) ?? [];
       if (filter === "follow") {
-        const rank = (r: Outcome) => (tempOf(r) === "hot" ? 0 : 1) * 10 + (r.last_dir === "in" ? 0 : 1);
-        list = [...list].sort((a, b) => rank(a) - rank(b) || Date.parse(a.last_message_at ?? "") - Date.parse(b.last_message_at ?? ""));
+        const rank = (r: Outcome) => (interest(r) === "hot" ? 0 : 1) * 10 + (r.last_dir === "in" ? 0 : 1);
+        list = [...list].sort((x, y) => rank(x) - rank(y) || Date.parse(y.last_message_at ?? "") - Date.parse(x.last_message_at ?? ""));
       }
+      const contactIds = [...new Set(list.map((r) => r.contact_id))];
+      const { data: cts } = contactIds.length ? await supabase.from("contacts").select("id,wa_id").eq("workspace_id", ws.id).in("id", contactIds) : { data: [] };
+      setPhones(Object.fromEntries((cts ?? []).map((x: any) => [x.id, x.wa_id])));
       setRows(list);
       setAdNames(Object.fromEntries((a.data ?? []).map((x: any) => [x.ad_id, x.name])));
       setTasks(Object.fromEntries(((t.data ?? []) as Task[]).map((task) => [task.conversation_id, task])));
@@ -76,21 +112,18 @@ export default function Chats({ ws }: { ws: Workspace }) {
     });
   }, [ws.id, filter, ids, tick, src]);
 
-  const refresh = () => setTick((t) => t + 1);
-  const [rechecking, setRechecking] = useState(false);
-  const [note, setNote] = useState("");
   async function runKito(quiet = false) {
-    setRechecking(true); setNote(quiet ? "Kito is reading new chats…" : "Kito is reading the chats…");
+    setRechecking(true); setNote(quiet ? T("Kito is reading new chats…", "Kito anasoma chat mpya…") : T("Kito is reading the chats…", "Kito anasoma chat…"));
     try {
       let total = 0;
       for (let i = 0; i < 10; i++) {
         const r = await callFn<{ checked: number; failed: number; remaining: number; last_error?: string }>("kito", { workspace_id: ws.id });
         total += r.checked;
-        if (r.failed && r.last_error) { setNote(`Kito checked ${total} chats, then stopped: ${r.last_error}`); refresh(); setRechecking(false); return; }
+        if (r.failed && r.last_error) { setNote(T(`Kito read ${total} chats, then stopped: ${r.last_error}`, `Kito amesoma chat ${total}, kisha akasimama: ${r.last_error}`)); refresh(); setRechecking(false); return; }
         if (!r.remaining || !r.checked) break;
-        setNote(`Kito has checked ${total} chats, ${r.remaining} to go…`);
+        setNote(T(`Kito has read ${total} chats, ${r.remaining} to go…`, `Kito amesoma chat ${total}, zimebaki ${r.remaining}…`));
       }
-      setNote(total ? `Kito checked ${total} chats.` : quiet ? "" : "Kito is up to date. No new or changed chats."); refresh();
+      setNote(total ? T(`Kito read ${total} chats.`, `Kito amesoma chat ${total}.`) : quiet ? "" : T("Kito is up to date. No new messages.", "Kito yuko sawa. Hakuna ujumbe mpya.")); refresh();
     } catch (e) { setNote(quiet ? "" : (e as Error).message); }
     setRechecking(false);
   }
@@ -108,122 +141,129 @@ export default function Chats({ ws }: { ws: Workspace }) {
   }, [ws.id]);
   async function recheck() {
     setRechecking(true); setNote("");
-    try { const r = await callFn<{ reanalyzed: number }>("chat-import", { workspace_id: ws.id, action: "reanalyze" }); setNote(`Re-checked ${r.reanalyzed} chats.`); refresh(); }
+    try { const r = await callFn<{ reanalyzed: number }>("chat-import", { workspace_id: ws.id, action: "reanalyze" }); setNote(T(`Checked ${r.reanalyzed} chats again.`, `Chat ${r.reanalyzed} zimekaguliwa upya.`)); refresh(); }
     catch (e) { setNote((e as Error).message); }
     setRechecking(false);
   }
-
-  const pageRef = usePageEnter<HTMLElement>((root) => {
-    if (loading) return;
-    enterCards(root, { y: 18 });
-    enterRows(select(root, "table tbody tr"), { delay: 0.3, stagger: 0.04 });
-  }, [loading, filter]);
-  const pick = (f: Filter) => { setIds(null); setFilter(f); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
-  const pool = lite.filter((r) => inSource(r, src));
-  const count = (f: Filter) => pool.filter((r) => inFilter(r, f)).length;
-  const imported = lite.filter((r) => r.phone_number_id === "import").length;
-  // Everything first, then what needs me now, then where each chat stands.
-  const groups: [Filter, string][][] = [
-    [["all", T("All", "Wote")]],
-    [["follow", T("To follow up", "Wa kufuatilia")], ["signals", T("Payments to confirm", "Malipo ya kuthibitisha")]],
-    [["open", T("Open", "Bado wazi")], ["sold", T("Sold", "Waliouziwa")], ["lost", T("Lost", "Waliopotea")]],
-  ];
   async function deleteImported() {
     const list = lite.filter((r) => r.phone_number_id === "import").map((r) => r.id);
     if (!list.length) return;
-    if (!confirm(T(`Delete all ${list.length} imported chats (chat exports and CSV) and their messages? Recorded orders are kept. This cannot be undone.`,
-      `Futa chat ${list.length} zote zilizoingizwa (chat export na CSV) pamoja na ujumbe wake? Oda zilizorekodiwa zitabaki. Haiwezi kurudishwa.`))) return;
+    if (!confirm(T(`Delete all ${list.length} imported chats and their messages? Recorded sales are kept. This cannot be undone.`,
+      `Futa chat ${list.length} zote zilizoingizwa pamoja na ujumbe wake? Mauzo yaliyorekodiwa yatabaki. Haiwezi kurudishwa.`))) return;
     setDeleting(true); setErr("");
     const { data, error } = await supabase.rpc("delete_chats", { p_ws: ws.id, p_ids: list.slice(0, 1000), p_via: "chats_page", p_request: "Chats page: delete imported" });
     setDeleting(false);
     if (error) setErr(error.message);
     else { setNote(T(`Deleted ${(data as any).deleted} imported chats.`, `Chat ${(data as any).deleted} zilizoingizwa zimefutwa.`)); setSrc("any"); refresh(); }
   }
+
+  const pageRef = usePageEnter<HTMLElement>((root) => {
+    if (loading) return;
+    enterRows(select(root, ".cc"), { delay: 0.1, stagger: 0.04 });
+  }, [loading, filter]);
+
+  const pick = (f: Filter) => { setIds(null); setFilter(f); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
+  const pool = lite.filter((r) => inSource(r, src));
+  const count = (f: Filter) => pool.filter((r) => inFilter(r, f)).length;
+  const imported = lite.filter((r) => r.phone_number_id === "import").length;
+  const tabs: [Filter, string, string][] = [
+    ["all", T("All", "Wote"), T("Every customer", "Wateja wote")],
+    ["follow", T("Follow up", "Wafuatilie"), T("Interested — talk to them again", "Wana hamu — waongeleshe tena")],
+    ["signals", T("Check payment", "Hakiki malipo"), T("Said they paid — confirm the money came in", "Wamesema wamelipa — hakikisha pesa imeingia")],
+    ["open", T("Still talking", "Bado mnaongea"), T("No decision yet", "Bado hawajaamua")],
+    ["sold", T("Bought", "Wamenunua"), T("Paid and recorded", "Wamelipa na imerekodiwa")],
+    ["lost", T("Didn't buy", "Hawakununua"), T("Went quiet or said no", "Wamekaa kimya au wamekataa")],
+  ];
+  const emptyText = filter === "follow" ? T("Nobody to follow up right now.", "Hakuna wa kufuatilia kwa sasa.")
+    : filter === "signals" ? T("No payments to check.", "Hakuna malipo ya kuhakiki.")
+    : T("No chats here yet.", "Hakuna chat hapa bado.");
+
   return (
-    <section className="card" ref={pageRef}>
+    <section className="card chats" ref={pageRef}>
       <div className="chats-head">
         <div>
-          <h2 style={{ margin: 0 }}>Chats <span className="muted chats-total">{fmt(lite.length)}</span></h2>
-          {filter === "ids" && ids && <span className="small muted">{T(`Showing ${ids.length} chats from Kito or a report`, `Inaonyesha chat ${ids.length} kutoka Kito au ripoti`)} · <a href="#chats" onClick={() => { setIds(null); setFilter("all"); }}>{T("show all", "onyesha zote")}</a></span>}
+          <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(lite.length)}</span></h2>
+          <span className="small muted">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
-        <div className="row chats-tools">
-          <button className="small" onClick={recheck} disabled={rechecking} title={T("Run the latest detection rules over every chat", "Endesha kanuni mpya kwenye chat zote")}>{rechecking ? T("Working…", "Inafanya kazi…") : T("Re-check rules", "Kagua kanuni upya")}</button>
-          <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito (AI) reads new or changed chats and labels them. It also runs by itself every 15 minutes.", "Kito (AI) anasoma chat mpya au zilizobadilika na kuziwekea alama. Pia hujiendesha kila dakika 15.")}>✦ {T("Run Kito now", "Endesha Kito sasa")}</button>
-        </div>
+        <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
+          ✦ {rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
+        </button>
       </div>
+
       <div className="chats-bar">
-        <div className="seg chats-filters" role="tablist" aria-label={T("Filter chats", "Chuja chat")}>
-          {groups.map((g, gi) => (
-            <span key={gi} className="chats-group">
-              {g.map(([f, label]) => (
-                <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => pick(f)}>
-                  {label}<span className="cnt">{count(f)}</span>
-                </button>
-              ))}
-            </span>
+        <div className="chips-tabs" role="tablist" aria-label={T("Show", "Onyesha")}>
+          {tabs.map(([f, label, hint]) => (
+            <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => pick(f)} title={hint}>
+              {label}<span className="cnt">{count(f)}</span>
+            </button>
           ))}
         </div>
-        <label className="chats-src small">
-          <span className="muted">{T("Source", "Chanzo")}</span>
-          <select value={src} onChange={(e) => { setSrc(e.target.value as Source); if (filter === "ids") pick("all"); }}>
-            <option value="any">{T("All chats", "Chat zote")}</option>
-            <option value="live">{T("Live WhatsApp", "WhatsApp hai")}</option>
-            <option value="import">{T(`Imported (${imported})`, `Zilizoingizwa (${imported})`)}</option>
-          </select>
-        </label>
+        <select className="chats-src" value={src} aria-label={T("Where from", "Wametoka wapi")} onChange={(e) => { setSrc(e.target.value as Source); if (filter === "ids") pick("all"); }}>
+          <option value="any">{T("From: everywhere", "Kutoka: kote")}</option>
+          <option value="live">{T("From: WhatsApp", "Kutoka: WhatsApp")}</option>
+          <option value="import">{T(`From: uploaded files (${imported})`, `Kutoka: faili zilizopakiwa (${imported})`)}</option>
+        </select>
       </div>
+      {filter !== "ids" && <p className="small muted" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
+      {filter === "ids" && ids && <p className="small" style={{ margin: 0 }}>{T(`Showing ${ids.length} customers Kito picked`, `Inaonyesha wateja ${ids.length} aliowachagua Kito`)} · <a href="#chats" onClick={() => pick("all")}>{T("show everyone", "onyesha wote")}</a></p>}
       {src === "import" && imported > 0 && canManage(ws) && (
         <div className="row small" style={{ gap: 8 }}>
-          <span className="muted">{T("Chats from uploaded chat exports and CSV files.", "Chat kutoka chat export na faili za CSV.")}</span>
-          <button className="small danger" disabled={deleting} onClick={deleteImported}>{deleting ? T("Deleting…", "Inafuta…") : T(`Delete all ${imported} imported`, `Futa zote ${imported} zilizoingizwa`)}</button>
+          <span className="muted">{T("These came from chat files you uploaded, not live WhatsApp.", "Hizi zimetoka kwenye faili ulizopakia, si WhatsApp moja kwa moja.")}</span>
+          <button className="small danger" disabled={deleting} onClick={deleteImported}>{deleting ? T("Deleting…", "Inafuta…") : T(`Delete all ${imported}`, `Futa zote ${imported}`)}</button>
         </div>
       )}
-      <p className="small muted" style={{ margin: 0 }}>{T("A chat counts as a sale only when an order is recorded. Detected payments, Kito's reading and ✅ marks are hints you confirm or correct here.", "Chat inahesabiwa kama mauzo tu oda ikirekodiwa. Malipo yaliyogunduliwa, usomaji wa Kito na alama ✅ ni dalili unazothibitisha au kusahihisha hapa.")} <a href="#connect" className="small">{T("Import orders from CSV →", "Ingiza oda kutoka CSV →")}</a></p>
       {note && <p className="small muted" style={{ margin: 0 }}>{note}</p>}
       {err && <p className="err small" style={{ margin: 0 }}>{err}</p>}
-      <details>
-        <summary>Kito log{runs[0] ? ` · last ran ${when(runs[0].ran_at)}` : ""}</summary>
-        <p className="small muted" style={{ margin: "6px 0" }}>Kito checks by itself every 15 minutes. It only reads chats that are new or have new messages, so quiet checks cost nothing and are not listed.</p>
-        {runs.length === 0 ? <p className="small muted">No runs yet.</p> : (
-          <div className="scroll"><table>
-            <thead><tr><th>When</th><th>How</th><th className="n">Chats read</th><th className="n">Failed</th><th className="n">Waiting</th><th>Note</th></tr></thead>
-            <tbody>{runs.map((k) => (
-              <tr key={k.id}><td className="small">{when(k.ran_at)}</td><td className="small">{k.trigger === "auto" ? "Automatic" : "Button"}</td>
-                <td className="n">{k.checked}</td><td className="n">{k.failed || ""}</td><td className="n">{k.remaining || ""}</td><td className="small muted">{k.note ?? ""}</td></tr>
-            ))}</tbody>
-          </table></div>
-        )}
-      </details>
-      {loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="empty">{filter === "follow" ? T("Nobody to follow up right now.", "Hakuna wa kufuatilia kwa sasa.") : filter === "signals" ? T("No detected payments waiting for confirmation.", "Hakuna malipo yaliyogunduliwa yanayosubiri uthibitisho.") : T("No chats here yet.", "Hakuna chat hapa bado.")}</div> : (
-        <div className="scroll"><table>
-          <thead><tr><th>{T("Customer", "Mteja")}</th><th>{T("Source", "Chanzo")}</th><th>{T("What happened", "Kilichotokea")}</th><th className="n">{T("1st reply", "Jibu la 1")}</th><th>{T("Why / next step", "Kwa nini / hatua")}</th><th>{T("Action", "Kitendo")}</th></tr></thead>
-          <tbody>{rows.map((r) => <Row key={r.id} r={r} lang={lang} adName={r.ad_id ? adNames[r.ad_id] : undefined} ws={ws} task={tasks[r.id]} onChange={refresh} startOpen={filter === "ids" && rows.length <= 3} />)}</tbody>
-        </table></div>
+
+      {loading ? <p className="muted">{T("Loading…", "Inapakia…")}</p> : rows.length === 0 ? <div className="empty">{emptyText}</div> : (
+        <div className="cc-list">
+          {rows.map((r) => <Card key={r.id} r={r} ws={ws} T={T} adName={r.ad_id ? adNames[r.ad_id] : undefined} phone={phoneOf(phones[r.contact_id])}
+            task={tasks[r.id]} onChange={refresh} startOpen={filter === "ids" && rows.length <= 3} />)}
+        </div>
       )}
+
+      <details className="chats-how">
+        <summary className="small muted">{T("How this page works", "Ukurasa huu unafanyaje kazi")}{runs[0] ? ` · ${T("Kito last updated", "Kito alisasisha")} ${when(runs[0].ran_at)}` : ""}</summary>
+        <div className="small" style={{ display: "grid", gap: 6, marginTop: 8 }}>
+          <span>{T("Kito, the assistant inside itaOS, reads every WhatsApp chat and writes what happened and what to do next. It updates by itself every 15 minutes.",
+            "Kito, msaidizi ndani ya itaOS, anasoma kila chat ya WhatsApp na kuandika kilichotokea na hatua inayofuata. Anajisasisha mwenyewe kila dakika 15.")}</span>
+          <span>{T("A customer only counts as \"Bought\" after you record the sale. If someone says they paid, check your M-Pesa / bank first, then press \"Yes, record sale\".",
+            "Mteja anahesabiwa \"Amenunua\" pale tu unaporekodi mauzo. Mtu akisema amelipa, angalia M-Pesa / benki kwanza, kisha bonyeza \"Ndiyo, rekodi mauzo\".")}</span>
+          <span><a href="#connect">{T("Import past sales from a CSV file →", "Ingiza mauzo ya zamani kutoka faili la CSV →")}</a></span>
+          <span className="row" style={{ gap: 6 }}>
+            <button className="small" onClick={recheck} disabled={rechecking}>{T("Re-check all chats with the latest rules", "Kagua chat zote upya kwa kanuni mpya")}</button>
+          </span>
+          {runs.length > 0 && (
+            <div className="scroll"><table>
+              <thead><tr><th>{T("When", "Lini")}</th><th>{T("How", "Vipi")}</th><th className="n">{T("Chats read", "Chat zilizosomwa")}</th><th className="n">{T("Failed", "Zilizoshindwa")}</th><th>{T("Note", "Maelezo")}</th></tr></thead>
+              <tbody>{runs.slice(0, 8).map((k) => (
+                <tr key={k.id}><td className="small">{when(k.ran_at)}</td><td className="small">{k.trigger === "auto" ? T("By itself", "Mwenyewe") : T("Button", "Kitufe")}</td>
+                  <td className="n">{k.checked}</td><td className="n">{k.failed || ""}</td><td className="small muted">{k.note ?? ""}</td></tr>
+              ))}</tbody>
+            </table></div>
+          )}
+        </div>
+      </details>
     </section>
   );
 }
 
-const tempOf = (r: Outcome): "hot" | "warm" | "cold" | null => r.kito_temp ?? (r.warm ? "warm" : null);
-const daysSince = (iso: string | null) => (iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 864e5)) : 0);
-
-/** Where the displayed outcome comes from, in order of precedence (mirrors the SQL view). */
-function outcomeSource(r: Outcome, T: (en: string, sw: string) => string): { label: string; kind: "confirmed" | "override" | "kito" | "rules" | "stale" } {
-  if (Number(r.paid_orders) > 0) return { label: T(`Confirmed: ${r.paid_orders} paid order${r.paid_orders > 1 ? "s" : ""}`, `Imethibitishwa: oda ${r.paid_orders}`), kind: "confirmed" };
-  if (r.outcome_override) return { label: r.override_by ? T(`Your correction${r.override_at ? " · " + when(r.override_at) : ""}`, `Marekebisho yako${r.override_at ? " · " + when(r.override_at) : ""}`) : T("From ✅ in the saved name (not confirmed)", "Kutoka ✅ kwenye jina (haijathibitishwa)"), kind: "override" };
-  if (r.kito_outcome && (r.kito_confidence === "high" || r.kito_confidence === "medium")) return { label: T(`Kito's reading (${r.kito_confidence} confidence)`, `Usomaji wa Kito (uhakika ${r.kito_confidence})`), kind: "kito" };
-  if (r.auto_outcome === "open" && r.last_message_at && Date.now() - Date.parse(r.last_message_at) > 2 * 864e5) return { label: T("Rules: open chat quiet for 2+ days counts as lost", "Kanuni: chat iliyo wazi bila ujumbe siku 2+ ni iliyopotea"), kind: "stale" };
-  return { label: T("Keyword rules", "Kanuni za maneno"), kind: "rules" };
-}
-
-function Row({ r, lang, adName, ws, task, onChange, startOpen }: { r: Outcome; lang: "sw" | "en"; adName?: string; ws: Workspace; task?: Task; onChange: () => void; startOpen?: boolean }) {
+function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outcome; ws: Workspace; T: Tr; adName?: string; phone: string | null; task?: Task; onChange: () => void; startOpen?: boolean }) {
+  const lang = ws.language;
   const [open, setOpen] = useState(!!startOpen);
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const editor = canEdit(ws);
-  const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
+  const st = statusOf(r, T, ws.currency);
+  const temp = interest(r);
+  const confirmed = Number(r.paid_orders) > 0;
+  const name = (r.contact_name ?? "").replace(/✅/g, "").trim() || T("Customer", "Mteja");
+  const from = r.source === "ad" ? T(`From the ad "${adName ?? r.source_label ?? "ad"}"`, `Kutoka tangazo "${adName ?? r.source_label ?? "tangazo"}"`)
+    : r.source_label ? T(`From ${r.source_label}`, `Kutoka ${r.source_label}`)
+    : r.source === "organic" ? T("Messaged you directly", "Alikutumia ujumbe moja kwa moja") : T("Source unknown", "Chanzo hakijulikani");
+  const why = r.kito_temp ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
 
   useEffect(() => { if (open && !msgs) loadMsgs(); }, [open]);
   async function loadMsgs() {
@@ -231,131 +271,116 @@ function Row({ r, lang, adName, ws, task, onChange, startOpen }: { r: Outcome; l
     setMsgs((data as Msg[]) ?? []);
   }
   async function setOverride(v: "lost" | "open" | null) {
-    const noteText = v ? prompt(T("Why? (optional, kept with the correction)", "Kwa nini? (si lazima)")) ?? "" : "";
     setBusy(true); setErr("");
-    const { error } = await supabase.from("conversations").update({ outcome_override: v, override_note: noteText.trim().slice(0, 300) || null }).eq("id", r.id);
+    const { error } = await supabase.from("conversations").update({ outcome_override: v, override_note: null }).eq("id", r.id);
     if (!error && v === "lost" && task) await supabase.from("follow_up_tasks").update({ status: "dismissed" }).eq("id", task.id).eq("workspace_id", ws.id);
     setBusy(false); if (error) setErr(error.message); else onChange();
   }
-  async function createFollowUp() {
+  async function remind() {
     setBusy(true); setErr("");
     const { data: user } = await supabase.auth.getUser();
     const { error } = await supabase.from("follow_up_tasks").insert({
-      workspace_id: ws.id, conversation_id: r.id, title: `Follow up with ${r.contact_name ?? "customer"}`,
-      draft: r.kito_next ? T("Suggested next step: ", "Hatua inayopendekezwa: ") + r.kito_next : null, draft_source: r.kito_next ? "kito" : null, due_at: new Date().toISOString(), created_by: user.user?.id,
+      workspace_id: ws.id, conversation_id: r.id, title: `Follow up with ${name}`,
+      draft: r.kito_next ?? null, draft_source: r.kito_next ? "kito" : null, due_at: new Date().toISOString(), created_by: user.user?.id,
     });
-    setBusy(false); if (error) setErr(error.code === "23505" ? T("A follow-up task already exists.", "Tayari kuna kazi ya kufuatilia.") : error.message); else onChange();
-  }
-  async function updateTask(status: "done" | "dismissed") {
-    if (!task) return;
-    setBusy(true); setErr("");
-    const { error } = await supabase.from("follow_up_tasks").update({ status }).eq("id", task.id).eq("workspace_id", ws.id);
-    setBusy(false); if (error) setErr(error.message); else onChange();
+    setBusy(false); if (error) setErr(error.code === "23505" ? T("A reminder already exists.", "Tayari kuna kikumbusho.") : error.message); else onChange();
   }
 
-  const outcome = r.outcome ?? "open";
-  const src = outcomeSource(r, T);
-  const temp = tempOf(r);
-  const blocker = r.kito_temp ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
-  const days = daysSince(r.last_message_at);
-  const dtxt = days === 0 ? T("today", "leo") : T(`${days} days`, `siku ${days}`);
-  const waiting = r.last_dir === "in";
-  const confirmed = Number(r.paid_orders) > 0;
-  const signal = inferredFrom(r);
+  // The one button that matters most for this customer right now.
+  const main = !editor ? null
+    : st.key === "check" ? <button className="small primary" disabled={busy} onClick={() => { setRecording(true); setOpen(true); }}>{T("Money came in → record sale", "Pesa imeingia → rekodi mauzo")}</button>
+    : st.key === "bought" || st.key === "lost" ? null
+    : phone ? <a className="btn small primary" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">{st.key === "waiting" ? T("Reply on WhatsApp ↗", "Mjibu WhatsApp ↗") : T("Message on WhatsApp ↗", "Mtumie ujumbe WhatsApp ↗")}</a>
+    : null;
+
   return (
-    <>
-      <tr>
-        <td><b>{r.contact_name ?? "Customer"}</b><div><button className="small" onClick={() => setOpen(!open)} aria-expanded={open} style={{ padding: "0", border: 0, background: "none", color: "var(--accent)" }}>{open ? T("Hide details", "Ficha maelezo") : T("View chat & details", "Ona chat na maelezo")}</button></div></td>
-        <td className="small">
-          {r.source === "ad" && <span className="chip">{adName ?? "Ad"}</span>}
-          {r.source_label ? <span className="chip">{r.source_label}</span> : r.source !== "ad" && <span className="muted">{r.source}</span>}
-        </td>
-        <td><span className={"pill " + outcome}>{L[lang].outcome[outcome] ?? outcome}</span>{r.sale_amount != null && <div className="small num">{fmt(r.sale_amount)} {ws.currency}</div>}
-          <div className={"small " + (src.kind === "confirmed" ? "ok" : "muted")}>{src.label}</div>
-          {!confirmed && signal && <div className="small warnt">{T("Payment detected, not confirmed", "Malipo yamegunduliwa, hayajathibitishwa")} ({signal === "kito" ? "Kito" : signal === "rules" ? T("words/screenshot", "maneno/picha") : "✅"})</div>}
-          {outcome === "sold" && !confirmed && r.kito_outcome && r.kito_outcome !== "sold" && <div className="small warnt">{T("Kito sees no payment in the chat", "Kito haoni malipo kwenye chat")}</div>}
-          {(r.kito_label ?? r.label) && <div><span className={"chip" + (outcome === "sold" ? " ok" : "")}>{L[lang].label[(r.kito_label ?? r.label)!] ?? r.kito_label ?? r.label}</span></div>}
-          {r.kito_summary ? <div className="small" style={{ marginTop: 4, minWidth: 220, whiteSpace: "normal" }}>{r.kito_summary}</div>
-            : <div className="small muted" style={{ marginTop: 4 }}>{T("Kito has not read this chat yet", "Kito bado hajasoma chat hii")}</div>}</td>
-        <td className="n">{dur(r.first_response_sec)}</td>
-        <td style={{ minWidth: 220, whiteSpace: "normal" }}>
-          {outcome === "sold" ? (
-            <>
-              {r.kito_temp === "hot" && <span className="chip ok">{T("Likely to reorder", "Anaweza kununua tena")}</span>}
-              {(r.kito_tags ?? []).includes("repeat_buyer") && <span className="chip ok">{L[lang].tag.repeat_buyer}</span>}
-            </>
-          ) : (
-            <>
-              {temp && <span className={"temp " + temp + (r.kito_temp ? "" : " guess")} title={r.kito_temp ? "" : T("Keyword guess. Kito has not read this chat yet.", "Makisio ya maneno. Kito bado hajasoma.")}>{L[lang].temp[temp]}</span>}
-              {blocker && <span className={"chip" + (blocker === "business_slow" ? " bad" : "") + (r.kito_temp ? "" : " guess")}>{L[lang].blocker[blocker] ?? blocker}</span>}
-              <div className={"small " + (waiting ? "err" : days >= 3 ? "warnt" : "muted")} style={{ marginTop: 3 }}>
-                {waiting ? T(`Customer is waiting for a reply · ${dtxt}`, `Mteja anasubiri jibu · ${dtxt}`)
-                  : days >= 3 ? T(`Not followed up for ${days} days`, `Hajafuatiliwa kwa siku ${days}`)
-                  : T(`We wrote last · ${dtxt}`, `Tulimwandikia mwisho · ${dtxt}`)}
-              </div>
-            </>
-          )}
-          {r.kito_next && <div className="small" style={{ marginTop: 3 }}>→ {r.kito_next}</div>}
-        </td>
-        <td>
-          {task ? (
-            <div className="small">
-              <b>{task.title}</b> <a href="#actions" className="small">{T("open in Actions", "fungua Vitendo")}</a>
-              {editor && <div className="row" style={{ gap: 6, marginTop: 4 }}>
-                <button className="small" disabled={busy} onClick={() => updateTask("done")}>{T("Done", "Imekamilika")}</button>
-                <button className="small" disabled={busy} onClick={() => updateTask("dismissed")}>{T("Dismiss", "Ondoa")}</button>
-              </div>}
-            </div>
-          ) : editor && outcome !== "sold" && (temp === "hot" || temp === "warm") ? (
-            <button className="small" disabled={busy} onClick={createFollowUp}>{T("Create follow-up task", "Tengeneza kazi ya kufuatilia")}</button>
-          ) : null}
-          {editor && (
-            <div className="row" style={{ gap: 6, marginTop: 4 }}>
-              <button className="small primary" disabled={busy} onClick={() => { setRecording(true); setOpen(true); }}>{confirmed ? T("Add order", "Ongeza oda") : T("Record sale", "Rekodi mauzo")}</button>
-              {!confirmed && outcome !== "lost" && <button className="small" disabled={busy} onClick={() => setOverride("lost")}>{T("Lost", "Amepotea")}</button>}
-              {!confirmed && r.outcome_override && <button className="small" disabled={busy} onClick={() => setOverride(null)}>{T("Undo correction", "Tengua marekebisho")}</button>}
-            </div>
-          )}
-          {err && <div className="err small">{err}</div>}
-        </td>
-      </tr>
+    <article className={"cc " + st.tone + (open ? " open" : "")}>
+      <div className="cc-top" onClick={() => setOpen(!open)} role="button" tabIndex={0} aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }}>
+        <div className="cc-avatar" aria-hidden>{name.slice(0, 1).toUpperCase()}</div>
+        <div className="cc-main">
+          <div className="cc-line1">
+            <b className="cc-name">{name}</b>
+            {!confirmed && st.key !== "lost" && temp && <span className={"cc-heat " + temp}>{temp === "hot" ? T("Very interested", "Ana hamu sana") : temp === "warm" ? T("Interested", "Ana hamu") : T("Not very interested", "Hana hamu sana")}</span>}
+            <span className="cc-time small muted">{agoT(r.last_message_at, T)}</span>
+          </div>
+          <div className="small muted">{from}</div>
+          <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
+          {r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
+          {r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
+          {task && <div className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")} · <a href="#actions" onClick={(e) => e.stopPropagation()}>{T("see reminders", "ona vikumbusho")}</a></div>}
+        </div>
+        <div className="cc-act" onClick={(e) => e.stopPropagation()}>
+          {main}
+          <button className="small" onClick={() => setOpen(!open)}>{open ? T("Close", "Funga") : T("Open chat", "Fungua chat")}</button>
+        </div>
+      </div>
+
       {open && (
-        <tr><td colSpan={6}>
-          <div style={{ display: "grid", gap: 10 }}>
-            {recording && <OrderForm ws={ws} r={r} onDone={() => { setRecording(false); onChange(); }} onCancel={() => setRecording(false)} />}
-            <div className="two">
-              <div className="evidence">
-                <b>{T("Why this chat is labelled", "Kwa nini chat hii imewekewa alama hii")} “{L[lang].outcome[outcome] ?? outcome}”</b>
-                <span>{src.label}{r.override_note ? ` — “${r.override_note}”` : ""}</span>
-                {r.kito_outcome && <span className="small muted">Kito: {L[lang].outcome[r.kito_outcome]} ({r.kito_confidence}){r.kito_label ? ` · ${L[lang].label[r.kito_label]}` : ""}{r.kito_amount ? ` · ${fmt(r.kito_amount)}` : ""}</span>}
-                <span className="small muted">{T("Rules", "Kanuni")}: {r.auto_outcome ?? "–"}{r.stage ? ` · ${L[lang].stage[r.stage] ?? r.stage}` : ""}{r.payment_signal ? ` · ${T("payment words/screenshot found", "maneno/picha ya malipo yameonekana")}` : ""}{r.payment_amount ? ` · ${fmt(r.payment_amount)}` : ""}</span>
-                {(r.kito_evidence ?? []).length > 0 && <span className="small"><b>{T("Evidence Kito quoted", "Ushahidi wa Kito")}:</b> {(r.kito_evidence ?? []).map((q, i) => <q key={i} style={{ display: "block" }}>{q}</q>)}</span>}
-                {(r.kito_objections ?? r.objections ?? []).length > 0 && <span className="small muted">{T("Objections", "Pingamizi")}: {[...new Set([...(r.objections ?? []), ...(r.kito_objections ?? [])])].map((o) => L[lang].obj[o] ?? o).join(" · ")}</span>}
-                {(r.kito_tags ?? []).length > 0 && <span className="small muted">{T("Kito's notes", "Maelezo ya Kito")}: {(r.kito_tags ?? []).map((t) => L[lang].tag[t] ?? t).join(" · ")}</span>}
-                {editor && !confirmed && (
-                  <span className="row small" style={{ gap: 6 }}>{T("Correct it:", "Sahihisha:")}
-                    <button className="small" disabled={busy} onClick={() => { setRecording(true); }}>{T("It was sold → record order", "Iliuzwa → rekodi oda")}</button>
-                    {outcome !== "lost" && <button className="small" disabled={busy} onClick={() => setOverride("lost")}>{T("Lost", "Imepotea")}</button>}
-                    {outcome !== "open" && <button className="small" disabled={busy} onClick={() => setOverride("open")}>{T("Still open", "Bado wazi")}</button>}
-                  </span>
-                )}
-              </div>
-              <div>
-                <b className="small">{T("Orders for this chat", "Oda za chat hii")}</b>
-                <OrderList ws={ws} conversationId={r.id} onChange={onChange} />
-              </div>
-            </div>
-            {!msgs ? <span className="muted">Loading…</span> : msgs.length === 0 ? <span className="small muted">{T("No messages stored for this chat (imported inquiry).", "Hakuna ujumbe uliohifadhiwa (uliingizwa kutoka CSV).")}</span> : (
+        <div className="cc-body">
+          <div className="cc-conv">
+            <b className="small">{T("The conversation", "Mazungumzo")}</b>
+            {!msgs ? <span className="muted small">{T("Loading…", "Inapakia…")}</span> : msgs.length === 0 ? <span className="small muted">{T("No messages saved for this customer.", "Hakuna ujumbe uliohifadhiwa kwa mteja huyu.")}</span> : (
               <div className="bubbles">{msgs.map((m) => (
                 <div key={m.id} className={"bub " + m.direction}>
-                  <span className="t">{m.direction === "in" ? r.contact_name ?? "Customer" : ws.name}{m.origin === "app_echo" ? " (phone)" : ""} · {when(m.sent_at)}</span>
+                  <span className="t">{m.direction === "in" ? name : T("You", "Wewe")} · {when(m.sent_at)}</span>
                   {m.body ?? ""}
                 </div>
               ))}</div>
             )}
           </div>
-        </td></tr>
+
+          <div className="cc-side">
+            {editor && !confirmed && (
+              <div className="cc-ask">
+                <b>{T("Did they buy?", "Amenunua?")}</b>
+                <div className="cc-ask-btns">
+                  <button className="small primary" disabled={busy} onClick={() => setRecording(true)}>{T("Yes, record sale", "Ndiyo, rekodi mauzo")}</button>
+                  <button className={"small" + (r.outcome === "open" ? " on" : "")} disabled={busy} onClick={() => setOverride("open")}>{T("Not yet", "Bado")}</button>
+                  <button className={"small" + (r.outcome === "lost" ? " on" : "")} disabled={busy} onClick={() => setOverride("lost")}>{T("No", "Hapana")}</button>
+                </div>
+                {r.outcome_override && r.override_by && <button className="linkish small" disabled={busy} onClick={() => setOverride(null)}>{T("Undo my answer", "Futa jibu langu")}</button>}
+              </div>
+            )}
+            {recording && <OrderForm ws={ws} r={r} onDone={() => { setRecording(false); onChange(); }} onCancel={() => setRecording(false)} />}
+            <div style={{ display: "grid", gap: 4 }}>
+              <b className="small">{T("Sales from this customer", "Mauzo kwa mteja huyu")}</b>
+              <OrderList ws={ws} conversationId={r.id} onChange={onChange} />
+            </div>
+            {editor && !task && !confirmed && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
+            {phone && <a className="small" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">{T("Open in WhatsApp ↗", "Fungua WhatsApp ↗")}</a>}
+            <details className="cc-why">
+              <summary className="small muted">{T("How itaOS decided this", "itaOS imeamuaje hili")}</summary>
+              <div className="small muted" style={{ display: "grid", gap: 4, marginTop: 6 }}>
+                <span>{whySource(r, T)}</span>
+                {r.first_response_sec != null && <span>{T("You first replied after", "Ulijibu mara ya kwanza baada ya")} {dur(r.first_response_sec)}</span>}
+                {r.kito_outcome && <span>Kito: {L[lang].outcome[r.kito_outcome]} ({T("sure", "uhakika")}: {r.kito_confidence}){r.kito_label ? ` · ${L[lang].label[r.kito_label]}` : ""}</span>}
+                {r.stage && <span>{T("Keyword check", "Ukaguzi wa maneno")}: {L[lang].stage[r.stage] ?? r.stage}</span>}
+                {(r.kito_evidence ?? []).length > 0 && <span>{T("Messages Kito based this on:", "Ujumbe aliotumia Kito:")} {(r.kito_evidence ?? []).map((q, i) => <q key={i} style={{ display: "block" }}>{q}</q>)}</span>}
+                {(r.kito_tags ?? []).length > 0 && <span>{(r.kito_tags ?? []).map((t) => L[lang].tag[t] ?? t).join(" · ")}</span>}
+              </div>
+            </details>
+            {err && <div className="err small">{err}</div>}
+          </div>
+        </div>
       )}
-    </>
+    </article>
   );
+}
+
+function whySource(r: Outcome, T: Tr) {
+  if (Number(r.paid_orders) > 0) return T("You recorded a sale for this customer.", "Umerekodi mauzo kwa mteja huyu.");
+  if (r.outcome_override) return r.override_by ? T(`You set this yourself${r.override_at ? " on " + when(r.override_at) : ""}.`, `Umeweka hili mwenyewe${r.override_at ? " " + when(r.override_at) : ""}.`) : T("There is a ✅ in the saved contact name.", "Kuna ✅ kwenye jina la mteja.");
+  if (r.kito_outcome && (r.kito_confidence === "high" || r.kito_confidence === "medium")) return T("Kito read the chat and decided.", "Kito amesoma chat na kuamua.");
+  if (r.auto_outcome === "open" && r.last_message_at && Date.now() - Date.parse(r.last_message_at) > 2 * 864e5) return T("No messages for 2+ days, so it counts as didn't buy.", "Hakuna ujumbe siku 2+, kwa hiyo inahesabiwa hakununua.");
+  return T("Based on words in the chat (Kito wasn't sure).", "Kutokana na maneno kwenye chat (Kito hakuwa na uhakika).");
+}
+
+function lostWhy(why: string, T: Tr) {
+  const m: Record<string, [string, string]> = {
+    price: ["said the price is too high", "alisema bei ni kubwa"], think: ["said they'd think about it", "alisema atafikiria"],
+    money: ["no money right now", "hana pesa kwa sasa"], trust: ["wasn't sure to trust it yet", "hakuwa na uhakika bado"],
+    delivery: ["too far / delivery problem", "yuko mbali / usafirishaji"], business_slow: ["we replied too late", "tulichelewa kujibu"],
+  };
+  return m[why] ? T(m[why][0], m[why][1]) : why;
 }
