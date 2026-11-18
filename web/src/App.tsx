@@ -12,6 +12,7 @@ import Content from "./Content";
 import Kito from "./Kito";
 import Logo from "./Logo";
 import { hidePreloader } from "./preloader";
+import { useIsPlatformAdmin } from "./adminAccess";
 
 type View = "dashboard" | "kito" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
 const VIEWS: View[] = ["dashboard", "kito", "report", "actions", "chats", "content", "connect", "settings"];
@@ -41,6 +42,7 @@ export default function App() {
     const { error } = await supabase.from("workspaces").update({ language: l }).eq("id", ws.id);
     if (error) setWs(ws);
   };
+  const isPlatformAdmin = useIsPlatformAdmin(session ? session.user.id : null);
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
@@ -50,6 +52,15 @@ export default function App() {
     window.addEventListener("hashchange", onHash);
     return () => { sub.subscription.unsubscribe(); window.removeEventListener("hashchange", onHash); };
   }, []);
+
+  // Signed in after being sent here from /app/admin: go back there.
+  useEffect(() => {
+    if (!session) return;
+    try {
+      const next = sessionStorage.getItem("itaos-after-login");
+      if (next) { sessionStorage.removeItem("itaos-after-login"); if (next === "/app/admin") location.replace(next); }
+    } catch { /* storage unavailable */ }
+  }, [session]);
 
   useEffect(() => {
     if (!session) { setWs(undefined); return; }
@@ -86,6 +97,7 @@ export default function App() {
             {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
           </div>
           <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
+          {isPlatformAdmin && <a href="/app/admin" className="icon" aria-label="Pondi admin" title="Pondi admin"><AdminIcon /></a>}
           <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
       </header>
@@ -99,6 +111,14 @@ export default function App() {
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
     </div>
+  );
+}
+
+function AdminIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" /><path d="M9 12l2 2 4-4" />
+    </svg>
   );
 }
 

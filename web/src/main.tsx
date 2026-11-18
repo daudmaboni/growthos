@@ -15,7 +15,8 @@ if (!isApp && (APP_VIEWS.test(location.hash) || AUTH_HASH.test(location.hash) ||
   location.replace("/app" + location.search + location.hash);
 } else {
   const root = createRoot(document.getElementById("root")!);
-  (isApp ? import("./App") : import("./Home")).then(({ default: Page }) => {
+  const isAdmin = path === "/app/admin";
+  (isAdmin ? import("./AdminPage") : isApp ? import("./App") : import("./Home")).then(({ default: Page }) => {
     root.render(<React.StrictMode><Page /></React.StrictMode>);
   });
 }
