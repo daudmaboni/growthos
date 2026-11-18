@@ -82,6 +82,21 @@ export function evidence(customerMsgs: TickMsg[], at: string, amount: number | n
   return { receiptAmount: receipt?.amount ? Math.round(receipt.amount) : null, txn, note };
 }
 
+const TRANSPORT_BEFORE = /(usafiri|nauli|boda|\bbus\b|\bbasi\b|delivery)[^\d\n]{0,15}$/i;
+const TRANSPORT_AFTER = /^\s*(\/=|tsh|tzs)?\s*(ya|kwa|ni)?\s*(usafiri|nauli|boda|\bbus\b|\bbasi\b|delivery)/i;
+/** The price of the goods in a message: the first amount that isn't a transport cost
+ *  ("Usafiri 15,000", "10,000 ya bus"). */
+export function goodsPriceIn(body: string | null | undefined): number | null {
+  const text = (body ?? "").replace(PHONE, " ");
+  for (const m of text.matchAll(new RegExp(PRICE.source, "gi"))) {
+    const at = m.index ?? 0;
+    if (TRANSPORT_BEFORE.test(text.slice(Math.max(0, at - 25), at)) || TRANSPORT_AFTER.test(text.slice(at + m[0].length, at + m[0].length + 25))) continue;
+    const n = num(m[1] || m[2] || m[3] || "");
+    if (n) return n;
+  }
+  return null;
+}
+
 /** Last price the business sent in the 30 days before `at`. */
 export function lastPriceBefore(msgs: TickMsg[], at: string): number | null {
   const t = Date.parse(at);
@@ -89,7 +104,7 @@ export function lastPriceBefore(msgs: TickMsg[], at: string): number | null {
     const m = msgs[i];
     if (m.direction !== "out" || Date.parse(m.sent_at) > t) continue;
     if (t - Date.parse(m.sent_at) > 30 * DAY) break;
-    const p = priceIn(m.body);
+    const p = goodsPriceIn(m.body);
     if (p) return p;
   }
   return null;

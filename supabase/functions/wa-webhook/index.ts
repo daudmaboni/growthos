@@ -361,11 +361,15 @@ Deno.serve(async (req) => {
     if (body.action === "scan_ticks") {
       // One-off / repair: turn existing ✅ messages into orders (same rules as live messages).
       const db = admin();
-      let q = db.from("messages").select("conversation_id").eq("direction", "out").or("body.like.%✅%,body.like.%✔%,body.like.%☑%").limit(5000);
-      if (body.workspace_id) q = q.eq("workspace_id", String(body.workspace_id));
-      const { data, error } = await q;
-      if (error) return json({ error: error.message }, 500);
-      const ids = [...new Set((data ?? []).map((r) => r.conversation_id))];
+      // Pass conversation_ids (found with SQL) on big workspaces: a text search over every message can time out.
+      let ids: string[] = Array.isArray(body.conversation_ids) ? body.conversation_ids.map(String).slice(0, 500) : [];
+      if (!ids.length) {
+        let q = db.from("messages").select("conversation_id").eq("direction", "out").or("body.like.%✅%,body.like.%✔%,body.like.%☑%").limit(5000);
+        if (body.workspace_id) q = q.eq("workspace_id", String(body.workspace_id));
+        const { data, error } = await q;
+        if (error) return json({ error: error.message }, 500);
+        ids = [...new Set((data ?? []).map((r) => r.conversation_id as string))];
+      }
       let orders = 0;
       for (const id of ids) {
         const { data: msgs } = await db.from("messages").select("id,direction,sent_at,body,type,media").eq("conversation_id", id).order("sent_at").limit(5000);

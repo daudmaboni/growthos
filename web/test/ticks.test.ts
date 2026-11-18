@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tickAmount, isPaidTick, phonesIn, priceIn, findTicks, evidence, lastPriceBefore } from "../../supabase/functions/_shared/ticks";
+import { tickAmount, isPaidTick, phonesIn, priceIn, findTicks, evidence, lastPriceBefore, goodsPriceIn } from "../../supabase/functions/_shared/ticks";
 
 const out = (id: string, body: string, at = "2026-11-18T10:00:00Z") => ({ id, direction: "out" as const, sent_at: at, body, type: "text" });
 const inn = (id: string, body: string, at = "2026-11-18T09:00:00Z", media?: any) => ({ id, direction: "in" as const, sent_at: at, body, type: media ? "image" : "text", media });
@@ -44,5 +44,12 @@ describe("owner ✅ messages", () => {
     const msgs = [out("p", "Kayapower ni Tsh 175,000 tu", "2026-11-10T10:00:00Z"), inn("q", "sawa", "2026-11-11T10:00:00Z")];
     expect(lastPriceBefore(msgs, "2026-11-18T10:00:00Z")).toBe(175000);
     expect(lastPriceBefore(msgs, "2026-12-15T10:00:00Z")).toBeNull();
+  });
+  it("ignores transport costs when picking the price", () => {
+    expect(goodsPriceIn("Unalipia Usafiri Kwanza 15,000 10,000 Ya Bus 5,000 Ya Boda Anayepeleka Mzigo")).toBeNull();
+    expect(goodsPriceIn("Lipia TZS 180,000 , Hapo 10,000 Ya Usafiri")).toBe(180000);
+    expect(goodsPriceIn("Lipa 105,000 Pamoja Na Gharama Za Usafirishaji Wa Dawa.")).toBe(105000);
+    const msgs = [out("a", "Offer Ya Kufunga Mwezi Leo Kwa TZS 150,000", "2026-09-30T08:00:00Z"), out("b", "Unalipia Usafiri Kwanza 15,000 10,000 Ya Bus 5,000 Ya Boda", "2026-09-30T09:00:00Z")];
+    expect(lastPriceBefore(msgs, "2026-10-04T10:00:00Z")).toBe(150000);
   });
 });
