@@ -14,7 +14,7 @@
 // runs after the response and is idempotent; failed events are retried by the scheduled job
 // (bounded by max_attempts) or replayed on request by a workspace owner/admin.
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
-import { captureMedia } from "../_shared/media.ts";
+import { captureMedia, dualhookKey } from "../_shared/media.ts";
 import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, type Envelope } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
@@ -104,6 +104,7 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
       await saveMessage(ctx, conv.id, m, "out", "app_echo");
     }
   } else if (field === "history") {
+    let mediaKey: string | null | undefined;
     for (const h of value.history ?? []) {
       if (h.errors?.length) {
         const { error } = await db.from("wa_numbers").update({ history_status: "declined" }).eq("phone_number_id", pnid);
@@ -122,6 +123,13 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
           if (error) throw new Error("could not save message");
         }
         if (rows.length) ctx.touched.push(conv.id);
+        // Payment screenshots in the backfill: Dualhook can still serve media from the last 7 days.
+        const recent = Date.now() - 7 * 864e5 + 3600e3;
+        for (const r of rows) {
+          if (r.direction !== "in" || (r.type !== "image" && r.type !== "document") || Date.parse(r.sent_at) < recent) continue;
+          if (mediaKey === undefined) mediaKey = await dualhookKey(db, ctx.ws);
+          await captureMedia(db, ctx.ws, r.id, r.raw, mediaKey);
+        }
       }
       const progress = Number(h.metadata?.progress ?? 0);
       const { error } = await db.from("wa_numbers").update({ history_status: progress >= 100 ? "complete" : "receiving" }).eq("phone_number_id", pnid);
