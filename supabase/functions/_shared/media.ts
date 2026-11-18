@@ -9,6 +9,7 @@
 // so the payment rules, Kito's labelling and Ask Kito all see it like words in the chat.
 // A receipt is still only a SIGNAL: the owner confirms the money in their own account.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
+import { readToken } from "./db.ts";
 
 const KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const MODEL = Deno.env.get("KITO_VISION_MODEL") ?? "claude-sonnet-5-5";
@@ -26,6 +27,27 @@ const b64 = (bytes: Uint8Array) => {
   for (let i = 0; i < bytes.length; i += step) s += String.fromCharCode(...bytes.subarray(i, i + step));
   return btoa(s);
 };
+
+const DUALHOOK = "https://api.dualhook.com/v25.0";
+
+/** The workspace's Dualhook Outbound API key (dh_live_…), if the owner saved one on the Connect page. */
+export async function dualhookKey(db: SupabaseClient, ws: string): Promise<string | null> {
+  const { data } = await db.from("connections").select("meta").eq("workspace_id", ws).eq("provider", "whatsapp").eq("meta->>via", "dualhook").maybeSingle();
+  const id = data?.meta?.api_key_secret_id;
+  if (!id) return null;
+  try { return await readToken(db, id); } catch { return null; }
+}
+
+/** Via Dualhook: GET /<media id>/content with the dh_live key. Media ids from webhooks work for 7 days. */
+async function downloadDualhook(mediaId: string, key: string): Promise<{ bytes: Uint8Array; mime: string } | { error: string }> {
+  const res = await fetch(`${DUALHOOK}/${encodeURIComponent(mediaId)}/content`, { headers: { Authorization: `Bearer ${key}` } }).catch(() => null);
+  if (!res) return { error: "network" };
+  if (!res.ok) return { error: `dualhook ${res.status}: ${(await res.text().catch(() => "")).slice(0, 120)}` };
+  const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > MAX_BYTES) return { error: "too large" };
+  return { bytes, mime };
+}
 
 async function download(url: string): Promise<{ bytes: Uint8Array; mime: string } | { error: string }> {
   for (const auth of TOKEN ? [false, true] : [false]) {
@@ -94,27 +116,53 @@ export function receiptLine(r: Receipt) {
 }
 
 /** Save and read one inbound media message. Never throws: a failure is recorded on the message. */
-export async function captureMedia(db: SupabaseClient, ws: string, msgId: string, m: any) {
+export async function captureMedia(db: SupabaseClient, ws: string, msgId: string, m: any, key?: string | null): Promise<"saved" | "skipped" | "failed"> {
   try {
     const media = m?.[m?.type];
-    if (!media?.url) return;
+    if (!media?.url && !media?.id) return "skipped";
     const { data: cur } = await db.from("messages").select("media,body").eq("id", msgId).maybeSingle();
-    if (cur?.media?.path) return;   // already saved (replayed event)
-    const got = await download(media.url);
-    if ("error" in got) { console.error("media download failed", got.error); await db.from("messages").update({ media: { error: got.error, mime: media.mime_type ?? null } }).eq("id", msgId); return; }
+    if (cur?.media?.path) return "skipped";   // already saved (replayed event)
+    if (key === undefined) key = await dualhookKey(db, ws);
+    // Dualhook first (Meta's own link needs a Meta token we don't hold while on Dualhook), then the direct link.
+    let got: { bytes: Uint8Array; mime: string } | { error: string } = { error: "no download route" };
+    if (key && media.id) got = await downloadDualhook(String(media.id), key);
+    if ("error" in got && media.url) { const direct = await download(media.url); if (!("error" in direct)) got = direct; else if (!key) got = { error: direct.error + " — add your Dualhook API key on the Connect page" }; }
+    if ("error" in got) { console.error("media download failed", got.error); await db.from("messages").update({ media: { error: got.error, mime: media.mime_type ?? null } }).eq("id", msgId); return "failed"; }
     const mime = OK_MIME.includes(got.mime) ? got.mime : OK_MIME.includes(media.mime_type) ? media.mime_type : null;
-    if (!mime) { await db.from("messages").update({ media: { error: "unsupported type", mime: got.mime } }).eq("id", msgId); return; }
+    if (!mime) { await db.from("messages").update({ media: { error: "unsupported type", mime: got.mime } }).eq("id", msgId); return "failed"; }
     const ext = mime === "application/pdf" ? "pdf" : mime.split("/")[1].replace("jpeg", "jpg");
     const path = `${ws}/${msgId.replace(/[^A-Za-z0-9_-]/g, "_").slice(-120)}.${ext}`;
     const { error: upErr } = await db.storage.from("wa-media").upload(path, got.bytes, { contentType: mime, upsert: true });
-    if (upErr) { console.error("media store failed", upErr.message); await db.from("messages").update({ media: { error: "could not store", mime } }).eq("id", msgId); return; }
+    if (upErr) { console.error("media store failed", upErr.message); await db.from("messages").update({ media: { error: "could not store", mime } }).eq("id", msgId); return "failed"; }
 
     const { data: w } = await db.from("workspaces").select("name").eq("id", ws).single();
     const receipt = await readReceipt(got.bytes, mime, w?.name ?? "the business");
     const caption = media.caption ? String(media.caption) : "";
     const body = receipt ? [caption, receiptLine(receipt)].filter(Boolean).join("\n") : cur?.body ?? null;
     await db.from("messages").update({ media: { path, mime, bytes: got.bytes.length, receipt, read_at: new Date().toISOString() }, body }).eq("id", msgId);
+    return "saved";
   } catch (e) {
     console.error("captureMedia", String((e as Error)?.message ?? e).slice(0, 200));
+    return "failed";
   }
+}
+
+/** Fetch images/PDFs that arrived in the last 7 days but were not saved (e.g. before the key was added). */
+export async function backfillMedia(db: SupabaseClient, ws: string, limit = 40) {
+  const key = await dualhookKey(db, ws);
+  const since = new Date(Date.now() - 7 * 864e5 + 3600e3).toISOString();
+  const { data: rows } = await db.from("messages").select("id,conversation_id,raw,media")
+    .eq("workspace_id", ws).eq("direction", "in").in("type", ["image", "document"]).gte("sent_at", since).order("sent_at", { ascending: false }).limit(200);
+  const todo = (rows ?? []).filter((r: any) => !r.media?.path).slice(0, limit);
+  const out = { saved: 0, failed: 0, last_error: null as string | null, conversations: [] as string[] };
+  for (const r of todo as any[]) {
+    const res = await captureMedia(db, ws, r.id, r.raw, key);
+    if (res === "saved") { out.saved++; out.conversations.push(r.conversation_id); }
+    else if (res === "failed") {
+      out.failed++;
+      const { data } = await db.from("messages").select("media").eq("id", r.id).single();
+      out.last_error = data?.media?.error ?? null;
+    }
+  }
+  return out;
 }

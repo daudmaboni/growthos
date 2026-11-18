@@ -363,3 +363,4 @@ button.danger:hover:not(:disabled) { background: var(--bad); color: #fff; }
 .mv img { max-width: 220px; max-height: 260px; border-radius: 8px; cursor: zoom-in; object-fit: cover; }
 .mv img.big { max-width: min(520px, 100%); max-height: none; cursor: zoom-out; }
 .mv-tag { font-size: 12px; font-weight: 600; }
+.dh-key { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--card); border: 1px solid var(--line); }

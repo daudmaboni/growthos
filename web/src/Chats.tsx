@@ -418,7 +418,7 @@ function lostWhy(why: string, T: Tr) {
 function lastPriceSent(msgs: Msg[] | null): number | null {
   for (const m of [...(msgs ?? [])].reverse()) {
     if (m.direction !== "out" || !m.body) continue;
-    const nums = [...m.body.replace(/(\+?255|0)[67]\d{2}[ -]?\d{3}[ -]?\d{3}/g, "").matchAll(/(\d{1,3}(?:[,.\s]\d{3})+|\d{4,6})(?!\d)/g)]
+    const nums = [...m.body.replace(/(\+?255|0)[67]\d{2}[ -]?\d{3}[ -]?\d{3}/g, "").replace(/\d{7,}/g, "").matchAll(/(\d{1,3}(?:[,.\s]\d{3})+|(?<![\d,.])\d{4,6})(?![\d,.]?\d)/g)]
       .map((x) => Number(x[1].replace(/[,.\s]/g, ""))).filter((n) => n >= 500 && n <= 50_000_000);
     if (nums.length) return nums[nums.length - 1];
   }

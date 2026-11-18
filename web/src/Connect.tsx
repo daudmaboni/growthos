@@ -72,6 +72,24 @@ export default function Connect({ ws }: { ws: Workspace }) {
     const r = await callFn<{ webhook_url: string; verify_token: string }>("dualhook-connect", { workspace_id: ws.id });
     setDh(r);
   });
+  // Dualhook Outbound API key: lets itaOS download the images customers send (payment screenshots).
+  const [dhKey, setDhKey] = useState("");
+  const [dhKeyLast4, setDhKeyLast4] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("connections").select("meta").eq("workspace_id", ws.id).eq("provider", "whatsapp").eq("meta->>via", "dualhook").maybeSingle()
+      .then(({ data }) => setDhKeyLast4((data as any)?.meta?.api_key_last4 ?? null));
+  }, [ws.id, busy]);
+  const saveDhKey = () => run("dhkey", async () => {
+    const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "set_api_key", api_key: dhKey.trim() });
+    setDhKey("");
+    setMsg(r.images_failed && !r.images_saved
+      ? { err: `Key saved, but Dualhook did not return the images: ${r.last_error ?? "unknown error"}` }
+      : { ok: `Key saved. ${r.images_saved} image${r.images_saved === 1 ? "" : "s"} from the last 7 days fetched and read${r.images_failed ? `, ${r.images_failed} could not be fetched` : ""}.` });
+  });
+  const fetchImages = () => run("dhkey", async () => {
+    const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "backfill_media" });
+    setMsg(r.images_failed && !r.images_saved ? { err: `Could not fetch images: ${r.last_error ?? "unknown error"}` } : { ok: `${r.images_saved} image${r.images_saved === 1 ? "" : "s"} fetched and read${r.images_failed ? `, ${r.images_failed} failed` : ""}.` });
+  });
   const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => setMsg({ ok: "Copied." }), () => setMsg({ err: "Copy failed. Select the text and copy it by hand." }));
 
   const replay = () => run("replay", async () => {
@@ -123,6 +141,17 @@ export default function Connect({ ws }: { ws: Workspace }) {
               {!dh && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : dhConns.length ? "New webhook URL" : "Use Dualhook"}</button>}
             </div>
             <span className="small muted">Use this while itaOS's own Meta approval is pending. Dualhook is a Meta Tech Provider: the number keeps working in the WhatsApp Business app, and Meta sends chats, ad clicks and history straight to itaOS.</span>
+            {dhConns.length > 0 && (
+              <div className="dh-key">
+                <b className="small">Payment screenshots {dhKeyLast4 ? <span className="ok small">· key saved (…{dhKeyLast4})</span> : <span className="warnt small">· not set up</span>}</b>
+                <span className="small muted">To read the images customers send, itaOS downloads them through Dualhook. In Dualhook open <b>Connection → Overview → Outbound API key</b>, create a key (it starts with <code>dh_live_</code>) and paste it here. Images from the last 7 days are fetched right away.</span>
+                <div className="row">
+                  <input type="password" autoComplete="off" placeholder="dh_live_…" value={dhKey} onChange={(e) => setDhKey(e.target.value)} style={{ flex: 1 }} />
+                  <button className="small primary" disabled={!!busy || !dhKey.trim().startsWith("dh_live_")} onClick={saveDhKey}>{busy === "dhkey" ? "Saving…" : dhKeyLast4 ? "Replace key" : "Save key"}</button>
+                  {dhKeyLast4 && <button className="small" disabled={!!busy} onClick={fetchImages}>Fetch missed images</button>}
+                </div>
+              </div>
+            )}
             {dh && (
               <>
                 <ol className="small" style={{ margin: "4px 0", paddingLeft: 18 }}>
