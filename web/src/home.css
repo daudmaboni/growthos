@@ -5,7 +5,7 @@
   --mint: #5ef0ae;       /* main button */
   --ink: #10201a; --ink-2: #3b4a44; --soft: #f2f5f3; --line: #e3e9e6;
   --mint-bg: #e2f6ec; --butter: #fff4d6; --blush: #fde6ea; --sky: #e4efff;
-  background: #fff; color: var(--ink); font-family: "Urbanist", system-ui, sans-serif; font-size: 17px; line-height: 1.6;
+  background: #fff; color: var(--ink); font-family: "Geist", system-ui, sans-serif; font-size: 17px; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 html.hp-page { color-scheme: light; scroll-behavior: smooth; scroll-padding-top: 80px; }

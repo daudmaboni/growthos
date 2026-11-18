@@ -24,7 +24,7 @@ const hashIds = () => {
 
 export default function Chats({ ws }: { ws: Workspace }) {
   const [ids, setIds] = useState<string[] | null>(hashIds());
-  const [filter, setFilter] = useState<Filter>(ids ? "ids" : "follow");
+  const [filter, setFilter] = useState<Filter>(ids ? "ids" : "all");
   const [rows, setRows] = useState<Outcome[]>([]);
   const [src, setSrc] = useState<Source>("any");
   const [lite, setLite] = useState<Lite[]>([]);
@@ -122,11 +122,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const pool = lite.filter((r) => inSource(r, src));
   const count = (f: Filter) => pool.filter((r) => inFilter(r, f)).length;
   const imported = lite.filter((r) => r.phone_number_id === "import").length;
-  // Grouped the way an owner works: what needs me now → where each chat stands → everything.
+  // Everything first, then what needs me now, then where each chat stands.
   const groups: [Filter, string][][] = [
+    [["all", T("All", "Wote")]],
     [["follow", T("To follow up", "Wa kufuatilia")], ["signals", T("Payments to confirm", "Malipo ya kuthibitisha")]],
     [["open", T("Open", "Bado wazi")], ["sold", T("Sold", "Waliouziwa")], ["lost", T("Lost", "Waliopotea")]],
-    [["all", T("All", "Wote")]],
   ];
   async function deleteImported() {
     const list = lite.filter((r) => r.phone_number_id === "import").map((r) => r.id);
@@ -144,7 +144,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       <div className="chats-head">
         <div>
           <h2 style={{ margin: 0 }}>Chats <span className="muted chats-total">{fmt(lite.length)}</span></h2>
-          {filter === "ids" && ids && <span className="small muted">{T(`Showing ${ids.length} chats from Kito or a report`, `Inaonyesha chat ${ids.length} kutoka Kito au ripoti`)} · <a href="#chats" onClick={() => { setIds(null); setFilter("follow"); }}>{T("show all", "onyesha zote")}</a></span>}
+          {filter === "ids" && ids && <span className="small muted">{T(`Showing ${ids.length} chats from Kito or a report`, `Inaonyesha chat ${ids.length} kutoka Kito au ripoti`)} · <a href="#chats" onClick={() => { setIds(null); setFilter("all"); }}>{T("show all", "onyesha zote")}</a></span>}
         </div>
         <div className="row chats-tools">
           <button className="small" onClick={recheck} disabled={rechecking} title={T("Run the latest detection rules over every chat", "Endesha kanuni mpya kwenye chat zote")}>{rechecking ? T("Working…", "Inafanya kazi…") : T("Re-check rules", "Kagua kanuni upya")}</button>

@@ -5,7 +5,7 @@
   --good: #5fd39a; --good-soft: #5fd39a24; --warn: #f3b25a; --warn-soft: #f3b25a26; --bad: #ff8569; --bad-soft: #ff856924; --info: #6fd3dc; --info-soft: #6fd3dc24;
   --c1: #4ad48f; --c2: #5b8cff; --c3: #f5a524; --c4: #c9a2ff; --c5: #ff7d62; --c6: #3cc6ea;
   --shadow-sm: 0 1px 2px #00000080; --shadow: 0 1px 2px #00000080, 0 16px 34px -22px #000000e6; --shadow-lg: 0 2px 6px #0000008c, 0 34px 80px -26px #000000f2;
-  --font: "Urbanist", system-ui, -apple-system, "Segoe UI", sans-serif; --display: var(--font); --body: var(--font); --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; --display: var(--font); --body: var(--font); --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 24px; --ease: cubic-bezier(.22, 1, .36, 1);
   color-scheme: dark;
 }
@@ -192,6 +192,7 @@ textarea { font: inherit; color: var(--ink); background: var(--raised); border: 
 }
 
 /* font choice (Settings → Appearance), saved per device */
+html[data-font="urbanist"] { --font: "Urbanist", system-ui, -apple-system, "Segoe UI", sans-serif; }
 html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
 .fontpick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .fontpick button { display: grid; gap: 4px; text-align: left; border-radius: var(--r-lg); padding: 14px 16px; }

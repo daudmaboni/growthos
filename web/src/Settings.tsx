@@ -250,17 +250,18 @@ function SaveRow({ busy, msg, T, label, noButton }: { busy: boolean; msg: { ok?:
 }
 
 const FONTS: { id: string; name: string; family: string; note: [string, string] }[] = [
-  { id: "urbanist", name: "Urbanist", family: '"Urbanist", system-ui, sans-serif', note: ["Current · rounded, friendly", "Ya sasa · ya mviringo"] },
+  { id: "geist", name: "Geist", family: '"Geist", system-ui, sans-serif', note: ["Default · same as ponditech.com", "Ya kawaida · kama ponditech.com"] },
+  { id: "urbanist", name: "Urbanist", family: '"Urbanist", system-ui, sans-serif', note: ["Rounded, friendly", "Ya mviringo"] },
   { id: "inter", name: "Inter", family: '"Inter", system-ui, sans-serif', note: ["Clean · easy to read numbers", "Safi · namba zinasomeka vizuri"] },
 ];
 
 function FontPicker({ T }: { T: Tr }) {
-  const read = () => { try { return localStorage.getItem("growthos-font") || "urbanist"; } catch { return "urbanist"; } };
+  const read = () => { try { return localStorage.getItem("itaos-font") || "geist"; } catch { return "geist"; } };
   const [font, setFont] = useState(read);
   const pick = (id: string) => {
     setFont(id);
-    if (id === "urbanist") delete document.documentElement.dataset.font; else document.documentElement.dataset.font = id;
-    try { localStorage.setItem("growthos-font", id); } catch { /* storage unavailable */ }
+    if (id === "geist") delete document.documentElement.dataset.font; else document.documentElement.dataset.font = id;
+    try { localStorage.setItem("itaos-font", id); } catch { /* storage unavailable */ }
   };
   return (
     <section className="card">
