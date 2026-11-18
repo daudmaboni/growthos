@@ -143,7 +143,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
           </div>
         )}
         {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
-        {manager && (
+        {manager && (d360Conns.length > 0 || dhConns.length === 0) && (
           <div className="evidence">
             <div className="row between"><b>Connect through 360dialog</b>
               {!showD360 && <button className="small" disabled={!!busy} onClick={() => setShowD360(true)}>{d360Conns.length ? "Change API key" : "Use 360dialog"}</button>}
@@ -169,7 +169,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
         {nums.map((n) => (
           <div className="row between small" key={n.phone_number_id}>
             <span><span className="status-dot on" /> {n.display_phone ?? n.phone_number_id}</span>
-            <span className="muted">History: {n.history_status ?? "not requested"}{n.history_requested_at ? ` (requested ${when(n.history_requested_at)})` : ""}</span>
+            <span className="muted">History: {n.history_status ?? (dhConns.length || d360Conns.length ? "waiting for Meta" : "not requested")}{n.history_requested_at ? ` (requested ${when(n.history_requested_at)})` : ""}</span>
           </div>
         ))}
         {(health.length > 0 || nums.length > 0) && (
