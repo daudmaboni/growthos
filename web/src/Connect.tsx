@@ -126,7 +126,12 @@ export default function Connect({ ws }: { ws: Workspace }) {
             {accounts.map((a) => <button key={a.id} onClick={() => pickAccount(a)} disabled={!!busy}>{a.name} <span className="muted small">({a.id}, {a.currency})</span></button>)}
           </div>
         )}
-        {adsConns.map((c) => <StatusRow key={c.id} c={c} />)}
+        {adsConns.map((c) => (
+          <div key={c.id} style={{ display: "grid", gap: 6 }}>
+            <StatusRow c={c} />
+            {manager && <DisconnectAds c={c} onDone={(text) => { setMsg({ ok: text }); setTick((t) => t + 1); }} onError={(text) => setMsg({ err: text })} last={adsConns.length === 1} />}
+          </div>
+        ))}
       </section>
 
       <section className="card">
@@ -241,6 +246,33 @@ function StatusRow({ c, waitingText = "Waiting for first sync" }: { c: Conn; wai
     <div className="row between small">
       <span><span className={"status-dot " + (c.status === "active" ? "on" : "err")} /> {c.label ?? c.external_id} <span className="muted">({c.external_id})</span></span>
       <span className={c.last_error ? "err" : "muted"}>{c.last_error ? `Error: ${c.last_error}${c.last_sync_at ? ` · last good sync ${when(c.last_sync_at)}` : ""}` : c.last_sync_at ? "Last successful sync " + when(c.last_sync_at) : waitingText}</span>
+    </div>
+  );
+}
+
+/** Disconnect an ad account: stops syncing and deletes the stored Meta token. Past figures stay unless asked. */
+function DisconnectAds({ c, onDone, onError, last }: { c: Conn; onDone: (t: string) => void; onError: (t: string) => void; last: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [wipe, setWipe] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function go() {
+    setBusy(true);
+    const { data, error } = await supabase.rpc("disconnect_ads", { p_conn: c.id, p_delete_data: wipe });
+    setBusy(false);
+    if (error) return onError(error.message);
+    const d = data as { ads_deleted: number; days_deleted: number };
+    onDone(`${c.label ?? c.external_id} disconnected. itaOS no longer reads it${wipe && last ? ` and its past ad data was deleted (${d.ads_deleted} ads).` : "; past figures stay in your reports."} You can connect it again any time.`);
+  }
+  if (!open) return <button className="small linkish" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>Disconnect this ad account</button>;
+  return (
+    <div className="dh-key">
+      <b className="small">Disconnect {c.label ?? c.external_id}?</b>
+      <span className="small muted">itaOS stops reading spend and ad clicks from it right away and deletes its stored Meta access. Your ads on Facebook are not changed.</span>
+      {last && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={wipe} onChange={(e) => setWipe(e.target.checked)} /> Also delete its past ad data from itaOS (spend, ads list). Chats and sales stay.</label>}
+      <div className="row" style={{ gap: 6 }}>
+        <button className="small danger" disabled={busy} onClick={go}>{busy ? "Disconnecting…" : "Disconnect"}</button>
+        <button className="small" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </div>
   );
 }

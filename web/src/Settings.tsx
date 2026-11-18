@@ -3,7 +3,7 @@ import { supabase, Workspace, canManage, canEdit, when } from "./lib";
 import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./motion";
 
 type Tab = "business" | "profile" | "appearance" | "rules" | "account";
-const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["account", "Account", "Akaunti"]];
+const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["account", "My profile", "Wasifu wangu"]];
 const CURRENCIES = ["TZS", "KES", "UGX", "RWF", "USD"];
 
 export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "dark" | "light"; onTheme: (t: "dark" | "light", from?: HTMLElement | null) => void }) {
@@ -35,7 +35,7 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
       {tab === "profile" && <Profile ws={ws} T={T} />}
       {tab === "appearance" && <Appearance ws={ws} onWs={onWs} theme={theme} onTheme={onTheme} T={T} />}
       {tab === "rules" && <Rates ws={ws} onWs={onWs} T={T} />}
-      {tab === "account" && <Account email={email} T={T} />}
+      {tab === "account" && <><MyProfile ws={ws} T={T} /><Account email={email} T={T} /></>}
     </div>
   );
 }
@@ -209,6 +209,78 @@ function Profile({ ws, T }: { ws: Workspace; T: Tr }) {
   );
 }
 
+/** The signed-in person: name, phone, email, role, when they joined. Name and phone are theirs to edit. */
+function MyProfile({ ws, T }: { ws: Workspace; T: Tr }) {
+  const [u, setU] = useState<any>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
+  const [emailMsg, setEmailMsg] = useState<{ ok?: string; err?: string }>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const x = data.user; setU(x);
+      setName(String(x?.user_metadata?.full_name ?? ""));
+      setPhone(String(x?.user_metadata?.phone ?? ""));
+    });
+  }, []);
+  const role: Record<string, [string, string]> = { owner: ["Owner", "Mmiliki"], admin: ["Admin", "Msimamizi"], analyst: ["Analyst", "Mchambuzi"], viewer: ["Viewer", "Mtazamaji"] };
+  const day = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "–");
+
+  async function save(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); setMsg({});
+    const p = phone.trim();
+    if (p && !/^\+?[0-9][0-9 -]{7,16}$/.test(p)) { shake(e.currentTarget); return setMsg({ err: T("Enter a phone number like +255 712 345 678.", "Weka namba kama +255 712 345 678.") }); }
+    setBusy(true);
+    const { data, error } = await supabase.auth.updateUser({ data: { full_name: name.trim().slice(0, 80) || null, phone: p || null } });
+    setBusy(false);
+    if (error) { shake(e.currentTarget); setMsg({ err: error.message }); } else { setU(data.user); flash(e.currentTarget); setMsg({ ok: T("Saved.", "Imehifadhiwa.") }); }
+  }
+  async function changeEmail() {
+    setEmailMsg({});
+    const em = newEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return setEmailMsg({ err: T("Enter a valid email.", "Weka barua pepe sahihi.") });
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ email: em }, { emailRedirectTo: location.origin + "/app#settings/account" });
+    setBusy(false);
+    if (error) setEmailMsg({ err: error.message });
+    else { setNewEmail(""); setEmailMsg({ ok: T(`Check ${em} (and your current inbox) for a confirmation link. The email changes once you confirm.`, `Angalia ${em} (na barua pepe ya sasa) kupata kiungo cha uthibitisho. Itabadilika ukithibitisha.`) }); }
+  }
+
+  if (!u) return <section className="card"><span className="muted small">{T("Loading…", "Inapakia…")}</span></section>;
+  return (
+    <form className="card" onSubmit={save}>
+      <div className="row between">
+        <div className="row" style={{ gap: 12 }}>
+          <div className="cc-avatar" aria-hidden>{(name || u.email || "?").slice(0, 1).toUpperCase()}</div>
+          <div><h2>{name || T("Your profile", "Wasifu wako")}</h2><span className="small muted">{role[ws.role ?? "viewer"]?.[ws.language === "sw" ? 1 : 0] ?? ws.role} · {ws.name}</span></div>
+        </div>
+      </div>
+      <div className="profile-facts small">
+        <span><span className="muted">{T("Email", "Barua pepe")}</span><b>{u.email}</b>{u.email_confirmed_at ? <span className="ok"> ✓ {T("confirmed", "imethibitishwa")}</span> : <span className="warnt"> · {T("not confirmed", "haijathibitishwa")}</span>}</span>
+        <span><span className="muted">{T("Joined", "Alijiunga")}</span><b>{day(u.created_at)}</b></span>
+        <span><span className="muted">{T("Last sign-in", "Aliingia mwisho")}</span><b>{u.last_sign_in_at ? when(u.last_sign_in_at) : "–"}</b></span>
+        <span><span className="muted">{T("Role", "Nafasi")}</span><b>{role[ws.role ?? "viewer"]?.[ws.language === "sw" ? 1 : 0] ?? ws.role}</b></span>
+      </div>
+      <Field id="p-name" label={T("Full name", "Jina kamili")}>
+        <input id="p-name" autoComplete="name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Daud Maboni" />
+      </Field>
+      <Field id="p-phone" label={T("Phone number", "Namba ya simu")} hint={T("For your own records. itaOS never sends messages to it.", "Kwa kumbukumbu zako. itaOS haitumi ujumbe kwake.")}>
+        <input id="p-phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255 7xx xxx xxx" />
+      </Field>
+      <SaveRow busy={busy} msg={msg} T={T} />
+      <Field id="p-email" label={T("Change email", "Badilisha barua pepe")} hint={T("We send a confirmation link; nothing changes until you click it.", "Tunatuma kiungo cha uthibitisho; hakuna kinachobadilika mpaka ukibonyeze.")}>
+        <div className="row" style={{ gap: 6 }}>
+          <input id="p-email" type="email" autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder={u.email} style={{ flex: 1 }} />
+          <button type="button" className="small" disabled={busy || !newEmail.trim()} onClick={changeEmail}>{T("Send link", "Tuma kiungo")}</button>
+        </div>
+      </Field>
+      {(emailMsg.ok || emailMsg.err) && <span className={"small " + (emailMsg.err ? "err" : "ok")}>{emailMsg.err ?? emailMsg.ok}</span>}
+    </form>
+  );
+}
+
 function Account({ email, T }: { email: string; T: Tr }) {
   const [pw, setPw] = useState("");
   const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
@@ -224,7 +296,7 @@ function Account({ email, T }: { email: string; T: Tr }) {
   return (
     <>
       <form className="card" onSubmit={submit}>
-        <div><h2>{T("Your account", "Akaunti yako")}</h2><span className="small muted">{email}</span></div>
+        <div><h2>{T("Password", "Nenosiri")}</h2><span className="small muted">{email}</span></div>
         <Field id="s-pw" label={T("New password", "Nenosiri jipya")} hint={T("At least 8 characters.", "Herufi 8 au zaidi.")}>
           <input id="s-pw" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
         </Field>
