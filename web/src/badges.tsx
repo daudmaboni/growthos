@@ -28,7 +28,6 @@ export function useNavBadges(wsId: string, view: string): Badges {
     let t: number | undefined;
     const soon = () => { window.clearTimeout(t); t = window.setTimeout(load, 1500); };
     const ch = supabase.channel("badges-" + wsId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `workspace_id=eq.${wsId}` }, (p: any) => { if (p?.new?.origin !== "history") soon(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${wsId}` }, soon)
       .subscribe();
     const iv = window.setInterval(load, 60_000);

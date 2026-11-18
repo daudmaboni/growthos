@@ -86,15 +86,17 @@ export default function Chats({ ws }: { ws: Workspace }) {
       timer = window.setTimeout(() => { timer = undefined; last = Date.now(); setQuiet(true); refresh(); window.dispatchEvent(new Event("itaos:live")); }, wait);
     };
     const ch = supabase.channel("chats-" + ws.id)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, bump)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, bump)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, (p: any) => {
-        if (p?.new?.origin === "history") return; // old chats being backfilled, not new messages
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, (p: any) => {
+        // A chat changes whenever a message lands (its summary is recomputed), so this covers new messages too.
+        // The messages table itself is not streamed: backfills write thousands of rows at once.
         bump();
-        // Let Kito read the new message shortly after it lands (it only reads changed chats).
+        // Let Kito read the new message shortly after it lands — only when the chat has news Kito hasn't read
+        // (Kito's own label updates also change the chat; those must not wake it again).
+        const c = p?.new;
+        if (!c?.last_message_at || (c.kito_checked_at && Date.parse(c.last_message_at) <= Date.parse(c.kito_checked_at))) return;
         window.clearTimeout(kitoTimer); kitoTimer = window.setTimeout(() => { callFn("kito", { workspace_id: ws.id }).then(() => { setQuiet(true); refresh(); }).catch(() => {}); }, 20000);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, () => window.dispatchEvent(new Event("itaos:live")))
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, bump)
       .subscribe((status) => setLive(status === "SUBSCRIBED"));
     return () => { window.clearTimeout(timer); window.clearTimeout(kitoTimer); supabase.removeChannel(ch); };
   }, [ws.id]);

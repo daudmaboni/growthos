@@ -239,7 +239,7 @@ type Via = "360dialog" | "dualhook";
 
 async function bridgeConnection(via: Via, token: string) {
   const hash = await sha256Hex(token);
-  return await admin().from("connections").select("id,workspace_id,external_id,status,meta")
+  return await admin().from("connections").select("id,workspace_id,external_id,status,meta,last_sync_at,last_error")
     .eq("provider", "whatsapp").eq("meta->>via", via).eq("meta->>webhook_token_hash", hash).maybeSingle();
 }
 
@@ -310,7 +310,11 @@ async function bridgeDelivery(req: Request, via: Via, token: string) {
     }
     const firstWaba = kept.entry.find((e) => e.id)?.id;
     const wabaPatch = firstWaba && !conn.meta?.waba_id ? { meta: { ...conn.meta, waba_id: String(firstWaba) } } : {};
-    await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active", ...wabaPatch }).eq("id", conn.id);
+    // Busy numbers deliver several times a second: refresh the connection's "last seen" at most once a minute.
+    const stale = !conn.last_sync_at || Date.now() - Date.parse(conn.last_sync_at) > 60_000;
+    if (stale || conn.status !== "active" || conn.last_error || "meta" in wabaPatch) {
+      await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active", ...wabaPatch }).eq("id", conn.id);
+    }
     const saved = await persistChanges(kept);
     // @ts-ignore EdgeRuntime is provided by Supabase
     EdgeRuntime.waitUntil(processInBackground(saved.db, saved.events));
