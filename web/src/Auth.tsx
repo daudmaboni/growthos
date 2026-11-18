@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase, AUTH_LINK_ERROR } from "./lib";
 import { enterTiles, shake, usePageEnter, select } from "./motion";
 import Logo from "./Logo";
@@ -37,6 +37,10 @@ const T = {
   terms: { en: "By creating an account you agree to our", sw: "Kwa kufungua akaunti unakubali" },
   termsLink: { en: "terms", sw: "masharti yetu" },
   home: { en: "← Back to home", sw: "← Rudi mwanzo" },
+  google: { en: "Continue with Google", sw: "Endelea na Google" },
+  or: { en: "or with email", sw: "au kwa barua pepe" },
+  inApp: { en: "Google sign-in doesn't work inside WhatsApp, Instagram or Facebook. Open this page in Chrome or Safari, or use your email below.", sw: "Kuingia kwa Google hakufanyi kazi ndani ya WhatsApp, Instagram au Facebook. Fungua ukurasa huu kwenye Chrome au Safari, au tumia barua pepe hapa chini." },
+  providerOff: { en: "Google sign-in isn't available right now. Use your email instead.", sw: "Kuingia kwa Google hakupatikani sasa hivi. Tumia barua pepe badala yake." },
   staff: { en: "Pondi staff? Staff sign-in", sw: "Mfanyakazi wa Pondi? Ingia hapa" },
   staffAccount: { en: "This is a Pondi staff account. Staff sign in on the staff page.", sw: "Hii ni akaunti ya wafanyakazi wa Pondi. Wafanyakazi huingia kwenye ukurasa wa wafanyakazi." },
   openStaff: { en: "Go to staff sign-in", sw: "Nenda kwa wafanyakazi" },
@@ -98,7 +102,29 @@ function friendly(lang: Lang, msg: string): string {
   if (/rate limit|too many|security purposes/i.test(msg)) return tr(lang, "rate");
   if (/password should be at least|weak password/i.test(msg)) return tr(lang, "short");
   if (/failed to fetch|network/i.test(msg)) return tr(lang, "offline");
+  if (/provider is not enabled|unsupported provider/i.test(msg)) return tr(lang, "providerOff");
   return msg;
+}
+
+/* ---------- Google ---------- */
+/** In-app browsers (WhatsApp, Instagram, Facebook, Android WebViews) where Google blocks sign-in. */
+const IN_APP = typeof navigator !== "undefined" && /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Line\/|; wv\)/i.test(navigator.userAgent);
+
+/** Shows the Google button only once Google is switched on in Supabase (Authentication → Providers). */
+function useGoogleEnabled(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY } })
+      .then((r) => r.json()).then((j) => { if (live) setOn(j?.external?.google === true); }).catch(() => { /* hide on error */ });
+    return () => { live = false; };
+  }, []);
+  return on;
+}
+
+function GoogleMark() {
+  // Neutral mark (not Google's logo): a simple "G" in a circle.
+  return <span className="auth-g" aria-hidden="true">G</span>;
 }
 
 /* ---------- sign in / create account ---------- */
@@ -120,6 +146,14 @@ export function AuthScreen() {
   const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.05 }); }, [mode, !!sent]);
   const t = (k: Key, v?: Record<string, string>) => tr(lang, k, v);
   const redirect = location.origin + "/app";
+  const googleOn = useGoogleEnabled();
+
+  async function google() {
+    setErr(""); setBusy(true);
+    try { localStorage.setItem("itaos-lang", lang); } catch { /* storage unavailable */ }
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirect, queryParams: { prompt: "select_account" } } });
+    if (error) fail(error.message); // on success the browser leaves for Google
+  }
 
   const go = (m: Mode) => { setMode(m); setErr(""); setCanResend(false); };
   const fail = (msg: string) => {
@@ -202,6 +236,11 @@ export function AuthScreen() {
               <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "on" : ""} onClick={() => go("signin")}>{t("signIn")}</button>
               <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
             </div>
+            {googleOn && (<>
+              <button type="button" className="auth-google" disabled={busy} onClick={google}><GoogleMark />{t("google")}</button>
+              {IN_APP && <p className="muted small" style={{ margin: 0 }}>{t("inApp")}</p>}
+              <div className="auth-or"><span>{t("or")}</span></div>
+            </>)}
           </>
         ) : (
           <div><h2 style={{ margin: "0 0 4px" }}>{mode === "forgot" ? t("resetTitle") : t("sendLink")}</h2>
