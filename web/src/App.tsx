@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, Workspace, WS_COLUMNS, Role } from "./lib";
+import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
+import { AuthScreen, SetNewPassword, LangToggle, initialLang, tr } from "./Auth";
 import Dashboard from "./Dashboard";
 import Chats from "./Chats";
 import Connect from "./Connect";
@@ -24,6 +25,7 @@ const viewFromHash = (): View => {
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [ws, setWs] = useState<Workspace | null | undefined>(undefined);
+  const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try { return localStorage.getItem("growthos-theme") === "dark" ? "dark" : "light"; } catch { return "light"; } // light is the default
@@ -49,7 +51,7 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => { setSession(s); if (e === "PASSWORD_RECOVERY") setRecovering(true); });
     const onHash = () => setView(viewFromHash());
     window.addEventListener("hashchange", onHash);
     return () => { sub.subscription.unsubscribe(); window.removeEventListener("hashchange", onHash); };
@@ -67,7 +69,11 @@ export default function App() {
   useEffect(() => {
     if (!session) { setWs(undefined); return; }
     supabase.from("workspaces").select(WS_COLUMNS).order("created_at").limit(1).then(async ({ data }) => {
-      const w = (data?.[0] as unknown as Workspace) ?? null;
+      let w: Workspace | null = (data?.[0] as unknown as Workspace) ?? null;
+      // New accounts carry the business name from "Create account": set the workspace up for them.
+      if (!w && typeof session.user.user_metadata?.business_name === "string" && session.user.user_metadata.business_name.trim()) {
+        w = await createFromSignup(session.user.user_metadata.business_name.trim(), session.user.user_metadata.language === "en" ? "en" : "sw");
+      }
       if (w) { const { data: role } = await supabase.rpc("member_role", { ws: w.id }); w.role = (role as Role) ?? "viewer"; }
       setWs(w);
     });
@@ -77,9 +83,10 @@ export default function App() {
   useEffect(() => { if (session === null || (session && ws !== undefined)) hidePreloader(); }, [session, ws]);
 
   if (session === undefined) return <div className="center muted">Loading…</div>;
-  if (!session) return <Login />;
+  if (!session) return <AuthScreen />;
+  if (recovering) return <SetNewPassword email={session.user.email ?? ""} onDone={() => setRecovering(false)} />;
   if (toAdmin) return <div className="center muted">Opening admin…</div>;
-  if (ws === undefined) return <div className="center muted">Loading workspace…</div>;
+  if (ws === undefined) return <div className="center muted">{tr(initialLang(), "wait")}</div>;
   if (ws === null) return <CreateWorkspace onDone={setWs} />;
 
   return (
@@ -134,51 +141,21 @@ function GearIcon() {
   );
 }
 
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"password" | "link">("password");
-  const [sent, setSent] = useState(false);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.06 }); });
-  async function submit(e: React.FormEvent) {
-    e.preventDefault(); setErr(""); setBusy(true);
-    if (mode === "password") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) { shake(formRef.current); setErr(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message); }
-      return;
-    }
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + "/app" } });
-    setBusy(false);
-    if (error) setErr(/rate limit/i.test(error.message) ? "Too many emails sent. Wait an hour or sign in with your password." : error.message); else setSent(true);
-  }
-  return (
-    <div className="center">
-      <form className="card auth" ref={formRef} onSubmit={submit}>
-        <div className="row"><Logo size={44} /><h1>ItaOS</h1></div>
-        <p className="muted" style={{ margin: 0 }}>See which ads bring paying customers, not just chats.</p>
-        {sent ? <p className="ok">Check {email} for a sign-in link.</p> : (<>
-          <label htmlFor="email"><b>Email</b></label>
-          <input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@business.co.tz" />
-          {mode === "password" && (<>
-            <label htmlFor="pw"><b>Password</b></label>
-            <input id="pw" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </>)}
-          <button className="primary" disabled={busy}>{busy ? "Please wait…" : mode === "password" ? "Sign in" : "Email me a sign-in link"}</button>
-          <button type="button" className="small" onClick={() => { setMode(mode === "password" ? "link" : "password"); setErr(""); }}>
-            {mode === "password" ? "Use an email link instead" : "Use a password instead"}
-          </button>
-          {err && <p className="err">{err}</p>}
-        </>)}
-        <a href="/" className="small muted" style={{ textAlign: "center", textDecoration: "none" }}>← Back to home</a>
-      </form>
-    </div>
-  );
+// One attempt per page load, so a token refresh can't create a second workspace.
+let signupCreate: Promise<Workspace | null> | null = null;
+function createFromSignup(name: string, language: "sw" | "en"): Promise<Workspace | null> {
+  signupCreate ??= (async () => {
+    const { data: id, error } = await supabase.rpc("create_workspace", { p_name: name });
+    if (error || !id) return null; // fall back to the "Name your business" screen
+    if (language === "en") await supabase.from("workspaces").update({ language: "en" }).eq("id", id);
+    const { data } = await supabase.from("workspaces").select(WS_COLUMNS).eq("id", id).single();
+    return data ? ({ ...(data as unknown as Workspace) }) : null;
+  })();
+  return signupCreate;
 }
 
 function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
+  const [lang, setLang] = useState(initialLang);
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -194,22 +171,25 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
     if (error) {
       setBusy(false);
       if (error.code === "42501" || /permission denied|not signed in|JWT/i.test(error.message)) { setLost(true); return; }
-      return setErr("Couldn't create the workspace. Please try again.");
+      shake(formRef.current);
+      return setErr(tr(lang, "wsFail"));
     }
+    if (lang === "en") await supabase.from("workspaces").update({ language: "en" }).eq("id", id);
     const { data } = await supabase.from("workspaces").select(WS_COLUMNS).eq("id", id).single();
     onDone({ ...(data as unknown as Workspace), role: "owner" });
   }
   return (
     <div className="center">
       <form className="card auth" ref={formRef} onSubmit={submit}>
-        <h2>Name your business</h2>
-        <label htmlFor="wsname" className="small muted">This is the workspace your ads and WhatsApp connect to.</label>
-        <input id="wsname" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kayani Herbs" />
+        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">ItaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
+        <h2 style={{ margin: 0 }}>{tr(lang, "wsTitle")}</h2>
+        <label htmlFor="wsname" className="small muted">{tr(lang, "wsBody")}</label>
+        <input id="wsname" required autoComplete="organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr(lang, "businessPh")} />
         {lost ? (<>
-          <p className="err">Your email is confirmed, but this browser lost your sign-in. Please sign in again to continue.</p>
-          <button type="button" className="primary" onClick={() => supabase.auth.signOut({ scope: "local" })}>Sign in again</button>
+          <p className="err">{tr(lang, "wsLost")}</p>
+          <button type="button" className="primary" onClick={() => supabase.auth.signOut({ scope: "local" })}>{tr(lang, "signInAgain")}</button>
         </>) : (<>
-          <button className="primary" disabled={busy}>{busy ? "Creating…" : "Create workspace"}</button>
+          <button className="primary" disabled={busy}>{busy ? tr(lang, "wsCreating") : tr(lang, "wsCreate")}</button>
           {err && <p className="err">{err}</p>}
         </>)}
       </form>

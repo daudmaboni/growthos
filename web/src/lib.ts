@@ -1,5 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Read these before the client starts: it removes the tokens from the address bar when it signs in.
+const startHash = typeof location === "undefined" ? "" : location.hash + "&" + location.search;
+/** Opened from a "reset password" email. */
+export const PASSWORD_RECOVERY = /type=recovery/.test(startHash);
+/** Opened from an email link that has expired or was already used. */
+export const AUTH_LINK_ERROR = /[#&?]error=|error_code=|error_description=/.test(startHash);
+
 export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 export async function callFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
