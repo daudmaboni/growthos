@@ -4,20 +4,20 @@
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
-import { OrderForm, OrderList, inferredFrom } from "./Orders";
+import { OrderForm, OrderList, inferredFrom, signalDismissed } from "./Orders";
 
 type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "ids";
 type Source = "any" | "live" | "import";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string };
-type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; phone_number_id: string };
+type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; override_by: string | null; phone_number_id: string };
 type Tr = (en: string, sw: string) => string;
 
 /** Same rules as the database filters below, used to count each tab. */
 const inFilter = (r: Lite, f: Filter) =>
   f === "all" ? true
   : f === "follow" ? r.outcome !== "sold" && (r.kito_temp === "hot" || r.kito_temp === "warm" || (r.kito_temp == null && r.warm))
-  : f === "signals" ? Number(r.paid_orders) === 0 && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
+  : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? r.phone_number_id === "import" : r.phone_number_id !== "import");
 
@@ -85,11 +85,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
     if (filter === "ids" && ids) q = q.in("id", ids);
     else if (filter === "follow") q = q.neq("outcome", "sold").or("kito_temp.in.(hot,warm),and(kito_temp.is.null,warm.eq.true)");
-    else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,kito_outcome.eq.sold,outcome_override.eq.sold");
+    else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,kito_outcome.eq.sold,outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
     else if (filter !== "all") q = q.eq("outcome", filter);
     supabase.from("kito_runs").select("id,trigger,ran_at,checked,failed,remaining,note").eq("workspace_id", ws.id).order("ran_at", { ascending: false }).limit(20)
       .then(({ data }) => setRuns((data as Run[]) ?? []));
-    supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,phone_number_id").eq("workspace_id", ws.id).limit(2000)
+    supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(2000)
       .then(({ data }) => setLite((data as Lite[]) ?? []));
     Promise.all([
       q,
@@ -253,6 +253,7 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
   const [open, setOpen] = useState(!!startOpen);
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [recording, setRecording] = useState(false);
+  const [confirming, setConfirming] = useState(!!startOpen && !!inferredFrom(r));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const editor = canEdit(ws);
@@ -288,7 +289,7 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
 
   // The one button that matters most for this customer right now.
   const main = !editor ? null
-    : st.key === "check" ? <button className="small primary" disabled={busy} onClick={() => { setRecording(true); setOpen(true); }}>{T("Money came in → record sale", "Pesa imeingia → rekodi mauzo")}</button>
+    : st.key === "check" ? <button className="small primary" disabled={busy} onClick={() => { setConfirming(true); setOpen(true); }}>{T("Check payment", "Hakiki malipo")}</button>
     : st.key === "bought" || st.key === "lost" ? null
     : phone ? <a className="btn small primary" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">{st.key === "waiting" ? T("Reply on WhatsApp ↗", "Mjibu WhatsApp ↗") : T("Message on WhatsApp ↗", "Mtumie ujumbe WhatsApp ↗")}</a>
     : null;
@@ -331,7 +332,8 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
           </div>
 
           <div className="cc-side">
-            {editor && !confirmed && (
+            {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); onChange(); }} />}
+            {editor && !confirmed && st.key !== "check" && (
               <div className="cc-ask">
                 <b>{T("Did they buy?", "Amenunua?")}</b>
                 <div className="cc-ask-btns">
@@ -383,4 +385,68 @@ function lostWhy(why: string, T: Tr) {
     delivery: ["too far / delivery problem", "yuko mbali / usafirishaji"], business_slow: ["we replied too late", "tulichelewa kujibu"],
   };
   return m[why] ? T(m[why][0], m[why][1]) : why;
+}
+
+/** The price the business last sent in the chat, e.g. "155,000" or "Ni TSh 35,000" → 155000. */
+function lastPriceSent(msgs: Msg[] | null): number | null {
+  for (const m of [...(msgs ?? [])].reverse()) {
+    if (m.direction !== "out" || !m.body) continue;
+    const nums = [...m.body.replace(/(\+?255|0)[67]\d{2}[ -]?\d{3}[ -]?\d{3}/g, "").matchAll(/(\d{1,3}(?:[,.\s]\d{3})+|\d{4,6})(?!\d)/g)]
+      .map((x) => Number(x[1].replace(/[,.\s]/g, ""))).filter((n) => n >= 500 && n <= 50_000_000);
+    if (nums.length) return nums[nums.length - 1];
+  }
+  return null;
+}
+
+/** "Says they paid": the owner checks their own M-Pesa / bank, then confirms in one tap. */
+function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace; T: Tr; msgs: Msg[] | null; onDone: () => void }) {
+  const guess = r.kito_amount ?? r.payment_amount ?? lastPriceSent(msgs);
+  const [amount, setAmount] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => { if (!amount && guess) setAmount(Math.round(Number(guess)).toLocaleString("en-US")); }, [guess]);
+
+  async function yes() {
+    const a = Number(amount.replace(/[^\d.]/g, ""));
+    if (!(a > 0)) return setErr(T("Enter the amount that came in.", "Weka kiasi kilichoingia."));
+    const txn = code.trim().toUpperCase().replace(/\s+/g, "");
+    setBusy(true); setErr("");
+    const { data: user } = await supabase.auth.getUser();
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("orders").insert({
+      workspace_id: ws.id, conversation_id: r.id, amount: a, discount: 0, currency: ws.currency, status: "paid", fulfillment_status: "not_shipped",
+      occurred_at: now, paid_at: now, provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id,
+      external_ref: txn ? "txn:" + txn : null, notes: txn ? `Transaction ${txn}` : null,
+    });
+    setBusy(false);
+    if (error) setErr(error.code === "23505" ? T(`Transaction ${txn} is already recorded for another sale. The same payment can't count twice.`, `Muamala ${txn} tayari umerekodiwa kwa mauzo mengine. Malipo hayo hayawezi kuhesabiwa mara mbili.`) : error.message);
+    else onDone();
+  }
+  async function no() {
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("conversations").update({ outcome_override: "open", override_note: "payment not received" }).eq("id", r.id);
+    setBusy(false); if (error) setErr(error.message); else onDone();
+  }
+
+  return (
+    <div className="cc-ask cc-pay">
+      <b>{T("Did the money really come in?", "Pesa imeingia kweli?")}</b>
+      <ol className="small cc-steps">
+        <li>{T("Open your own M-Pesa / Lipa namba / bank messages or app — not the customer's screenshot.", "Fungua ujumbe au app YAKO ya M-Pesa / Lipa namba / benki — si picha ya mteja.")}</li>
+        <li>{T("Find a payment with the same amount, around the same time, from this customer's name or number.", "Tafuta malipo ya kiasi hicho, muda huo huo, kutoka jina au namba ya mteja huyu.")}</li>
+        <li>{T("Copy its transaction code (e.g. QK41ABC9XY) below.", "Nakili namba ya muamala (mf. QK41ABC9XY) hapa chini.")}</li>
+      </ol>
+      <div className="cc-pay-fields">
+        <label className="small">{T("Amount received", "Kiasi kilichoingia")} ({ws.currency})<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="155,000" /></label>
+        <label className="small">{T("Transaction code", "Namba ya muamala")}<input value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} placeholder="QK41ABC9XY" /></label>
+      </div>
+      <div className="cc-ask-btns">
+        <button className="small primary" disabled={busy} onClick={yes}>✓ {T("Yes, money received", "Ndiyo, pesa imeingia")}</button>
+        <button className="small" disabled={busy} onClick={no}>✗ {T("No, nothing came in", "Hapana, haijaingia")}</button>
+      </div>
+      <span className="small muted">{T("\"Yes\" records the sale, so it shows in your revenue right away.", "\"Ndiyo\" inarekodi mauzo, na yanaonekana kwenye mapato papo hapo.")}</span>
+      {err && <span className="err small">{err}</span>}
+    </div>
+  );
 }

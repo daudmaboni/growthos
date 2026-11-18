@@ -4,7 +4,12 @@ import { supabase, Workspace, Order, Outcome, L, amt, when, orderNet, canEdit } 
 
 type Ev = { id: number; action: string; actor: string | null; at: string; before: any; after: any };
 
+/** The owner answered "money did not come in" (or "didn't buy"): stop treating the chat as a payment to check. */
+export const signalDismissed = (r: Pick<Outcome, "override_by" | "outcome_override">) =>
+  !!r.override_by && (r.outcome_override === "open" || r.outcome_override === "lost");
+
 export function inferredFrom(r: Outcome): "kito" | "rules" | "name_mark" | null {
+  if (signalDismissed(r)) return null;
   if (r.kito_outcome === "sold" && r.kito_confidence !== "low") return "kito";
   if (r.payment_signal) return "rules";
   if (r.outcome_override === "sold") return "name_mark";

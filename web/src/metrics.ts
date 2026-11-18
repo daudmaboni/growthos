@@ -100,7 +100,8 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
   const unknown = convs.filter((c) => c.source === "unknown");
   const confirmed = (c: Outcome) => Number(c.paid_orders) > 0;
   const attributed = (c: Outcome) => confirmed(c) && !!c.first_paid_at && !!c.started_at && Date.parse(c.first_paid_at) <= Date.parse(c.started_at) + win;
-  const signal = (c: Outcome) => !!c.payment_signal || c.kito_outcome === "sold" || c.outcome_override === "sold";
+  const signal = (c: Outcome) => !(c.override_by && (c.outcome_override === "open" || c.outcome_override === "lost"))
+    && (!!c.payment_signal || c.kito_outcome === "sold" || c.outcome_override === "sold");
   const replied = convs.filter((c) => c.first_response_sec != null);
   const priced = convs.filter((c) => c.price_shared);
   const signals = convs.filter(signal);

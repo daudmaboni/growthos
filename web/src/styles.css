@@ -349,3 +349,9 @@ button.danger { background: var(--bad-soft); color: var(--bad); border-color: va
 button.danger:hover:not(:disabled) { background: var(--bad); color: #fff; }
 .kito-danger { border-top-color: var(--bad); }
 .kito-del-list { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cc-pay { border: 1px solid var(--warn); background: var(--warn-soft); }
+.cc-steps { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.cc-pay-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cc-pay-fields label { display: grid; gap: 3px; }
+.cc-pay-fields input { background: var(--card); }
+@media (max-width: 760px) { .cc-pay-fields { grid-template-columns: 1fr; } }
