@@ -2,7 +2,8 @@
 // period, then runs the central metrics. One place, so both views agree.
 import { useEffect, useRef, useState } from "react";
 import { supabase, Workspace, Outcome, AdPerf, Order, localDay } from "./lib";
-import { computeFunnel, comparisonOf, periodEnding, FunnelMetrics, DailyInsight, Expense } from "./metrics";
+import { computeFunnel, comparisonOf, FunnelMetrics, DailyInsight, Expense } from "./metrics";
+import { RangeSel, resolveRange } from "./ranges";
 
 export type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
 export type Num = { phone_number_id: string; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
@@ -29,7 +30,7 @@ export async function loadConversations(ws: string, fromIso: string) {
   return rows;
 }
 
-export function useGrowthData(ws: Workspace, days: number): GrowthData {
+export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
   const [state, setState] = useState<GrowthData>({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), ws.timezone) });
   // Background refresh: re-read every 2 min and whenever the tab comes back into view.
   // Refreshes are silent (no skeletons); only a new workspace or period shows the loading state.
@@ -54,11 +55,12 @@ export function useGrowthData(ws: Workspace, days: number): GrowthData {
   }, [ws.id]);
   useEffect(() => {
     let live = true;
-    const key = ws.id + "|" + days + "|" + ws.timezone;
+    const rk = JSON.stringify(range);
+    const key = ws.id + "|" + rk + "|" + ws.timezone;
     const silent = loadedKey.current === key;
     const tz = ws.timezone || "Africa/Dar_es_Salaam";
     const today = localDay(new Date(), tz);
-    const period = periodEnding(today, days, "current");
+    const period = resolveRange(range, today);
     const prevP = comparisonOf(period);
     const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
     if (!silent) setState((s) => ({ ...s, loading: true, err: "" }));
@@ -95,6 +97,6 @@ export function useGrowthData(ws: Workspace, days: number): GrowthData {
       }
     })();
     return () => { live = false; };
-  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, days, tick]);
+  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), tick]);
   return state;
 }

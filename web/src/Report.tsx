@@ -4,22 +4,25 @@ import { useMemo, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { Workspace, fmt, pct, money, dur } from "./lib";
 import { useGrowthData } from "./data";
+import DateRange from "./DateRange";
+import { RangeSel, loadRange, saveRange } from "./ranges";
 import { diagnose, Finding } from "./diagnosis";
 import { delta, Metric } from "./metrics";
 import { SourceBadge } from "./Provenance";
 
 export default function Report({ ws }: { ws: Workspace }) {
-  const [days, setDays] = useState(7);
+  const [range, setRangeState] = useState<RangeSel>(() => loadRange("report", { key: "last_7" }));
+  const setRange = (r: RangeSel) => { setRangeState(r); saveRange("report", r); };
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const g = useGrowthData(ws, days);
+  const g = useGrowthData(ws, range);
   const { mx, prev } = g;
   const findings = useMemo(() => (mx ? diagnose(mx, g.convs, g.orders, ws.timezone) : []), [mx, g.convs, g.orders, ws.timezone]);
   const pageRef = usePageEnter<HTMLDivElement>((root) => {
     if (g.loading) return;
     enterCards(select(root, ":scope > .card, .hero"), { stagger: 0.06 });
     enterRows(select(root, ".finding"), { delay: 0.3, x: -8, y: 0, stagger: 0.05 });
-  }, [g.loading, days]);
+  }, [g.loading, JSON.stringify(range)]);
 
   if (g.loading || !mx || !prev) return <div className="skeletons" aria-busy="true"><div className="skeleton" style={{ minHeight: 120 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>;
 
@@ -48,7 +51,7 @@ export default function Report({ ws }: { ws: Workspace }) {
           <h2>{T("Weekly diagnosis", "Uchunguzi wa wiki")}</h2>
           <div className="sub"><span>{mx.period.from} → {mx.period.to}</span><span>{T("vs", "dhidi ya")} {prev.period.from} → {prev.period.to}</span><span>{ws.timezone} · {ws.currency}</span></div>
         </div>
-        <div className="seg" role="group" aria-label="Period">{[7, 14, 30].map((d) => <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)} aria-pressed={days === d}>{d} {T("days", "siku")}</button>)}</div>
+        <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
       </div>
       {g.err && <p className="err">{g.err}</p>}
 

@@ -3,16 +3,19 @@ import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "
 import { Workspace, fmt, pct, dur, L, amt, money, ago, localDay } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
+import DateRange from "./DateRange";
+import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
 import { diagnose } from "./diagnosis";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
 
 export default function Dashboard({ ws }: { ws: Workspace }) {
-  const [days, setDays] = useState(14);
+  const [range, setRangeState] = useState<RangeSel>(() => loadRange("dashboard", { key: "last_7" }));
+  const setRange = (r: RangeSel) => { setRangeState(r); saveRange("dashboard", r); };
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const D = (k: string) => DEFINITIONS[k]?.[lang] ?? "";
-  const g = useGrowthData(ws, days);
+  const g = useGrowthData(ws, range);
   const { mx, prev, ads, daily, loading, err } = g;
   const adCur = mx?.adCurrency ?? ws.currency;
 
@@ -29,10 +32,10 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     const byDay: Record<string, number> = {};
     for (const r of daily) byDay[r.day] = (byDay[r.day] ?? 0) + r.spend;
     const dayList = (from: string, n: number) => Array.from({ length: n }, (_, i) => new Date(new Date(from + "T00:00:00Z").getTime() + i * 864e5).toISOString().slice(0, 10));
-    const labels = dayList(mx.period.from, days), prevDays = dayList(prev.period.from, days);
+    const labels = dayList(mx.period.from, mx.period.days), prevDays = dayList(prev.period.from, prev.period.days);
     const cur = labels.map((d) => byDay[d] ?? 0), pv = prevDays.map((d) => byDay[d] ?? 0);
     return { labels, cur, prev: pv, total: mx.spend.value ?? 0, change: delta(mx.spend, prev.spend) };
-  }, [daily, mx, prev, days]);
+  }, [daily, mx, prev]);
 
   const noData = !loading && !ads.length && !g.convs.length && !g.orders.length;
   const pageRef = usePageEnter<HTMLDivElement>((root) => {
@@ -42,7 +45,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
     growBars(select(root, ".fstep .bar > i, .costrow .bar > i"), { axis: "x", delay: 0.5, stagger: 0.07 });
     enterRows(select(root, "table tbody tr"), { delay: 0.45, stagger: 0.04 });
     enterRows(select(root, ".finding, .legend .li"), { delay: 0.4, x: -8, y: 0, stagger: 0.05 });
-  }, [loading, days, noData]);
+  }, [loading, JSON.stringify(range), noData]);
   const totalRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (!loading) countTo(totalRef.current, trend.total, (n) => money(n, adCur), { duration: 1.2, delay: 0.35 }); }, [loading, trend.total, adCur]);
 
@@ -73,9 +76,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
           )}
         </div>
         <div className="row">
-          <div className="seg" role="group" aria-label="Period">
-            {[7, 14, 30].map((d) => <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)} aria-pressed={days === d}>{d} {T("days", "siku")}</button>)}
-          </div>
+          <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
         </div>
       </div>
       {err && <p className="err">{err}</p>}
