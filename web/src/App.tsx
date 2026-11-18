@@ -1,3 +1,4 @@
+import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
 import { useEffect, useRef, useState } from "react";
 import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
@@ -77,6 +78,8 @@ export default function App() {
   // Keep the bouncing dots up until we know whether to show login, workspace setup or the dashboard.
   useEffect(() => { if (session === null || (session && ws !== undefined)) hidePreloader(); }, [session, ws]);
 
+  const badges = useNavBadges(ws?.id ?? "", view);
+
   if (session === undefined) return <div className="center muted">Loading…</div>;
   if (!session) return <AuthScreen />;
   if (recovering) return <SetNewPassword email={session.user.email ?? ""} onDone={() => setRecovering(false)} />;
@@ -92,8 +95,8 @@ export default function App() {
           <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
           <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
           <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>
-          <a href="#actions" className={view === "actions" ? "on" : ""}>{ws.language === "sw" ? "Vitendo" : "Actions"}</a>
-          <a href="#chats" className={view === "chats" ? "on" : ""}>Chats</a>
+          <a href="#actions" className={view === "actions" ? "on" : ""}>{ws.language === "sw" ? "Vitendo" : "Actions"}<NavBadge badge={actionsBadge(badges, ws.language === "sw")} /></a>
+          <a href="#chats" className={view === "chats" ? "on" : ""}>Chats<NavBadge badge={chatsBadge(badges, ws.language === "sw")} /></a>
           <a href="#content" className={view === "content" ? "on" : ""}>{ws.language === "sw" ? "Maudhui" : "Content"}</a>
           <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
         </nav>
@@ -106,7 +109,7 @@ export default function App() {
           <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
       </header>
-      <BottomNav view={view} sw={ws.language === "sw"} />
+      <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
       {view === "dashboard" && <Dashboard ws={ws} />}
       {view === "kito" && <Kito ws={ws} />}
       {view === "report" && <Report ws={ws} />}
@@ -209,7 +212,7 @@ const ORDER: View[] = ["dashboard", "kito", "chats"];
 const SLOTS = ORDER.length + 1; // + More
 
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
-export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
+export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badges?: Badges }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const close = () => setOpen(false);
@@ -316,6 +319,7 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
             <a key={v} href={"#" + v} className={"sheet-item" + (view === v ? " on" : "")}>
               <span className="sheet-ico">{icon}</span>
               <span><b>{label}</b><span className="small muted">{note}</span></span>
+              {v === "actions" && badges && <NavBadge badge={actionsBadge(badges, sw)} />}
             </a>
           ))}
         </div>
@@ -324,10 +328,10 @@ export function BottomNav({ view, sw }: { view: View; sw: boolean }) {
         onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}>
         <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
-          <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span></a>
+          <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span>{v === "chats" && badges && <NavBadge badge={chatsBadge(badges, sw)} />}</a>
         ))}
         <button type="button" className={moreOn || open ? "on" : ""} aria-expanded={open} onClick={() => setOpen(!open)}>
-          <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span>{L("More", "Zaidi")}</span>
+          <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span>{L("More", "Zaidi")}</span>{badges && <NavBadge badge={actionsBadge(badges, sw)} />}
         </button>
       </nav>
     </>

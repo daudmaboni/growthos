@@ -375,3 +375,14 @@ input.copy-flash { border-color: var(--good) !important; box-shadow: 0 0 0 3px v
 @keyframes copy-pop { 0% { transform: scale(.92); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
 @keyframes copy-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 @media (prefers-reduced-motion: reduce) { button.copy-btn.done, button.copy-btn.fail { animation: none; } }
+
+/* Nav badges, WhatsApp style */
+nav.tabs a, .bottomnav a, .bottomnav button, .sheet-item { position: relative; }
+.navbadge { position: absolute; top: -7px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; display: grid; place-items: center;
+  font: 700 11px/1 var(--font); font-variant-numeric: tabular-nums; color: #fff; box-shadow: 0 0 0 2px var(--paper); pointer-events: none; animation: badge-pop .45s var(--ease); }
+.navbadge.green { background: #25d366; color: #06301a; }
+.navbadge.red { background: #ff3b30; }
+.bottomnav .navbadge { top: 2px; right: calc(50% - 22px); }
+.sheet-item .navbadge { position: static; margin-left: auto; align-self: center; box-shadow: none; }
+@keyframes badge-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .navbadge { animation: none; } }
