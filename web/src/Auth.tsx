@@ -123,10 +123,11 @@ function useGoogleEnabled(): boolean {
   return on;
 }
 
-/** Google's official "G" mark from /google-g.svg (from Google's sign-in branding kit); hidden until that file exists. */
+/** Google's official "G" mark, loaded from Google's own hosted copy for sign-in buttons. Hidden if it can't load. */
+const GOOGLE_G = "https://developers.google.com/identity/images/g-logo.png";
 function GoogleMark() {
   const [ok, setOk] = useState(true);
-  return ok ? <img className="auth-g" src="/google-g.svg" alt="" aria-hidden="true" width={20} height={20} onError={() => setOk(false)} /> : null;
+  return ok ? <span className="auth-g-wrap" aria-hidden="true"><img className="auth-g" src={GOOGLE_G} alt="" width={18} height={18} onError={() => setOk(false)} /></span> : null;
 }
 
 /* ---------- sign in / create account ---------- */
