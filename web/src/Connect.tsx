@@ -68,7 +68,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
   });
 
   const connectDualhook = () => run("dh", async () => {
-    if (dhConns.length && !confirm("This makes a new webhook URL and verify token. The old ones stop working, so you must paste the new ones into Dualhook. Continue?")) return;
+    if (dhConns.length && prompt("This cuts off WhatsApp until you paste the new URL and token into Dualhook. Type REPLACE to continue.") !== "REPLACE") return;
     const r = await callFn<{ webhook_url: string; verify_token: string }>("dualhook-connect", { workspace_id: ws.id });
     setDh(r);
   });
@@ -138,7 +138,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
         {manager && (
           <div className="evidence">
             <div className="row between"><b>Connect through Dualhook</b>
-              {!dh && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : dhConns.length ? "New webhook URL" : "Use Dualhook"}</button>}
+              {!dh && !dhConns.length && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Use Dualhook"}</button>}
             </div>
             <span className="small muted">Use this while itaOS's own Meta approval is pending. Dualhook is a Meta Tech Provider: the number keeps working in the WhatsApp Business app, and Meta sends chats, ad clicks and history straight to itaOS.</span>
             {dhConns.length > 0 && (
@@ -168,6 +168,13 @@ export default function Connect({ ws }: { ws: Workspace }) {
                 <span className="small err">Save both values now: itaOS keeps only a fingerprint and can't show them again.</span>
                 <div className="row"><button onClick={() => setDh(null)}>Done</button></div>
               </>
+            )}
+            {!dh && dhConns.length > 0 && (
+              <details className="small">
+                <summary className="muted">Advanced: replace the webhook URL</summary>
+                <span className="small err" style={{ display: "block", margin: "6px 0" }}>Only do this if the URL was leaked. The current URL stops working immediately, and no WhatsApp messages reach itaOS until you paste the new URL and token into Dualhook (Webhook Override → Change).</span>
+                <button className="small danger" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : "Replace webhook URL"}</button>
+              </details>
             )}
           </div>
         )}
