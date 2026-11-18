@@ -34,7 +34,7 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
       {tab === "business" && <Business ws={ws} onWs={onWs} T={T} />}
       {tab === "profile" && <Profile ws={ws} T={T} />}
       {tab === "appearance" && <Appearance ws={ws} onWs={onWs} theme={theme} onTheme={onTheme} T={T} />}
-      {tab === "rules" && <Rates ws={ws} onWs={onWs} T={T} />}
+      {tab === "rules" && <><Rates ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
       {tab === "account" && <><MyProfile ws={ws} T={T} /><Account email={email} T={T} /></>}
     </div>
   );
@@ -108,6 +108,30 @@ function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: 
         <SaveRow busy={busy} msg={msg} T={T} noButton />
       </form>
     </>
+  );
+}
+
+/** Owners/admins can answer WhatsApp chats from itaOS. This switch turns that off for the whole business. */
+function Replying({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const on = ws.send_enabled !== false;
+  async function toggle() {
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("workspaces").update({ send_enabled: !on }).eq("id", ws.id);
+    setBusy(false);
+    if (error) setErr(error.message); else onWs({ ...ws, send_enabled: !on });
+  }
+  return (
+    <section className="card">
+      <div><h2>{T("Reply to customers from itaOS", "Jibu wateja kutoka itaOS")}</h2>
+        <span className="small muted">{T("The owner and admins can type replies in the chat. They go out from your own WhatsApp number and also appear in the WhatsApp Business app. WhatsApp allows this only within 24 hours of the customer's last message.", "Mmiliki na admin wanaweza kuandika majibu kwenye chat. Yanatoka kwa namba yako ya WhatsApp na pia yanaonekana kwenye app ya WhatsApp Business. WhatsApp inaruhusu hili ndani ya saa 24 tangu ujumbe wa mwisho wa mteja.")}</span></div>
+      <label className="row" style={{ gap: 10, cursor: canManage(ws) ? "pointer" : "default" }}>
+        <input type="checkbox" checked={on} disabled={busy || !canManage(ws)} onChange={toggle} />
+        <span>{on ? T("On: replies can be sent from itaOS", "Imewashwa: majibu yanaweza kutumwa kutoka itaOS") : T("Off: itaOS only reads chats", "Imezimwa: itaOS inasoma chat tu")}</span>
+      </label>
+      {err && <span className="err small">{err}</span>}
+    </section>
   );
 }
 

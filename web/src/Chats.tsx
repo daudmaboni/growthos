@@ -20,7 +20,7 @@ const inFilter = (r: Lite, f: Filter) =>
   : f === "follow" ? r.outcome !== "sold" && (r.kito_temp === "hot" || r.kito_temp === "warm" || (r.kito_temp == null && r.warm))
   : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
   : r.outcome === f;
-const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? r.phone_number_id === "import" : r.phone_number_id !== "import");
+const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? (r as any).phone_number_id === "import" : r.phone_number_id !== "import");
 
 const PAGE = 100;
 
@@ -229,7 +229,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const pick = (f: Filter) => { setIds(null); setFilter(f); setLimit(PAGE); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
   const pool = lite.filter((r) => inSource(r, src));
   const count = (f: Filter) => counts ? Number(counts[f] ?? 0) : pool.filter((r) => inFilter(r, f)).length;
-  const imported = counts ? Number(counts.imported ?? 0) : lite.filter((r) => r.phone_number_id === "import").length;
+  const imported = counts ? Number(counts.imported ?? 0) : lite.filter((r) => (r as any).phone_number_id === "import").length;
   const total = counts ? Number(counts.all ?? 0) : lite.length;
   const shownTotal = filter === "ids" ? rows.length : count(filter);
   const tz = ws.timezone || "Africa/Dar_es_Salaam";
@@ -478,17 +478,14 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
                     <div className={"wa-msg " + m.direction + (tail ? " tail" : "")}>
                       <div className="wa-bub">
                         {m.media?.path ? <MediaView m={m} T={T} /> : <span className="wa-text">{m.body ?? ""}</span>}
-                        <span className="wa-meta">{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden>✓✓</span>}</span>
+                        <span className="wa-meta">{m.origin === "itaos" && <span className="wa-via" title={T("Sent from itaOS", "Imetumwa kutoka itaOS")}>itaOS · </span>}{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden>✓✓</span>}</span>
                       </div>
                     </div>
                   </div>
                 );
               })}
           </div>
-          <div className="wa-compose">
-            <span>{T("itaOS only reads your chats. Reply from WhatsApp.", "itaOS inasoma chat tu. Jibu kupitia WhatsApp.")}</span>
-            {phone && <a className="btn small primary" href={waLink(phone)} target="_blank" rel="noopener noreferrer">{T("Open WhatsApp ↗", "Fungua WhatsApp ↗")}</a>}
-          </div>
+          <Composer r={r} ws={ws} T={T} phone={phone} msgs={msgs} onSent={loadMsgs} />
         </div>
         <aside className="wa-side" aria-label={T("About this customer", "Kuhusu mteja huyu")}>
           <div className="wa-side-head"><b>{T("This customer", "Mteja huyu")}</b><button className="icon wa-side-x" onClick={() => setSide(false)} aria-label={T("Hide", "Ficha")}>✕</button></div>
@@ -530,6 +527,77 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
           </details>
           {err && <div className="err small">{err}</div>}
         </aside>
+      </div>
+    </div>
+  );
+}
+
+/** Reply box at the bottom of the chat, like WhatsApp's. Sends from the business's own number through
+ *  the wa-send function. WhatsApp allows free replies only within 24 h of the customer's last message. */
+function Composer({ r, ws, T, phone, msgs, onSent }: { r: Outcome; ws: Workspace; T: Tr; phone: string | null; msgs: Msg[] | null; onSent: () => Promise<void> | void }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [err, setErr] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { setText(""); setErr(""); }, [r.id]);
+  useEffect(() => { const el = box.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; } }, [text]);
+
+  const openWa = phone && <a className="btn small" href={waLink(phone)} target="_blank" rel="noopener noreferrer">{T("Open WhatsApp ↗", "Fungua WhatsApp ↗")}</a>;
+  if (!canManage(ws) || ws.send_enabled === false || (r as any).phone_number_id === "import") {
+    return (
+      <div className="wa-compose">
+        <span>{(r as any).phone_number_id === "import" ? T("This chat came from an uploaded file. Reply from WhatsApp.", "Chat hii imetoka kwenye faili. Jibu kupitia WhatsApp.")
+          : !canManage(ws) ? T("Only the owner or an admin can reply from itaOS.", "Mmiliki au admin pekee anaweza kujibu kutoka itaOS.")
+          : T("Replying from itaOS is turned off in Settings.", "Kujibu kutoka itaOS kumezimwa kwenye Mipangilio.")}</span>
+        {openWa}
+      </div>
+    );
+  }
+  const lastIn = msgs ? [...msgs].reverse().find((m) => m.direction === "in") : null;
+  const left = lastIn ? 24 * 3600e3 - (Date.now() - Date.parse(lastIn.sent_at)) : -1;
+  if (msgs && left <= 0) {
+    return (
+      <div className="wa-compose closed">
+        <span>{T("24 hours have passed since their last message, so WhatsApp only allows approved template messages. Reply from the WhatsApp app.", "Zimepita saa 24 tangu ujumbe wake wa mwisho, kwa hiyo WhatsApp inaruhusu ujumbe wa template tu. Jibu kupitia app ya WhatsApp.")}</span>
+        {openWa}
+      </div>
+    );
+  }
+  async function send() {
+    const t = text.trim();
+    if (!t || sending) return;
+    setSending(true); setErr("");
+    try {
+      await callFn("wa-send", { workspace_id: ws.id, conversation_id: r.id, text: t });
+      setText(""); await onSent();
+    } catch (e) { setErr((e as Error).message); }
+    setSending(false); box.current?.focus();
+  }
+  async function draft() {
+    setDrafting(true); setErr("");
+    try {
+      const d = await callFn<{ draft_sw: string; draft_en: string }>("kito", { workspace_id: ws.id, action: "draft_reply", conversation_id: r.id });
+      setText(ws.language === "en" ? d.draft_en || d.draft_sw : d.draft_sw || d.draft_en); box.current?.focus();
+    } catch (e) { setErr((e as Error).message); }
+    setDrafting(false);
+  }
+  const hours = Math.floor(left / 3600e3), mins = Math.max(1, Math.round((left % 3600e3) / 60000));
+  return (
+    <div className="wa-compose open">
+      {(err || (msgs && left < 3 * 3600e3)) && (
+        <div className={"wa-compose-note small" + (err ? " err" : "")}>{err || T(`The 24-hour window closes in ${hours ? `${hours} h ` : ""}${mins} min. After that, only template messages.`, `Dirisha la saa 24 linafungwa baada ya ${hours ? `saa ${hours} ` : ""}dakika ${mins}. Baada ya hapo, template tu.`)}</div>
+      )}
+      <div className="wa-compose-row">
+        <button className="wa-kito" onClick={draft} disabled={drafting || sending} title={T("Kito writes a reply from this chat. You check it before sending.", "Kito anaandika jibu kutoka chat hii. Unaliangalia kabla ya kutuma.")}>
+          {drafting ? "…" : "✦"}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
+        </button>
+        <textarea ref={box} rows={1} value={text} placeholder={T("Type a message", "Andika ujumbe")} aria-label={T("Message", "Ujumbe")}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 900) { e.preventDefault(); send(); } }} />
+        <button className="wa-send" onClick={send} disabled={!text.trim() || sending} aria-label={T("Send", "Tuma")} title={T("Send from your WhatsApp number", "Tuma kutoka namba yako ya WhatsApp")}>
+          {sending ? <span className="wa-spin" /> : <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z" /></svg>}
+        </button>
       </div>
     </div>
   );

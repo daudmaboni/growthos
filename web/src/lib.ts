@@ -22,8 +22,8 @@ export async function callFn<T = any>(name: string, body: Record<string, unknown
 
 export type Role = "owner" | "admin" | "analyst" | "viewer";
 export type Workspace = { id: string; name: string; currency: string; language: "sw" | "en"; unit_cost: number | null; fx_rate: number | null;
-  timezone: string; follow_up_hours: number; conversion_window_days: number; role?: Role };
-export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,timezone,follow_up_hours,conversion_window_days";
+  timezone: string; follow_up_hours: number; conversion_window_days: number; send_enabled?: boolean; role?: Role };
+export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,timezone,follow_up_hours,conversion_window_days,send_enabled";
 export const canEdit = (ws: Workspace) => ws.role == null || ws.role !== "viewer";
 export const canManage = (ws: Workspace) => ws.role === "owner" || ws.role === "admin";
 

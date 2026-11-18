@@ -571,3 +571,25 @@ button.wa-side-btn.warn { border-color: var(--warn); color: var(--warn); }
   .wa-side { top: auto; left: 0; right: 0; width: auto; max-height: 78%; border-left: 0; border-radius: 18px 18px 0 0; transform: translateY(105%); box-shadow: 0 -12px 30px -10px #00000059; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
   .wa-pane.side-open .wa-side { transform: none; }
 }
+
+/* Reply box (sends through wa-send) */
+.wa-compose.open { display: grid; gap: 6px; padding: 8px 10px; }
+.wa-compose.closed span { color: var(--wa-meta); }
+.wa-compose-row { display: flex; align-items: flex-end; gap: 8px; }
+.wa-compose-row textarea { flex: 1; resize: none; min-height: 42px; max-height: 160px; padding: 10px 14px; border-radius: 22px; border: 0; background: var(--wa-in); color: var(--wa-ink); font: 15px/1.4 var(--font); box-shadow: 0 1px .5px #0b141a21; outline: none; }
+.wa-compose-row textarea::placeholder { color: var(--wa-meta); }
+button.wa-send { width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 0; display: grid; place-items: center; background: #00a884; color: #fff; flex: none; }
+button.wa-send:hover:not(:disabled) { background: #06cf9c; }
+button.wa-send:disabled { opacity: .45; }
+button.wa-kito { height: 42px; padding: 0 12px; border-radius: 21px; display: inline-flex; align-items: center; gap: 6px; flex: none; background: transparent; border: 1px solid var(--wa-line); color: var(--wa-ink); font-weight: 650; }
+button.wa-kito > :first-child, button.wa-kito { font-size: 14px; }
+button.wa-kito:hover:not(:disabled) { background: var(--wa-dot); }
+.wa-compose-note { color: var(--wa-meta); padding: 0 4px; }
+.wa-compose-note.err { color: var(--bad); }
+.wa-via { opacity: .85; }
+.wa-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #ffffff66; border-top-color: #fff; animation: wa-spin .8s linear infinite; }
+@keyframes wa-spin { to { transform: rotate(360deg); } }
+@media (max-width: 899px) { button.wa-kito span { display: none; } button.wa-kito { padding: 0; width: 42px; justify-content: center; } }
+.wa-compose.open { justify-content: stretch; }
+.wa-compose-row textarea { background: var(--wa-input, #ffffff); min-width: 0; }
+:root:not([data-theme="light"]) .wa-compose-row textarea { --wa-input: #2a3942; }
