@@ -60,7 +60,8 @@ export async function reanalyze(db: SupabaseClient, conversationIds: string[]) {
     }).eq("id", id);
     if (updateError) throw new Error(`could not save conversation analysis: ${updateError.message}`);
     // The owner's "175,000✅" reply becomes a confirmed paid order (see ticks.ts).
-    await confirmTicks(db, id, msgs as TickMsg[]);
+    // Never let this block message processing: a failure here is logged and retried on the next message.
+    await confirmTicks(db, id, msgs as TickMsg[]).catch((e) => console.error("tick orders", String((e as Error)?.message ?? e).slice(0, 200)));
   }
 }
 
