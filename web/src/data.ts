@@ -42,6 +42,16 @@ export function useGrowthData(ws: Workspace, days: number): GrowthData {
     window.addEventListener("focus", bump);
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", bump); window.removeEventListener("focus", bump); };
   }, []);
+  // Live: a new chat message, a Kito label or a recorded sale refreshes the numbers right away.
+  useEffect(() => {
+    let t: number | undefined;
+    const soon = () => { window.clearTimeout(t); t = window.setTimeout(() => setTick((x) => x + 1), 1500); };
+    const ch = supabase.channel("growth-" + ws.id)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, soon)
+      .subscribe();
+    return () => { window.clearTimeout(t); supabase.removeChannel(ch); };
+  }, [ws.id]);
   useEffect(() => {
     let live = true;
     const key = ws.id + "|" + days + "|" + ws.timezone;

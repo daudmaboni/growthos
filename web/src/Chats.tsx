@@ -9,7 +9,8 @@ import { OrderForm, OrderList, inferredFrom, signalDismissed } from "./Orders";
 type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "ids";
 type Source = "any" | "live" | "import";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
-type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string };
+type Receipt = { is_receipt: boolean; amount: number | null; currency: string | null; txn_code: string | null; provider: string | null; paid_to: string | null; sender: string | null; paid_at: string | null; confidence: string; notes: string | null };
+type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string; type: string; media: { path?: string; mime?: string; receipt?: Receipt | null; error?: string } | null };
 type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; override_by: string | null; phone_number_id: string };
 type Tr = (en: string, sw: string) => string;
 
@@ -71,6 +72,25 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const lang = ws.language;
   const T: Tr = (en, sw) => (lang === "sw" ? sw : en);
   const refresh = () => setTick((t) => t + 1);
+  const [quiet, setQuiet] = useState(false);   // live refresh: update in place, no "Loading…"
+  const [live, setLive] = useState(false);
+
+  // Live: new WhatsApp messages, Kito's labels and recorded sales appear without reloading.
+  useEffect(() => {
+    let timer: number | undefined, kitoTimer: number | undefined;
+    const bump = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { setQuiet(true); refresh(); window.dispatchEvent(new Event("itaos:live")); }, 800); };
+    const ch = supabase.channel("chats-" + ws.id)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, bump)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, () => {
+        bump();
+        // Let Kito read the new message shortly after it lands (it only reads changed chats).
+        window.clearTimeout(kitoTimer); kitoTimer = window.setTimeout(() => { callFn("kito", { workspace_id: ws.id }).then(() => { setQuiet(true); refresh(); }).catch(() => {}); }, 20000);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `workspace_id=eq.${ws.id}` }, () => window.dispatchEvent(new Event("itaos:live")))
+      .subscribe((status) => setLive(status === "SUBSCRIBED"));
+    return () => { window.clearTimeout(timer); window.clearTimeout(kitoTimer); supabase.removeChannel(ch); };
+  }, [ws.id]);
 
   useEffect(() => {
     const onHash = () => { const i = hashIds(); setIds(i); if (i) setFilter("ids"); };
@@ -79,7 +99,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
   }, []);
 
   useEffect(() => {
-    setLoading(true); setErr("");
+    if (!quiet) setLoading(true);
+    setQuiet(false); setErr("");
     let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).order("last_message_at", { ascending: false }).limit(300);
     if (filter !== "ids" && src === "import") q = q.eq("phone_number_id", "import");
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
@@ -182,7 +203,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     <section className="card chats" ref={pageRef}>
       <div className="chats-head">
         <div>
-          <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(lite.length)}</span></h2>
+          <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(lite.length)}</span>{live && <span className="live-dot" title={T("Live: updates by itself when a message arrives", "Hai: inajisasisha ujumbe ukiingia")}>{T("Live", "Hai")}</span>}</h2>
           <span className="small muted">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
         <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
@@ -267,8 +288,14 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
   const why = r.kito_temp ? r.kito_blocker : (r.objections ?? [])[0] ?? null;
 
   useEffect(() => { if (open && !msgs) loadMsgs(); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const on = () => loadMsgs();
+    window.addEventListener("itaos:live", on);
+    return () => window.removeEventListener("itaos:live", on);
+  }, [open]);
   async function loadMsgs() {
-    const { data } = await supabase.from("messages").select("id,direction,sent_at,body,origin").eq("conversation_id", r.id).order("sent_at").limit(500);
+    const { data } = await supabase.from("messages").select("id,direction,sent_at,body,origin,type,media").eq("conversation_id", r.id).order("sent_at").limit(500);
     setMsgs((data as Msg[]) ?? []);
   }
   async function setOverride(v: "lost" | "open" | null) {
@@ -325,7 +352,7 @@ function Card({ r, ws, T, adName, phone, task, onChange, startOpen }: { r: Outco
               <div className="bubbles">{msgs.map((m) => (
                 <div key={m.id} className={"bub " + m.direction}>
                   <span className="t">{m.direction === "in" ? name : T("You", "Wewe")} · {when(m.sent_at)}</span>
-                  {m.body ?? ""}
+                  {m.media?.path ? <MediaView m={m} T={T} /> : (m.body ?? "")}
                 </div>
               ))}</div>
             )}
@@ -400,9 +427,13 @@ function lastPriceSent(msgs: Msg[] | null): number | null {
 
 /** "Says they paid": the owner checks their own M-Pesa / bank, then confirms in one tap. */
 function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace; T: Tr; msgs: Msg[] | null; onDone: () => void }) {
-  const guess = r.kito_amount ?? r.payment_amount ?? lastPriceSent(msgs);
+  const rc = [...(msgs ?? [])].reverse().find((m) => m.direction === "in" && m.media?.receipt?.is_receipt);
+  const receipt = rc?.media?.receipt ?? null;
+  const guess = receipt?.amount ?? r.kito_amount ?? r.payment_amount ?? lastPriceSent(msgs);
+  const priced = lastPriceSent(msgs);
   const [amount, setAmount] = useState("");
   const [code, setCode] = useState("");
+  useEffect(() => { if (!code && receipt?.txn_code) setCode(receipt.txn_code); }, [receipt?.txn_code]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => { if (!amount && guess) setAmount(Math.round(Number(guess)).toLocaleString("en-US")); }, [guess]);
@@ -432,8 +463,19 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   return (
     <div className="cc-ask cc-pay">
       <b>{T("Did the money really come in?", "Pesa imeingia kweli?")}</b>
+      {receipt && (
+        <div className="cc-receipt small">
+          <b>{T("Kito read the screenshot:", "Kito amesoma picha:")}</b>
+          <span>{[receipt.provider, receipt.amount ? money(receipt.amount, receipt.currency ?? ws.currency) : null, receipt.txn_code ? T(`code ${receipt.txn_code}`, `muamala ${receipt.txn_code}`) : null].filter(Boolean).join(" · ")}</span>
+          {receipt.paid_to && <span>{T("Paid to", "Imelipwa kwa")}: {receipt.paid_to}</span>}
+          {receipt.paid_at && <span>{T("Time on receipt", "Muda kwenye risiti")}: {receipt.paid_at}</span>}
+          {priced && receipt.amount && Math.round(receipt.amount) !== priced && <span className="warnt">⚠ {T(`Amount differs from the price you sent (${money(priced, ws.currency)}).`, `Kiasi ni tofauti na bei uliyotuma (${money(priced, ws.currency)}).`)}</span>}
+          {receipt.confidence === "low" && <span className="warnt">⚠ {T("Hard to read — check carefully.", "Haisomeki vizuri — kagua kwa makini.")}</span>}
+          {receipt.notes && <span className="muted">{receipt.notes}</span>}
+        </div>
+      )}
       <ol className="small cc-steps">
-        <li>{T("Open your own M-Pesa / Lipa namba / bank messages or app — not the customer's screenshot.", "Fungua ujumbe au app YAKO ya M-Pesa / Lipa namba / benki — si picha ya mteja.")}</li>
+        <li>{T("A screenshot can be edited or reused. Open your own M-Pesa / Lipa namba / bank messages or app — not the customer's screenshot.", "Picha inaweza kughushiwa au kutumwa tena. Fungua ujumbe au app YAKO ya M-Pesa / Lipa namba / benki — si picha ya mteja.")}</li>
         <li>{T("Find a payment with the same amount, around the same time, from this customer's name or number.", "Tafuta malipo ya kiasi hicho, muda huo huo, kutoka jina au namba ya mteja huyu.")}</li>
         <li>{T("Copy its transaction code (e.g. QK41ABC9XY) below.", "Nakili namba ya muamala (mf. QK41ABC9XY) hapa chini.")}</li>
       </ol>
@@ -448,5 +490,28 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
       <span className="small muted">{T("\"Yes\" records the sale, so it shows in your revenue right away.", "\"Ndiyo\" inarekodi mauzo, na yanaonekana kwenye mapato papo hapo.")}</span>
       {err && <span className="err small">{err}</span>}
     </div>
+  );
+}
+
+/** A saved image or PDF from the customer, with what Kito read from it. */
+function MediaView({ m, T }: { m: Msg; T: Tr }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (!m.media?.path) return;
+    supabase.storage.from("wa-media").createSignedUrl(m.media.path, 3600).then(({ data }) => setUrl(data?.signedUrl ?? null));
+  }, [m.media?.path]);
+  const r = m.media?.receipt;
+  const isPdf = m.media?.mime === "application/pdf";
+  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha")).join("\n");
+  return (
+    <span className="mv">
+      {url && (isPdf
+        ? <a href={url} target="_blank" rel="noopener noreferrer">📄 {T("Open PDF", "Fungua PDF")}</a>
+        : <img src={url} alt={T("Image from customer", "Picha kutoka kwa mteja")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
+      {caption && <span>{caption}</span>}
+      {r?.is_receipt ? <span className="mv-tag">🧾 {T("Payment screenshot", "Picha ya malipo")}{r.amount ? ` · ${Math.round(r.amount).toLocaleString("en-US")}` : ""}{r.txn_code ? ` · ${r.txn_code}` : ""}</span>
+        : r ? <span className="mv-tag muted">{r.notes ?? T("Not a payment", "Si malipo")}</span> : null}
+    </span>
   );
 }

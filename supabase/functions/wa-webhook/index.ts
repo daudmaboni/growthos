@@ -14,6 +14,7 @@
 // runs after the response and is idempotent; failed events are retried by the scheduled job
 // (bounded by max_attempts) or replayed on request by a workspace owner/admin.
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
+import { captureMedia } from "../_shared/media.ts";
 import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, type Envelope } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
@@ -67,6 +68,8 @@ async function saveMessage(ctx: Ctx, convId: string, m: any, direction: "in" | "
     sent_at: new Date(Number(m.timestamp) * 1000).toISOString(), type: m.type, body: textOf(m), raw: m,
   }, { onConflict: "id", ignoreDuplicates: true });
   if (error) throw new Error("could not save message");
+  // Payment screenshots: WhatsApp's link expires in minutes, so save + read it now (never throws).
+  if (direction === "in" && origin === "webhook" && (m.type === "image" || m.type === "document")) await captureMedia(ctx.db, ctx.ws, m.id, m);
   ctx.touched.push(convId);
 }
 

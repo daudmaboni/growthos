@@ -4,7 +4,7 @@ export type Msg = { direction: "in" | "out"; sent_at: string; body: string | nul
 const SIG = {
   askPrice: /(\bbei\b|ngapi|gharama|price|how much|\bcost\b|shilingi ngapi|sh ngapi)/i,
   priceAmount: /((tsh|tzs|sh\.?|shs|shilingi)\s*\.?\s*[\d][\d,. ]{2,}|[\d][\d,.]{2,}\s*(\/=|tsh|tzs|shilingi)|\b\d{1,3}[,.]\d{3}\b|\belfu\s+\w+)/i,
-  paidCustomer: /(nimetuma|nimelipa|nimeshatuma|nimeshalipa|nimekutumia|\bpaid\b|i have paid|i'?ve (sent|paid)|sent the money|muamala|\bconfirmed\b|imethibitishwa|transaction)/i,
+  paidCustomer: /(\[picha ya malipo\]|nimetuma|nimelipa|nimelipia|nimeshalipia|nimeshalipa|nimeweka (pesa|hela)|nimesend|nimeshatuma|nimeshalipa|nimekutumia|\bpaid\b|i have paid|i'?ve (sent|paid)|sent the money|muamala|\bconfirmed\b|imethibitishwa|transaction)/i,
   paidBusiness: /(tumepokea (malipo|pesa|tsh|tzs|sh)|malipo yamepokelewa|tumepokea\b.*\d|payment received|received your payment|asante kwa malipo|mzigo unatoka|order (is )?confirmed)/i,
   mpesaCode: /\b[A-Z0-9]{10}\b\s+(confirmed|imethibitishwa)/i,
   payInstr: /(lipa namba|till|paybill|akaunti|m-?pesa|tigo ?pesa|airtel ?money|halopesa|nalipa vipi|how do i pay)/i,

@@ -355,3 +355,11 @@ button.danger:hover:not(:disabled) { background: var(--bad); color: #fff; }
 .cc-pay-fields label { display: grid; gap: 3px; }
 .cc-pay-fields input { background: var(--card); }
 @media (max-width: 760px) { .cc-pay-fields { grid-template-columns: 1fr; } }
+.live-dot { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; font-size: 11.5px; font-weight: 700; color: var(--good); vertical-align: middle; }
+.live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 50% { opacity: .35; } }
+.cc-receipt { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.mv { display: grid; gap: 4px; }
+.mv img { max-width: 220px; max-height: 260px; border-radius: 8px; cursor: zoom-in; object-fit: cover; }
+.mv img.big { max-width: min(520px, 100%); max-height: none; cursor: zoom-out; }
+.mv-tag { font-size: 12px; font-weight: 600; }
