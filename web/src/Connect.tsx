@@ -21,6 +21,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const [tick, setTick] = useState(0);
   const [d360Key, setD360Key] = useState("");
   const [showD360, setShowD360] = useState(false);
+  const [dh, setDh] = useState<{ webhook_url: string; verify_token: string } | null>(null);
   const [health, setHealth] = useState<Health[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const manager = canManage(ws);
@@ -66,6 +67,13 @@ export default function Connect({ ws }: { ws: Workspace }) {
     setMsg({ ok: "Connected through 360dialog. The number appears here when its first message arrives; chat history (if you shared it during 360dialog signup) follows over the next few hours." });
   });
 
+  const connectDualhook = () => run("dh", async () => {
+    if (dhConns.length && !confirm("This makes a new webhook URL and verify token. The old ones stop working, so you must paste the new ones into Dualhook. Continue?")) return;
+    const r = await callFn<{ webhook_url: string; verify_token: string }>("dualhook-connect", { workspace_id: ws.id });
+    setDh(r);
+  });
+  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => setMsg({ ok: "Copied." }), () => setMsg({ err: "Copy failed. Select the text and copy it by hand." }));
+
   const replay = () => run("replay", async () => {
     const r = await callFn<{ requeued: number; processed: number; checked: number }>("wa-webhook", { action: "replay", workspace_id: ws.id });
     setMsg({ ok: `Requeued ${r.requeued} events; ${r.processed} of ${r.checked} processed now. The rest retry on the next scheduled run.` });
@@ -76,6 +84,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const adsConns = conns.filter((c) => c.provider === "meta_ads");
   const waConns = conns.filter((c) => c.provider === "whatsapp");
   const d360Conns = waConns.filter((c) => c.external_id.startsWith("360dialog:"));
+  const dhConns = waConns.filter((c) => c.external_id.startsWith("dualhook:"));
   const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card, :scope > .finding"), { stagger: 0.07 }); });
 
   return (
@@ -107,6 +116,32 @@ export default function Connect({ ws }: { ws: Workspace }) {
           <button className="primary" disabled={!!busy || !metaConfigured() || !manager} title={manager ? "" : "Only an owner or admin can connect accounts"} onClick={connectWa}>{busy === "wa" ? "Connecting…" : waConns.length ? "Connect another number" : "Connect WhatsApp"}</button>
         </div>
         <p className="small muted" style={{ margin: 0 }}>Keeps working on your phone as before. itaOS reads chats (and the last 6 months of history, once) to find where sales are lost. It doesn't send messages.</p>
+        {dhConns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from Meta via Dualhook" />)}
+        {manager && (
+          <div className="evidence">
+            <div className="row between"><b>Connect through Dualhook</b>
+              {!dh && <button className="small" disabled={!!busy} onClick={connectDualhook}>{busy === "dh" ? "Creating…" : dhConns.length ? "New webhook URL" : "Use Dualhook"}</button>}
+            </div>
+            <span className="small muted">Use this while itaOS's own Meta approval is pending. Dualhook is a Meta Tech Provider: the number keeps working in the WhatsApp Business app, and Meta sends chats, ad clicks and history straight to itaOS.</span>
+            {dh && (
+              <>
+                <ol className="small" style={{ margin: "4px 0", paddingLeft: 18 }}>
+                  <li>In Dualhook, start a new connection and choose <b>Webhook Override</b>. Paste these two values <b>before</b> you open Meta's signup window:</li>
+                </ol>
+                <label className="small">Webhook URL</label>
+                <div className="row"><input readOnly value={dh.webhook_url} style={{ flex: 1 }} onFocus={(e) => e.target.select()} /><button className="small" onClick={() => copy(dh.webhook_url)}>Copy</button></div>
+                <label className="small">Verify token</label>
+                <div className="row"><input readOnly value={dh.verify_token} style={{ flex: 1 }} onFocus={(e) => e.target.select()} /><button className="small" onClick={() => copy(dh.verify_token)}>Copy</button></div>
+                <ol className="small" start={2} style={{ margin: "4px 0", paddingLeft: 18 }}>
+                  <li>Continue in Dualhook: choose <b>"Connect your existing WhatsApp Business app"</b>, scan the QR on the phone and <b>allow chat history sharing</b>.</li>
+                  <li>The number appears here with its first message; the last 6 months of chats follow over a few hours.</li>
+                </ol>
+                <span className="small err">Save both values now: itaOS keeps only a fingerprint and can't show them again.</span>
+                <div className="row"><button onClick={() => setDh(null)}>Done</button></div>
+              </>
+            )}
+          </div>
+        )}
         {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
         {manager && (
           <div className="evidence">

@@ -21,7 +21,7 @@ Nothing in this repository deploys itself. To put the MVP live (after review):
 2. **Edge Functions** — deploy the changed and new functions. `wa-webhook` must stay public to Meta (no JWT check); the others keep the default JWT check.
    ```
    supabase functions deploy wa-webhook --no-verify-jwt
-   supabase functions deploy ads-sync meta-connect kito kito-ask csv-import chat-import d360-connect
+   supabase functions deploy ads-sync meta-connect kito kito-ask csv-import chat-import d360-connect dualhook-connect
    supabase functions delete sales-import     # replaced by csv-import
    ```
    Ask Kito uses the same `ANTHROPIC_API_KEY` secret. Optional: `KITO_ASK_MODEL` (default `claude-sonnet-5-5`) and `KITO_ASK_HOURLY` (questions per person per hour, default 40).
@@ -91,6 +91,22 @@ You need to be an admin of the Kayani Herbs Business Portfolio.
    - WhatsApp Web / Desktop on other devices gets logged out once. Link them again from the phone.
    - The phone keeps working exactly as before. GrowthOS only reads.
 5. Wait a few hours for the 6-month history to arrive. Then open **Dashboard** and **Chats**.
+
+## 3a. Bridge: connect WhatsApp through Dualhook (chosen bridge, while Pondi's Meta verification is pending)
+
+Dualhook is a Meta Tech Provider with Coexistence (the WhatsApp Business app keeps working on the phone) and **Webhook Override**: Meta itself sends `messages`, `smb_message_echoes`, `history` and `smb_app_state_sync` to our URL in Meta's normal format, so ad referrals (`ctwa_clid`) and the 6-month history arrive exactly as with our own app. Dualhook doesn't store message content. Developer plan: $12/month for 1 number (14-day free trial); Team $25/month for 5.
+
+Meta signs override traffic with Dualhook's app secret, which we don't have, so the URL itself carries a per-workspace secret: `…/functions/v1/wa-webhook/dh/<64-hex secret>`, plus a separate verify token for Meta's GET challenge. Only SHA-256 hashes of both are stored.
+
+1. Deploy `wa-webhook` (still `--no-verify-jwt`) and `dualhook-connect` (normal JWT check). No new secrets or migrations.
+2. If the number is connected to 360dialog, disconnect it first (WhatsApp Business app → Settings → Account → Business Platform → Disconnect).
+3. itaOS → Connect → WhatsApp Business → **Use Dualhook**. Copy the webhook URL and verify token shown (shown once; "New webhook URL" rotates both and the old URL stops working).
+4. Sign up at dualhook.com (Developer plan trial). Start a connection, choose Webhook Override and paste the URL + verify token **before** opening Meta's signup window. Order matters: Meta sends the one-time history only to the URL set when the number connects.
+5. In Meta's window choose **"Connect your existing WhatsApp Business app"**, scan the QR on the phone, **allow chat history sharing**.
+6. Send a test message and click a Click-to-WhatsApp ad from another phone. The number appears on the Connect page after the first event.
+7. Open the WhatsApp Business app on the phone at least every ~13 days, or Meta disconnects Coexistence.
+
+**Leaving the bridge later:** disconnect from Dualhook the same way as in step 2, then use **Connect WhatsApp** (Embedded Signup) once Pondi is a Tech Provider.
 
 ## 3b. Bridge: connect WhatsApp through 360dialog (while Pondi's Meta verification is pending)
 

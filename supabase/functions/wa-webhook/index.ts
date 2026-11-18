@@ -4,9 +4,11 @@
 //
 // Two ways in:
 //  - Meta delivers directly (our own Meta app): signed with x-hub-signature-256.
-//  - A partner (360dialog) relays Meta's events while ItaOS's own Tech Provider access is
-//    pending: authenticated by a per-workspace secret in x-growthos-token (set by d360-connect).
-//    Those events can only land in that token's workspace.
+//  - A partner relays Meta's events while ItaOS's own Tech Provider access is pending. Those
+//    events can only land in the workspace their secret belongs to:
+//      · 360dialog: per-workspace secret in the x-growthos-token header (set by d360-connect).
+//      · Dualhook (Webhook Override): Meta posts directly, signed with Dualhook's app secret, to
+//        /wa-webhook/dh/<secret> (set by dualhook-connect). The path secret replaces the signature.
 //
 // Durability: every verified change is saved to raw_events BEFORE Meta gets a 200. Processing
 // runs after the response and is idempotent; failed events are retried by the scheduled job
@@ -199,15 +201,34 @@ async function retryBatch(db: SupabaseClient, ws: string | null, limit: number) 
   return { processed, checked: rows.length };
 }
 
+type Via = "360dialog" | "dualhook";
+
+async function bridgeConnection(via: Via, token: string) {
+  const hash = await sha256Hex(token);
+  return await admin().from("connections").select("id,workspace_id,external_id,status,meta")
+    .eq("provider", "whatsapp").eq("meta->>via", via).eq("meta->>webhook_token_hash", hash).maybeSingle();
+}
+
+/** Meta's GET challenge for a Dualhook Webhook Override URL. */
+async function dualhookVerify(url: URL, token: string) {
+  if (url.searchParams.get("hub.mode") !== "subscribe") return new Response("forbidden", { status: 403 });
+  const { data: conn, error } = await bridgeConnection("dualhook", token);
+  if (error) return new Response("temporary lookup failure", { status: 500 });
+  const given = url.searchParams.get("hub.verify_token") ?? "";
+  if (!conn || conn.status === "revoked" || !given || (await sha256Hex(given)) !== conn.meta?.verify_token_hash) {
+    return new Response("forbidden", { status: 403 });
+  }
+  await admin().from("connections").update({ meta: { ...conn.meta, verified_at: new Date().toISOString() } }).eq("id", conn.id);
+  return new Response(url.searchParams.get("hub.challenge") ?? "", { status: 200 });
+}
+
 /**
- * 360dialog relay. The token identifies exactly one workspace connection. Numbers seen for the
+ * Partner relay. The token identifies exactly one workspace connection. Numbers seen for the
  * first time are registered to that workspace; a number owned by another workspace is refused.
  */
-async function bridgeDelivery(req: Request, token: string) {
+async function bridgeDelivery(req: Request, via: Via, token: string) {
   const db = admin();
-  const hash = await sha256Hex(token);
-  const { data: conn, error } = await db.from("connections").select("id,workspace_id,external_id,status")
-    .eq("provider", "whatsapp").eq("meta->>via", "360dialog").eq("meta->>webhook_token_hash", hash).maybeSingle();
+  const { data: conn, error } = await bridgeConnection(via, token);
   if (error) return new Response("temporary lookup failure", { status: 500 });
   if (!conn || conn.status === "revoked") return new Response("unknown token", { status: 401 });
 
@@ -238,7 +259,9 @@ async function bridgeDelivery(req: Request, token: string) {
       }
       if (changes.length) kept.entry.push({ id: entry.id, changes });
     }
-    await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active" }).eq("id", conn.id);
+    const firstWaba = kept.entry.find((e) => e.id)?.id;
+    const wabaPatch = firstWaba && !conn.meta?.waba_id ? { meta: { ...conn.meta, waba_id: String(firstWaba) } } : {};
+    await db.from("connections").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active", ...wabaPatch }).eq("id", conn.id);
     const saved = await persistChanges(kept);
     // @ts-ignore EdgeRuntime is provided by Supabase
     EdgeRuntime.waitUntil(Promise.all(saved.ids.map((id) => processStored(saved.db, id).catch((e) => console.error("background processing", safeError(e))))));
@@ -252,6 +275,15 @@ async function bridgeDelivery(req: Request, token: string) {
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  // ---- Dualhook Webhook Override: /wa-webhook/dh/<secret> ----
+  const dh = url.pathname.match(/\/dh\/([0-9a-f]{64})\/?$/);
+  if (dh) {
+    if (req.method === "GET") return await dualhookVerify(url, dh[1]);
+    if (req.method === "POST") return await bridgeDelivery(req, "dualhook", dh[1]);
+    return new Response("method not allowed", { status: 405 });
+  }
+
   if (req.method === "GET") {
     if (url.searchParams.get("hub.mode") === "subscribe" && VERIFY_TOKEN && url.searchParams.get("hub.verify_token") === VERIFY_TOKEN) {
       return new Response(url.searchParams.get("hub.challenge") ?? "", { status: 200 });
@@ -286,7 +318,7 @@ Deno.serve(async (req) => {
 
   // ---- 360dialog relay (per-workspace token) ----
   const bridgeToken = req.headers.get("x-growthos-token");
-  if (bridgeToken && !req.headers.get("x-hub-signature-256")) return await bridgeDelivery(req, bridgeToken);
+  if (bridgeToken && !req.headers.get("x-hub-signature-256")) return await bridgeDelivery(req, "360dialog", bridgeToken);
 
   // ---- Meta delivery ----
   const raw = await req.text();
