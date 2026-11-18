@@ -107,7 +107,7 @@ export default function Content({ ws }: { ws: Workspace }) {
 
       <section className="card">
         <div className="row between"><h2>{T("Content ideas and calendar", "Mawazo na kalenda ya maudhui")}</h2>
-          <div className="row">{editor && <button className="small" disabled={busy} onClick={askIdeas}>{busy ? "…" : T("Ask Kito for ideas (drafts)", "Muombe Kito mawazo (rasimu)")}</button>}{editor && <IdeaAdd ws={ws} onDone={refresh} />}</div>
+          <div className="row">{editor && <button className="small" disabled={busy} onClick={askIdeas}>{busy ? <><span className="kito-spin sm" aria-hidden />{T("Kito is thinking of ideas…", "Kito anatafuta mawazo…")}</> : T("Ask Kito for ideas (drafts)", "Muombe Kito mawazo (rasimu)")}</button>}{editor && <IdeaAdd ws={ws} onDone={refresh} />}</div>
         </div>
         <span className="small muted">{T("Ideas are editable drafts based on your business profile and recorded patterns. Nothing is published automatically.", "Mawazo ni rasimu zinazoweza kuhaririwa. Hakuna kinachochapishwa moja kwa moja.")}</span>
         {ideas.length === 0 ? <div className="empty">{T("No ideas yet.", "Hakuna mawazo bado.")}</div> : <div className="queue">{ideas.map((i) => <IdeaCard key={i.id} i={i} ws={ws} editor={editor} onChange={refresh} />)}</div>}

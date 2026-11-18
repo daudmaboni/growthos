@@ -160,6 +160,7 @@ export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: {
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const [draft, setDraft] = useState(t.draft ?? "");
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false); // Kito is writing a draft
   const [err, setErr] = useState("");
   const [kito, setKito] = useState<Draft | null>(null);
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
@@ -173,7 +174,7 @@ export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: {
     if (error) setErr(error.message); else { if (okMsg) setErr(okMsg); onChange(); }
   }
   async function askKito() {
-    setBusy(true); setErr(""); setKito(null);
+    setBusy(true); setAsking(true); setErr(""); setKito(null);
     try {
       const d = await callFn<Draft>("kito", { workspace_id: ws.id, action: "draft_reply", conversation_id: t.conversation_id });
       setKito(d);
@@ -182,7 +183,7 @@ export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: {
       await supabase.from("follow_up_tasks").update({ draft: text, draft_source: "kito" }).eq("id", t.id).eq("workspace_id", ws.id);
       onChange();
     } catch (e) { setErr((e as Error).message); }
-    setBusy(false);
+    setBusy(false); setAsking(false);
   }
   async function showChat() {
     if (msgs) { setMsgs(null); return; }
@@ -229,7 +230,7 @@ export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: {
         )}
         {editor && (
           <div className="row" style={{ gap: 6, marginTop: 6 }}>
-            <button className="small" disabled={busy} onClick={askKito}>{busy ? "…" : T("Ask Kito for a draft", "Muombe Kito rasimu")}</button>
+            <button className="small" disabled={busy} onClick={askKito}>{asking ? <><span className="kito-spin sm" aria-hidden />{T("Kito is writing…", "Kito anaandika…")}</> : T("Ask Kito for a draft", "Muombe Kito rasimu")}</button>
             <button className="small" disabled={busy || draft === (t.draft ?? "")} onClick={() => patch({ draft: draft || null }, T("Draft saved.", "Rasimu imehifadhiwa."))}>{T("Save draft", "Hifadhi rasimu")}</button>
             <button className="small" disabled={!draft} onClick={copy}>{T("Copy", "Nakili")}</button>
           </div>
