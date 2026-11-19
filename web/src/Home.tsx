@@ -313,17 +313,42 @@ export default function Home() {
         </section>
       </main>
 
+      {/* Footer — same layout as ponditech.com: brand + three link columns, big faded wordmark, company details row */}
       <footer className="hp-foot">
         <div className="hp-w">
-          <a href="/" className="hp-logo dark"><Logo size={28} /><span>itaOS</span></a>
-          <nav>
-            <a href={APP}>{T("Log in", "Ingia")}</a>
-            <a href={pilot} target="_blank" rel="noopener">{T("Join the pilot", "Jiunge na majaribio")}</a>
-            <a href="#faq">{T("Questions", "Maswali")}</a>
-            <a href="/privacy.html">{T("Privacy Policy", "Sera ya Faragha")}</a>
-            <a href="/terms.html">{T("Terms of Service", "Masharti ya Huduma")}</a>
-          </nav>
-          <p>© {new Date().getFullYear()} {T("itaOS by ", "itaOS na ")}<a href={PONDI_SITE} target="_blank" rel="noopener">Pondi Technologies</a> · Dar es Salaam, Tanzania</p>
+          <div className="hp-foot-top">
+            <div className="hp-foot-brand">
+              <a href="/" className="hp-foot-logo" aria-label="itaOS home">
+                <Logo size={30} />
+                <span><b>itaOS</b><small>by Pondi Technologies</small></span>
+              </a>
+              <p className="hp-foot-tag">{T("Know which ads bring paying customers, ", "Jua matangazo yapi yanaleta wateja wanaolipa, ")}<em>{T("built in Dar es Salaam for businesses that sell on WhatsApp.", "imetengenezwa Dar es Salaam kwa biashara zinazouza WhatsApp.")}</em></p>
+            </div>
+            <nav className="hp-foot-col" aria-label={T("Product", "Bidhaa")}>
+              <h4>{T("Product", "Bidhaa")}</h4>
+              <a href="#features">{T("Features", "Huduma")}</a>
+              <a href="#how">{T("How it works", "Inavyofanya kazi")}</a>
+              <a href={pilot} target="_blank" rel="noopener">{T("Join the pilot", "Jiunge na majaribio")}</a>
+              <a href={APP}>{T("Log in", "Ingia")}</a>
+            </nav>
+            <nav className="hp-foot-col" aria-label={T("Company", "Kampuni")}>
+              <h4>{T("Company", "Kampuni")}</h4>
+              <a href="#mission">{T("Our mission", "Lengo letu")}</a>
+              <a href={PONDI_SITE} target="_blank" rel="noopener">Pondi Technologies</a>
+              <a href={pilot} target="_blank" rel="noopener">{T("Contact", "Wasiliana nasi")}</a>
+              <a href="#faq">{T("Questions", "Maswali")}</a>
+            </nav>
+            <nav className="hp-foot-col" aria-label={T("Legal", "Kisheria")}>
+              <h4>{T("Legal", "Kisheria")}</h4>
+              <a href="/privacy.html">{T("Privacy Policy", "Sera ya Faragha")}</a>
+              <a href="/terms.html">{T("Terms of Service", "Masharti ya Huduma")}</a>
+            </nav>
+          </div>
+          <div className="hp-foot-mark" aria-hidden="true">itaOS<i>.</i></div>
+          <div className="hp-foot-bot">
+            <p>© {new Date().getFullYear()} {T("itaOS by ", "itaOS na ")}<a href={PONDI_SITE} target="_blank" rel="noopener">Pondi Technologies</a>. {T("All rights reserved.", "Haki zote zimehifadhiwa.")}</p>
+            <p>BRELA Reg. No. 723134 · Kinondoni, Dar es Salaam 14110, Tanzania · <a href={`https://wa.me/${PONDI_WA}`} target="_blank" rel="noopener">+255 745 160 572</a></p>
+          </div>
         </div>
       </footer>
 
