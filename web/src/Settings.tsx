@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase, callFn, Workspace, canManage, canEdit, when, moneyInput, moneyText, commaRuns } from "./lib";
+import PhoneApp from "./PhoneApp";
 import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./motion";
 
-type Tab = "business" | "profile" | "appearance" | "rules" | "account";
-const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["account", "My profile", "Wasifu wangu"]];
+type Tab = "business" | "profile" | "appearance" | "rules" | "app" | "account";
+const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["app", "Phone app", "App ya simu"], ["account", "My profile", "Wasifu wangu"]];
 const CURRENCIES: [string, string, string][] = [["TZS", "Tanzanian shillings", "Shilingi za Tanzania"], ["KES", "Kenyan shillings", "Shilingi za Kenya"], ["UGX", "Ugandan shillings", "Shilingi za Uganda"], ["RWF", "Rwandan francs", "Faranga za Rwanda"]];  // customers pay in local money; USD is for ad spend only, never for sales
 const TIMEZONES: [string, string][] = [["Africa/Dar_es_Salaam", "Tanzania (Dar es Salaam)"], ["Africa/Nairobi", "Kenya (Nairobi)"], ["Africa/Kampala", "Uganda (Kampala)"], ["Africa/Kigali", "Rwanda (Kigali)"], ["Africa/Johannesburg", "South Africa"], ["Europe/London", "UK (London)"], ["UTC", "UTC"]];
 
@@ -32,11 +33,12 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
       <nav className="tabs subtabs" aria-label="Settings sections">
         {TABS.map(([k, en, sw]) => <a key={k} href={"#settings/" + k} className={tab === k ? "on" : ""} onClick={(e) => { e.preventDefault(); setTab(k); }}>{T(en, sw)}</a>)}
       </nav>
-      {!canManage(ws) && tab !== "profile" && tab !== "account" && tab !== "appearance" && <p className="small muted">{T("Only an owner or admin can change these settings.", "Mmiliki au msimamizi tu anaweza kubadilisha mipangilio hii.")}</p>}
+      {!canManage(ws) && tab !== "profile" && tab !== "account" && tab !== "appearance" && tab !== "app" && <p className="small muted">{T("Only an owner or admin can change these settings.", "Mmiliki au msimamizi tu anaweza kubadilisha mipangilio hii.")}</p>}
       {tab === "business" && <Business ws={ws} onWs={onWs} T={T} />}
       {tab === "profile" && <Profile ws={ws} T={T} />}
       {tab === "appearance" && <Appearance ws={ws} onWs={onWs} theme={theme} onTheme={onTheme} T={T} />}
       {tab === "rules" && <><PaymentsCurrency ws={ws} onWs={onWs} T={T} /><Rates ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
+      {tab === "app" && <PhoneApp ws={ws} T={T} />}
       {tab === "account" && <><MyProfile ws={ws} T={T} /><Account email={email} T={T} /></>}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
+import { AppTip } from "./PhoneApp";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
@@ -119,7 +120,7 @@ export default function App() {
       </header>
       <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
       <PageView view={view}>
-      {view === "dashboard" && <Dashboard ws={ws} onWs={setWs} />}
+      {view === "dashboard" && <><AppTip sw={ws.language === "sw"} /><Dashboard ws={ws} onWs={setWs} /></>}
       {view === "kito" && <Kito ws={ws} />}
       {view === "attention" && <Attention ws={ws} />}
       {view === "report" && <Report ws={ws} />}

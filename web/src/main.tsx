@@ -5,6 +5,9 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./dashboard.css";
 import "./mobile.css";
+import { startPwa } from "./pwa";
+
+startPwa();
 
 // "/" is the public homepage; the app lives at "/app".
 // Old links ("/#dashboard") and Supabase sign-in links that land on "/" with tokens are sent on to the app.
