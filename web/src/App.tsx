@@ -1,5 +1,5 @@
 import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
@@ -116,6 +116,7 @@ export default function App() {
         </div>
       </header>
       <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
+      <PageView view={view}>
       {view === "dashboard" && <Dashboard ws={ws} onWs={setWs} />}
       {view === "kito" && <Kito ws={ws} />}
       {view === "report" && <Report ws={ws} />}
@@ -124,6 +125,7 @@ export default function App() {
       {view === "content" && <Content ws={ws} />}
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
+      </PageView>
     </div>
   );
 }
@@ -314,6 +316,30 @@ function TopMore({ view, sw, badges }: { view: View; sw: boolean; badges: Badges
   );
 }
 
+const PHONE_NAV = "(max-width: 760px)";
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const pageEl = () => document.querySelector<HTMLElement>(".page-view");
+
+/** Wraps the current page. On phones, a new section slides in from the side it lives on
+ *  (iOS-style), or rises in gently when it isn't one of the bottom-nav sections. */
+function PageView({ view, children }: { view: View; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const prev = useRef(view);
+  useLayoutEffect(() => {
+    const el = ref.current, from = prev.current; prev.current = view;
+    if (!el || from === view) return;
+    el.style.transition = ""; el.style.transform = ""; el.style.opacity = ""; el.classList.remove("swiping");
+    if (!window.matchMedia(PHONE_NAV).matches || reducedMotion()) return;
+    const a = ORDER.indexOf(from), b = ORDER.indexOf(view);
+    const dir = a >= 0 && b >= 0 ? Math.sign(b - a) : 0;
+    el.animate(dir
+      ? [{ transform: `translateX(${dir * 34}%)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }]
+      : [{ transform: "translateY(16px) scale(.985)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: dir ? 460 : 340, easing: "cubic-bezier(.22, 1, .36, 1)" });
+  }, [view]);
+  return <div className="page-view" ref={ref}>{children}</div>;
+}
+
 /** Phone navigation: four main sections plus "More". Hidden on wider screens, where the top tabs show. */
 export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badges?: Badges }) {
   const [open, setOpen] = useState(false);
@@ -391,13 +417,40 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
       if (!mode) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v"; if (mode === "v") return; }
       const w = window.innerWidth;
       setLens(Math.min(ORDER.length - 1, Math.max(0, cur - dx / w * 1.2)), true);
+      const page = pageEl();
+      if (page && !reducedMotion()) {
+        const edge = (dx > 0 && cur === 0) || (dx < 0 && cur === ORDER.length - 1);
+        const tx = edge ? dx * 0.2 : dx * 0.9; // rubber-band at the first / last section
+        page.classList.add("swiping");
+        page.style.transition = "none";
+        page.style.transform = `translateX(${tx}px)`;
+        page.style.opacity = String(1 - Math.min(1, Math.abs(tx) / w) * 0.45);
+      }
     };
     const end = () => {
       if (mode !== "h") return;
       const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
       const next = Math.abs(dx) > window.innerWidth * 0.28 || (fast && Math.abs(dx) > 40) ? cur + (dx < 0 ? 1 : -1) : cur;
       mode = "";
-      if (next >= 0 && next < ORDER.length && next !== cur) go(next); else setLens(cur, false);
+      const page = pageEl();
+      if (next >= 0 && next < ORDER.length && next !== cur) {
+        navigator.vibrate?.(8);
+        if (page && !reducedMotion()) {
+          // finish the throw: current page slides off, then the next one slides in (see PageView)
+          page.style.transition = "transform .17s cubic-bezier(.4, 0, 1, 1), opacity .17s linear";
+          page.style.transform = `translateX(${dx < 0 ? -45 : 45}%)`;
+          page.style.opacity = "0";
+          setLens(next, false);
+          window.setTimeout(() => go(next), 150);
+        } else go(next);
+      } else {
+        setLens(cur, false);
+        if (page) { // spring back into place
+          page.style.transition = "transform .5s cubic-bezier(.34, 1.35, .64, 1), opacity .3s ease";
+          page.style.transform = ""; page.style.opacity = "";
+          window.setTimeout(() => { page.style.transition = ""; page.classList.remove("swiping"); }, 520);
+        }
+      }
     };
     window.addEventListener("touchstart", start, { passive: true });
     window.addEventListener("touchmove", move, { passive: true });
