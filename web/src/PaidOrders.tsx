@@ -1,6 +1,7 @@
 // "Who paid": the paid orders behind the Revenue card, for the dashboard's date range and filters.
 // Each row is one sale with everything known about the customer and how the sale came about.
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase, Workspace, Order, Outcome, L, amt, money, localDay, orderNet } from "./lib";
 import type { Period } from "./metrics";
 
@@ -23,6 +24,24 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
   const key = paid.map((o) => o.id).join(",");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState("");
+
+  // Desktop: a popup over the blurred dashboard. Phone: a full-screen page.
+  // Esc closes it; on a phone the Back button closes it instead of leaving the dashboard.
+  useEffect(() => {
+    history.pushState({ ...(history.state ?? {}), paidList: true }, "");
+    const onPop = () => onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      if (history.state?.paidList) history.back();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let gone = false;
@@ -51,18 +70,21 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
   const srcLabel = (s: string | null | undefined) => s === "ad" ? T("From an ad", "Kutoka tangazo") : s === "organic" ? T("Not from an ad", "Si kutoka tangazo") : T("Source unknown", "Chanzo hakijulikani");
   const days = (a?: string | null, b?: string | null) => a && b ? Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 864e5)) : null;
 
-  return (
-    <div className="card paid-list">
-      <div className="row between">
-        <div>
-          <h2 style={{ margin: 0 }}>{T("Who paid", "Waliolipa")} <span className="muted">· {paid.length} · {money(total, cur)}</span></h2>
+  return createPortal(
+    <div className="dr-layer paid-layer" data-noswipe role="dialog" aria-modal="true" aria-labelledby="paid-h">
+    <div className="dr-scrim" onClick={onClose} aria-hidden />
+    <div className="card paid-list paid-modal">
+      <div className="row between paid-head">
+        <button className="paid-back" onClick={onClose} aria-label={T("Back", "Rudi")}>‹</button>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h2 id="paid-h" style={{ margin: 0 }}>{T("Who paid", "Waliolipa")} <span className="muted">· {paid.length} · {money(total, cur)}</span></h2>
           <span className="small muted">{T("Paid orders in the dates and filters above, newest first. A sale counts on the day the money came in.", "Oda zilizolipwa kwenye tarehe na vichujio vilivyo juu, mpya kwanza. Mauzo yanahesabiwa siku pesa ilipoingia.")}</span>
         </div>
-        <button className="small" onClick={onClose} aria-label={T("Close", "Funga")}>✕</button>
+        <button className="small paid-x" onClick={onClose} aria-label={T("Close", "Funga")}>✕</button>
       </div>
       {err && <p className="err small">{err}</p>}
       {!rows ? <div className="skeleton cc-skel" /> : rows.length === 0 ? <p className="small muted">{T("No paid orders in these dates.", "Hakuna oda zilizolipwa kwenye tarehe hizi.")}</p> : (
-        <div className="paid-rows">
+        <div className="paid-rows paid-body">
           {rows.map(({ o, c, phone }) => {
             const net = orderNet(o);
             const cost = o.cost != null ? Number(o.cost) : (ws.unit_cost != null ? Number(ws.unit_cost) : null);
@@ -102,5 +124,7 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
         </div>
       )}
     </div>
+    </div>,
+    document.body,
   );
 }

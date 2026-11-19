@@ -754,7 +754,6 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .kpi-click { cursor: pointer; }
 .kpi-click:hover, .kpi-click.on { border-color: var(--accent); }
 .kpi-click .kt::after { content: " ▸"; color: var(--muted); }
-.kpi-click.on .kt::after { content: " ▾"; }
 .paid-list { gap: 12px; }
 .paid-rows { display: grid; gap: 10px; }
 .paid-row { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
@@ -988,3 +987,26 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
   .inbox.frame button.cc-more { margin: 10px auto; }
   .cc-skel { min-height: 66px; }
 }
+
+/* "Who paid" (tap Revenue): popup over the blurred dashboard on desktop, its own full-screen page on a phone */
+.paid-modal { position: relative; z-index: 1; width: min(860px, 100%); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .12); animation: dr-pop-in .32s cubic-bezier(.2, .9, .3, 1.15) both; }
+.paid-modal .paid-head { flex: 0 0 auto; gap: 10px; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.paid-modal .paid-body, .paid-modal > .err, .paid-modal > p, .paid-modal > .skeleton { margin: 0 20px; }
+.paid-modal .paid-body { flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; margin: 0; padding: 14px 20px 20px; }
+.paid-modal > p, .paid-modal > .skeleton { margin: 16px 20px 20px; }
+.paid-back { display: none; }
+@media (max-width: 760px) {
+  .paid-layer { padding: 0; place-items: stretch; }
+  .paid-layer .dr-scrim { display: none; }
+  .paid-modal { width: 100%; max-height: none; height: 100dvh; border-radius: 0; border: 0; box-shadow: none; background: var(--bg, var(--panel));
+    animation: paid-page-in .28s cubic-bezier(.2, .8, .2, 1) both; }
+  .paid-modal .paid-head { position: sticky; top: 0; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; align-items: center;
+    background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px); }
+  .paid-modal .paid-head h2 { font-size: 18px; }
+  .paid-back { display: grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; padding: 0; border-radius: 50%; font-size: 26px; line-height: 1; background: transparent; border: 0; color: var(--accent); }
+  .paid-x { display: none; }
+  .paid-modal .paid-body { padding: 12px 12px calc(20px + env(safe-area-inset-bottom)); }
+}
+@keyframes paid-page-in { from { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .paid-modal { animation-duration: .01s !important; } }
