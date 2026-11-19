@@ -21,7 +21,7 @@ export function inferredFrom(r: Outcome): "kito" | "rules" | "name_mark" | null 
 /** When the customer paid, read from the chat (database function payment_moment): their receipt or
  *  M-Pesa SMS, "nimetuma", your "Tuma majina ya mpokeaji", or the first usage instructions — never the
  *  moment you press the button. Returned as local "YYYY-MM-DDTHH:mm" for a datetime input. */
-export type PayMoment = { at: string; kind: "receipt" | "customer_said_paid" | "business_confirmed" | "goods_received" | "last_message"; snippet: string };
+export type PayMoment = { at: string; kind: "kayatox" | "receipt" | "owner_tick" | "customer_said_paid" | "business_confirmed" | "goods_received" | "last_message"; snippet: string };
 export function usePaymentMoment(conversationId: string) {
   const [pm, setPm] = useState<PayMoment | null | undefined>(undefined);
   useEffect(() => {
@@ -40,8 +40,10 @@ export const toLocalInput = (iso: string) => new Date(Date.parse(iso) + 3 * 3600
 /** "YYYY-MM-DDTHH:mm" in East Africa time → ISO. */
 export const fromLocalInput = (v: string) => new Date(v + ":00+03:00").toISOString();
 export function momentWhy(kind: PayMoment["kind"], T: (en: string, sw: string) => string) {
-  return kind === "receipt" ? T("the customer's receipt / M-Pesa message", "risiti / ujumbe wa M-Pesa wa mteja")
-    : kind === "customer_said_paid" ? T("the customer saying they paid", "mteja aliposema amelipa")
+  return kind === "kayatox" ? T("your \"Matumizi ya KayaTox\" message, sent the day they paid", "ujumbe wako wa \"Matumizi ya KayaTox\", uliotumwa siku aliyolipa")
+    : kind === "owner_tick" ? T("your price ✅ message", "ujumbe wako wa bei ✅")
+    : kind === "receipt" ? T("the customer's receipt / M-Pesa message", "risiti / ujumbe wa M-Pesa wa mteja")
+    : kind === "customer_said_paid" ? T("a payment message in the chat (no KayaTox, screenshot or ✅ found)", "ujumbe wa malipo kwenye chat (hakuna KayaTox, picha ya malipo wala ✅)")
     : kind === "business_confirmed" ? T("your message right after payment", "ujumbe wako baada ya malipo")
     : kind === "goods_received" ? T("your \"Matumizi ya…\" message, sent the day they paid", "ujumbe wako wa \"Matumizi ya…\", uliotumwa siku aliyolipa")
     : T("the customer's last message (no payment message found)", "ujumbe wa mwisho wa mteja (hakuna ujumbe wa malipo)");
