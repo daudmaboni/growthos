@@ -6,6 +6,7 @@ import "./styles.css";
 import "./dashboard.css";
 import "./mobile.css";
 import "./graphite.css";
+import "./glass.css";
 import { startPwa } from "./pwa";
 
 startPwa();

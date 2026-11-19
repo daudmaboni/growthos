@@ -16,14 +16,8 @@
 }
 :root[data-dark="graphite"]:not([data-theme="light"]) body { background: #0f0f10; }
 
-/* Tabs and buttons: flat graphite chips instead of glass */
-:root[data-dark="graphite"]:not([data-theme="light"]) nav.tabs { background: #161618; border-color: #26262b; box-shadow: none; }
-:root[data-dark="graphite"]:not([data-theme="light"]) .glass-tabs .glass { background: #26262b; border-color: #34343a; box-shadow: none; }
-:root[data-dark="graphite"]:not([data-theme="light"]) .glass-tabs .glass::before { background: none; }
-:root[data-dark="graphite"]:not([data-theme="light"]) nav.tabs.glass-tabs { box-shadow: none; }
+/* Tabs and buttons: liquid glass like the other looks (see glass.css) */
 :root[data-dark="graphite"]:not([data-theme="light"]) .card { background: #161618; border-color: #26262b; box-shadow: none; }
-:root[data-dark="graphite"]:not([data-theme="light"]) button.primary, :root[data-dark="graphite"]:not([data-theme="light"]) .btn.primary { background: #2fbf62; color: #06210f; border-color: transparent; }
-:root[data-dark="graphite"]:not([data-theme="light"]) button.primary:hover:not(:disabled) { background: #4ade80; }
 
 /* Dashboard (normally navy + yellow) */
 :root[data-dark="graphite"]:not([data-theme="light"]) .dash-ia {

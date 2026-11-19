@@ -1,0 +1,105 @@
+/* Liquid glass (iOS 26 style) for every button, toggle and navigation in the app.
+   Loaded last (after graphite.css). The homepage (html.hp-page) and the staff admin (.ia / .st)
+   have their own glass rules in home.css and adminStyles.ts.
+   All app selectors sit inside :where() so they never out-rank a component's own rules. */
+
+:root {
+  --lg-fill: rgba(255, 255, 255, .06);
+  --lg-fill-hover: rgba(255, 255, 255, .11);
+  --lg-fill-strong: rgba(255, 255, 255, .13);
+  --lg-track: rgba(0, 0, 0, .22);
+  --lg-edge: rgba(255, 255, 255, .13);
+  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .04) 46%, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, .04) 100%);
+  --lg-tint-sheen: linear-gradient(180deg, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, .1) 45%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .12) 100%);
+  --lg-ring: inset 0 1px 0 rgba(255, 255, 255, .2), inset 0 -1px 1px rgba(0, 0, 0, .3), 0 6px 18px -10px rgba(0, 0, 0, .7);
+  --lg-ring-hover: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 1px rgba(0, 0, 0, .3), 0 10px 24px -12px rgba(0, 0, 0, .8);
+  --lg-blur: blur(16px) saturate(180%);
+  --lg-spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+:root[data-theme="light"] {
+  --lg-fill: rgba(255, 255, 255, .58);
+  --lg-fill-hover: rgba(255, 255, 255, .82);
+  --lg-fill-strong: rgba(255, 255, 255, .92);
+  --lg-track: rgba(20, 24, 36, .06);
+  --lg-edge: rgba(255, 255, 255, .95);
+  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .4) 50%, rgba(255, 255, 255, .2) 100%);
+  --lg-ring: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(20, 24, 36, .07), 0 0 0 .5px rgba(20, 24, 36, .14), 0 6px 16px -10px rgba(20, 24, 36, .35);
+  --lg-ring-hover: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(20, 24, 36, .07), 0 0 0 .5px rgba(20, 24, 36, .18), 0 12px 24px -12px rgba(20, 24, 36, .4);
+}
+
+/* ---- Every button: clear glass ---- */
+:where(html:not(.hp-page)) button:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) .btn:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.icon:not(:where(.ia *, .st *)) {
+  background-color: var(--lg-fill); background-image: var(--lg-sheen); border-color: var(--lg-edge); box-shadow: var(--lg-ring);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  transition: transform .35s var(--lg-spring), background-color .25s ease, box-shadow .25s ease, border-color .25s ease, color .25s ease, filter .25s ease;
+}
+:where(html:not(.hp-page)) button:hover:not(:disabled):not(:where(.ia *, .st *)), :where(html:not(.hp-page)) .btn:hover:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.icon:hover:not(:where(.ia *, .st *)) {
+  background-color: var(--lg-fill-hover); background-image: var(--lg-sheen); box-shadow: var(--lg-ring-hover);
+}
+:where(html:not(.hp-page)) button:active:not(:disabled):not(:where(.ia *, .st *)), :where(html:not(.hp-page)) .btn:active:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.icon:active:not(:where(.ia *, .st *)) { transform: scale(.96); }
+
+/* ---- Main actions (Save, Yes, Send, Sign in…): tinted green glass ---- */
+:where(html:not(.hp-page)) button.primary:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) .btn.primary:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.btn.primary:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.icon.on:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) nav.subtabs a.on:not(:where(.ia *, .st *)) {
+  background-color: color-mix(in srgb, var(--accent) 84%, transparent); background-image: var(--lg-tint-sheen);
+  border-color: rgba(255, 255, 255, .32); color: var(--on-accent);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .55), inset 0 -2px 4px rgba(0, 0, 0, .16), 0 0 0 .5px rgba(0, 0, 0, .18), 0 10px 24px -10px var(--accent-glow);
+}
+:where(html:not(.hp-page)) button.primary:hover:not(:disabled):not(:where(.ia *, .st *)), :where(html:not(.hp-page)) .btn.primary:hover:not(:where(.ia *, .st *)), :where(html:not(.hp-page)) a.btn.primary:hover:not(:where(.ia *, .st *)) {
+  background-color: color-mix(in srgb, var(--accent) 94%, transparent); background-image: var(--lg-tint-sheen); filter: brightness(1.05);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .6), inset 0 -2px 4px rgba(0, 0, 0, .16), 0 0 0 .5px rgba(0, 0, 0, .18), 0 14px 30px -12px var(--accent-glow);
+}
+
+/* ---- Delete / No / destructive: red-tinted glass ---- */
+:where(html:not(.hp-page)) button.danger:not(:where(.ia *, .st *)) {
+  background-color: color-mix(in srgb, var(--bad) 14%, transparent); background-image: var(--lg-sheen);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent); color: var(--bad);
+}
+:where(html:not(.hp-page)) button.danger:hover:not(:disabled):not(:where(.ia *, .st *)) {
+  background-color: color-mix(in srgb, var(--bad) 88%, transparent); background-image: var(--lg-tint-sheen); color: #fff;
+}
+
+/* ---- Toggles (SW/EN, Sign in / Create account, Yes/No, date ranges): recessed glass track + glass lens ---- */
+:where(html:not(.hp-page)) .seg {
+  background-color: var(--lg-track); border-color: var(--lg-edge);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .22), inset 0 0 0 .5px rgba(255, 255, 255, .06), 0 1px 0 rgba(255, 255, 255, .06);
+}
+:where(html:not(.hp-page)) .seg button { box-shadow: none; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:where(html:not(.hp-page)) .seg button.on {
+  background-color: var(--lg-fill-strong); background-image: var(--lg-sheen); border-color: var(--lg-edge); color: var(--ink);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .35), inset 0 -1px 1px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .14), 0 4px 12px -6px rgba(0, 0, 0, .45);
+}
+:where(html:not(.hp-page)) .seg button.on:active:not(:disabled) { transform: scale(1.04); }
+
+/* Chat filter chips */
+:where(html:not(.hp-page)) .chips-tabs button { background-color: var(--lg-fill); background-image: var(--lg-sheen); }
+:where(html:not(.hp-page)) .chips-tabs button.on { background-image: linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 60%); box-shadow: var(--lg-ring-hover); }
+
+/* Phone sub-tabs (Chats / Paid, etc.) as glass chips */
+:where(html:not(.hp-page)) nav.subtabs a { background-color: var(--lg-fill); background-image: var(--lg-sheen); border-color: var(--lg-edge); box-shadow: var(--lg-ring);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+
+/* Dashboard keeps its own accent but gets the glass finish */
+.dash-ia button.primary { background-color: color-mix(in srgb, var(--accent) 86%, transparent); background-image: var(--lg-tint-sheen);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .5), inset 0 -2px 4px rgba(0, 0, 0, .16), 0 10px 24px -10px var(--accent-glow); }
+.dash-ia button.primary:hover:not(:disabled) { background-color: var(--accent); background-image: var(--lg-tint-sheen); filter: brightness(1.04); }
+
+/* Buttons that are meant to look like plain links or icons stay clear (no glass) */
+:where(html:not(.hp-page)) :is(.link-btn, .linkish, .bottomnav a, .bottomnav button, nav.tabs .more-btn, .dr-nav button, button.dr-day, button.wa-x, button.wa-side-x, button.wa-back, .auth-pw .link-btn) {
+  box-shadow: none; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:where(html:not(.hp-page)) button.wa-kito:not(:hover) { box-shadow: none; background-image: none; }
+/* Google's sign-in button keeps Google's own look */
+:where(html:not(.hp-page)) .auth-google { background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+
+/* Sign-in card: frosted glass panel */
+:where(html:not(.hp-page)) .auth { background-color: color-mix(in srgb, var(--card) 78%, transparent); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%);
+  border-color: var(--lg-edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), var(--shadow-lg); }
+
+@media (prefers-reduced-motion: reduce) {
+  :where(html:not(.hp-page)) :where(button, .btn, a.icon) { transition: background-color .2s ease, box-shadow .2s ease, color .2s ease; }
+  :where(html:not(.hp-page)) :where(button:active, .btn:active, a.icon:active) { transform: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --lg-fill: var(--raised); }
+}
