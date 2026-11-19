@@ -99,7 +99,7 @@ export default function App() {
   if (paused) return <PausedNotice name={ws.name} sw={ws.language === "sw"} />;
 
   return (
-    <div className="shell" ref={shellRef}>
+    <div className={"shell view-" + view + (view === "chats" ? "" : " dash-ia")} ref={shellRef}>
       <header className="topbar">
         <div className="brand"><a className="home" href="#dashboard" aria-label="itaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>itaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <GlassTabs view={view}>

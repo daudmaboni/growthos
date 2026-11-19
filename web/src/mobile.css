@@ -1,0 +1,148 @@
+/* ===== itaOS on a phone (19 Nov, evening) =====
+   One look across every page: the navy + yellow brand from the dashboard, a sticky frosted top bar,
+   a hero card for the headline number, cards with room to breathe,
+   and cards instead of wide tables. Desktop is unchanged except where noted. Loaded after styles.css and dashboard.css. */
+
+/* The font picked in Settings → Appearance still wins over the brand font */
+html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-ia { --font: inherit; }
+
+.ads-m { display: none; }
+
+@media (max-width: 760px) {
+  body { font-size: 15px; -webkit-tap-highlight-color: transparent; }
+  .shell { padding: 0 14px calc(112px + env(safe-area-inset-bottom)); gap: 14px; }
+
+  /* ---- Top bar: sticky, frosted, compact ---- */
+  .topbar { position: sticky; top: 0; z-index: 35; margin: 0 -14px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    background: color-mix(in srgb, var(--paper) 82%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
+    border-bottom: 1px solid transparent; transition: border-color .25s var(--ease); }
+  .topbar .logo, .topbar .brand svg, .topbar .brand img { width: 32px !important; height: 32px !important; }
+  .brand-text h1 { font: 700 17px/1.1 var(--display); letter-spacing: -0.02em; }
+  .brand-text .ws { font-size: 12px; font-weight: 500; }
+  .actions { gap: 6px; }
+  .actions .seg { padding: 2px; }
+  .actions .seg button { padding: 4px 9px; font-size: 11.5px; letter-spacing: .02em; }
+  .actions button.icon, .actions a.icon { width: 34px; height: 34px; font-size: 15px; }
+
+  /* ---- Page head: title and the date button on one line ---- */
+  .hero { flex-wrap: nowrap; align-items: center; gap: 10px; padding-top: 4px; }
+  .hero > :first-child { min-width: 0; flex: 1 1 auto; }
+  .hero h2, .dash-ia .hero h2 { font: 700 23px/1.15 var(--display); letter-spacing: -0.025em; }
+  .hero .sub { font-size: 13.5px; line-height: 1.45; }
+  .hero > .row { flex: none; flex-wrap: nowrap; gap: 8px; }
+  .hero > .row > .small.muted { display: none; } /* "Updating…" — the spinner on the KPIs is enough */
+  .dr-trigger { padding: 9px 12px; gap: 6px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); font-size: 13.5px; min-height: 40px; }
+  .dr-trigger b { font-weight: 650; white-space: nowrap; }
+
+  /* ---- Cards ---- */
+  .card, .dash-ia .card { padding: 16px; border-radius: 20px; gap: 12px; }
+  .card h2, .dash-ia .card h2 { font-size: 16.5px; line-height: 1.25; }
+  .card > .row.between, .card > div > .row.between { align-items: flex-start; row-gap: 10px; }
+  .card .small.muted { line-height: 1.45; }
+  .two { gap: 14px; }
+  .shell-grid { gap: 14px; }
+  .empty { padding: 26px 18px; border-radius: 20px; line-height: 1.5; }
+
+  /* ---- KPI tiles: two even columns, the source dots go (they mean nothing at this size) ---- */
+  .kpis, .dash-ia .kpis { gap: 10px; }
+  .kpi, .dash-ia .kpi { padding: 13px 14px; border-radius: 16px; gap: 4px; justify-content: flex-start; }
+  .kpi .k .src { display: none; }
+  .kpi .k { font-size: 12.5px; }
+  .kpi .v, .dash-ia .kpi .v { font-size: clamp(17px, 4.9vw, 20px); line-height: 1.15; }
+  .kpi .kv { gap: 4px 6px; }
+  .kpi .s { font-size: 11.5px; margin-top: auto; }
+  .kpi.flag .v { color: var(--bad); }
+
+  /* The first number on the dashboard is the headline: a navy hero card with the yellow dot */
+  .view-dashboard .kpis > .kpi:first-child { position: relative; overflow: hidden; padding: 18px 18px 16px; border: 0; border-radius: 22px;
+    background: radial-gradient(120% 140% at 100% 0%, #2d4290 0%, transparent 55%), linear-gradient(160deg, #22336B, #16224A 70%); color: #fff; }
+  .view-dashboard .kpis > .kpi:first-child::after { content: ""; position: absolute; right: 18px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: #F7C948; box-shadow: 0 0 0 6px #F7C94826; }
+  .view-dashboard .kpis > .kpi:first-child .k { color: #C9D0EA; font-size: 13px; }
+  .view-dashboard .kpis > .kpi:first-child .v { color: #fff; font-size: 32px; letter-spacing: -0.03em; }
+  .view-dashboard .kpis > .kpi:first-child .s { color: #A9B3D6; font-size: 12.5px; margin-top: 4px; }
+  .view-dashboard .kpis > .kpi:first-child .delta { background: #ffffff1f; color: #fff; }
+  .view-dashboard .kpis > .kpi:first-child .delta.down { background: #4FD39433; color: #8BF0BE; }
+  .view-dashboard .kpis > .kpi:first-child .delta.up { background: #F7C94833; color: #F7C948; }
+  :root:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child { background: radial-gradient(90% 120% at 100% 0%, #F7C94833 0%, transparent 55%), linear-gradient(160deg, #2E4596, #1B2A5E 75%); box-shadow: inset 0 0 0 1px #F7C94840, 0 18px 40px -22px #000; }
+
+  /* ---- "Where chats stop": label and number on top, bar full width under them ---- */
+  .fstep, .dash-ia .fstep { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l v" "b b"; gap: 6px 10px; padding: 6px 0; font-size: 13.5px; }
+  .fstep > span:first-child { grid-area: l; min-width: 0; }
+  .fstep > .bar { grid-area: b; height: 8px; }
+  .fstep > span:last-child { grid-area: v; white-space: nowrap; font-weight: 600; }
+  .fstep .src { display: none; }
+
+  /* ---- Lists inside cards ---- */
+  .dash-ia .cov li { grid-template-columns: 26px minmax(0, 1fr) auto; padding: 10px 12px; border-radius: 12px; }
+  .dash-ia .dmini li, .dash-ia .legend .li { padding: 9px 12px; border-radius: 10px; font-size: 13.5px; }
+  .finding, .dash-ia .finding { padding: 12px 14px; border-radius: 0 12px 12px 0; gap: 4px; }
+  .costrow { gap: 6px 12px; }
+  .big, .dash-ia .big { font-size: 28px; }
+
+  /* ---- Tables (Diagnosis, Content, Kito, Actions): run edge to edge inside the card, first column stays put ---- */
+  .card .scroll { margin: 0 -16px; padding: 0 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+  .card .scroll::-webkit-scrollbar { display: none; }
+  .card .scroll table { min-width: 100%; }
+  .card .scroll th, .card .scroll td { white-space: nowrap; padding: 10px 10px; font-size: 13px; }
+  .card .scroll th:first-child, .card .scroll td:first-child { position: sticky; left: -16px; background: var(--card); z-index: 1; }
+  .card .scroll td:first-child { white-space: normal; min-width: 120px; max-width: 46vw; }
+
+  /* ---- Ads: one card per ad, the table is hidden ---- */
+  .dash-ia .scroll:has(> .ads-t) { display: none; }
+  .ads-m { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .ads-m li { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--row, var(--raised)); }
+  .ads-m li.dim { opacity: .62; }
+  .ads-m-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .ads-m-name { display: grid; gap: 1px; min-width: 0; }
+  .ads-m-name b { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+  .ads-m-name .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ads-m-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .ads-m-stats span { display: grid; gap: 1px; min-width: 0; }
+  .ads-m-stats small { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ads-m-stats b { font: 650 13.5px/1.25 var(--font); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .ads-m-stats b.bad { color: var(--bad); font-size: 12.5px; }
+  .card > .row.between > .seg { margin-left: auto; }
+
+  /* ---- Queues and lists on Actions / Needs attention / Content ---- */
+  .qitem { padding: 14px; border-radius: 16px; gap: 10px; }
+  .att-list li { padding: 12px 0; gap: 8px 12px; }
+  .att-list li > span:first-child { flex-basis: 100%; }
+
+  /* ---- Ask Kito ---- */
+  .kito-hero { gap: 12px; align-items: flex-start; }
+  .kito-hero .kito-logo { width: 44px !important; height: 44px !important; flex: none; }
+  .kito-suggest { display: grid; gap: 8px; }
+  .kito-suggest button { border-radius: 14px; padding: 11px 14px; font-size: 14px; font-weight: 500; text-align: left; background: var(--card); line-height: 1.35; }
+  .kito-recent-item { padding: 11px 14px; font-weight: 500; }
+  .kito-q { max-width: 88%; }
+  .kito-ask { bottom: calc(84px + env(safe-area-inset-bottom)); padding: 8px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border: 1px solid var(--line-2); box-shadow: 0 14px 30px -16px #0000007a; }
+  .kito-ask textarea { border: 0; background: transparent; min-height: 44px; resize: none; }
+  .kito-ask button { min-height: 44px; border-radius: 16px; }
+
+  /* ---- Settings / Connections ---- */
+  nav.subtabs { margin: 0 -14px; padding-left: 14px; padding-right: 14px; border-radius: 0; border-left: 0; border-right: 0; background: transparent; box-shadow: none; gap: 6px; }
+  nav.subtabs a { border: 1px solid var(--line-2); background: var(--card); }
+  nav.subtabs a.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+  /* ---- Touch: inputs at 16px so iPhones don't zoom in, comfortable buttons ---- */
+  input, select, textarea { font-size: 16px; }
+  button, .btn { min-height: 38px; }
+  button.small, .btn.small { min-height: 34px; }
+  .dr-day, button.dr-day, .seg button, .linkish, .link-btn, .bottomnav a, .bottomnav button { min-height: 0; }
+
+  /* ---- Bottom nav: a touch taller, labels a touch bigger ---- */
+  .bottomnav { width: min(340px, calc(100% - 28px)); }
+  .bottomnav a, .bottomnav button { font-size: 11px; padding: 8px 2px 7px; }
+}
+
+/* Very small phones (iPhone SE and narrower) */
+@media (max-width: 380px) {
+  .shell { padding-left: 12px; padding-right: 12px; }
+  .topbar { margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .brand-text .ws { display: none; }
+  .hero h2, .dash-ia .hero h2 { font-size: 21px; }
+  .kpi .v, .dash-ia .kpi .v { font-size: 18px; }
+  .ads-m-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; }
+}

@@ -357,6 +357,24 @@ function AdsTable({ ads, daily, today, adCur, A, T }: { ads: AdPerf[]; daily: { 
           {!list.length && <tr><td colSpan={11} className="muted small">{!ads.length ? T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.") : T("No ad is running right now. Tap All to see the stopped ones.", "Hakuna tangazo linaloendelea sasa. Bofya Yote kuona yaliyosimama.")}</td></tr>}
         </tbody>
       </table></div>
+      {/* Phones: one card per ad instead of an 11-column table */}
+      <ul className="ads-m">
+        {shown.map(({ a, r }) => (
+          <li key={a.ad_id} className={r === "off" || r === "unknown" ? "dim" : ""}>
+            <div className="ads-m-top">
+              <div className="ads-m-name"><b>{a.ad_name ?? a.ad_id}</b>{a.campaign_name && <span className="small muted">{a.campaign_name}</span>}</div>
+              <RunBadge r={r} T={T} />
+            </div>
+            <div className="ads-m-stats">
+              <span><small>{T("Spend", "Matumizi")}</small><b>{amt(A(Number(a.spend)), adCur)}</b></span>
+              <span><small>{T("Chats", "Chats")}</small><b>{fmt(a.platform_conversations)}</b></span>
+              <span><small>{T("Paid", "Wamelipa")}</small><b>{fmt(a.sold)}</b></span>
+              <span><small>{T("Cost / sale", "Gharama / mauzo")}</small><b className={!(Number(a.sold) > 0) && a.spend > 0 && a.chats > 0 ? "bad" : ""}>{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? T("No sale", "Hakuna") : "–") : amt(A(Number(a.spend) / Number(a.sold)), adCur)}</b></span>
+            </div>
+          </li>
+        ))}
+        {!list.length && <li className="muted small">{!ads.length ? T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.") : T("No ad is running right now. Tap All to see the stopped ones.", "Hakuna tangazo linaloendelea sasa. Bofya Yote kuona yaliyosimama.")}</li>}
+      </ul>
       {list.length > FOLD && (
         <button className="fold" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
           {open ? T("Show less", "Onyesha machache") : T(`Show ${hidden} more`, `Onyesha ${hidden} zaidi`)} <span aria-hidden className={open ? "up" : ""}>▾</span>
