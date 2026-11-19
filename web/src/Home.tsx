@@ -84,6 +84,43 @@ export default function Home() {
     return () => io.disconnect();
   }, []);
 
+  // Scroll-spy: the top-bar link for the section you're reading lights up, and a glass lens slides to it.
+  const SPY = ["features", "how", "faq"] as const;
+  const [active, setActive] = useState<string | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const line = innerHeight * 0.35;
+      let cur: string | null = null;
+      for (const id of SPY) {
+        const r = document.getElementById(id)?.getBoundingClientRect();
+        if (r && r.top <= line && r.bottom > line) cur = id;
+      }
+      // At the very bottom, the last section (Questions) counts as current.
+      if (!cur && innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = "faq";
+      setActive(cur);
+      setScrolled(scrollY > 12);
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(run); };
+    run();
+    addEventListener("scroll", on, { passive: true }); addEventListener("resize", on);
+    return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, []);
+  const navRef = useRef<HTMLElement>(null);
+  const [lens, setLens] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  useEffect(() => {
+    const place = () => {
+      const a = active && navRef.current?.querySelector<HTMLElement>(`a[href="#${active}"]`);
+      setLens(a ? { x: a.offsetLeft, y: a.offsetTop, w: a.offsetWidth, h: a.offsetHeight } : null);
+    };
+    place();
+    addEventListener("resize", place);
+    return () => removeEventListener("resize", place);
+  }, [active, lang]);
+  const spyLink = (id: string) => (active === id ? { className: "on", "aria-current": "location" as const } : {});
+
   const go = () => setMenu(false);
   const pilot = pilotLink(lang);
   const Lang = ({ dark }: { dark?: boolean }) => (
@@ -99,13 +136,15 @@ export default function Home() {
       <div className={"hp-curtain " + curtain.phase} aria-hidden="true">
         <div className="hp-curtain-in"><Logo size={44} /><span>{curtain.label}</span></div>
       </div>
-      <header className="hp-bar">
+      <header className={"hp-bar" + (scrolled ? " scrolled" : "")}>
         <div className="hp-w hp-bar-in">
           <a href="/" className="hp-logo" aria-label="itaOS home"><Logo size={30} /><span>itaOS</span></a>
-          <nav className="hp-nav" aria-label="Main">
-            <a href="#features">{T("Features", "Huduma")}</a>
-            <a href="#how">{T("How it works", "Inavyofanya kazi")}</a>
-            <a href="#faq">{T("Questions", "Maswali")}</a>
+          <nav className="hp-nav" aria-label="Main" ref={navRef}>
+            <span className={"hp-nav-lens" + (lens ? " on" : "")} aria-hidden="true"
+              style={lens ? { transform: `translate(${lens.x}px, ${lens.y}px)`, width: lens.w, height: lens.h } : undefined} />
+            <a href="#features" {...spyLink("features")}>{T("Features", "Huduma")}</a>
+            <a href="#how" {...spyLink("how")}>{T("How it works", "Inavyofanya kazi")}</a>
+            <a href="#faq" {...spyLink("faq")}>{T("Questions", "Maswali")}</a>
             <Lang />
             <a href={APP}>{T("Log in", "Ingia")}</a>
             <a href={pilot} className="hp-pill hp-pill-sm" target="_blank" rel="noopener">{T("Join the pilot", "Jiunge na majaribio")}</a>
@@ -122,9 +161,9 @@ export default function Home() {
         </div>
         <nav>
           <a href="/" onClick={go}>{T("Home", "Mwanzo")}</a>
-          <a href="#features" onClick={go}>{T("Features", "Huduma")}</a>
-          <a href="#how" onClick={go}>{T("How it works", "Inavyofanya kazi")}</a>
-          <a href="#faq" onClick={go}>{T("Questions", "Maswali")}</a>
+          <a href="#features" onClick={go} {...spyLink("features")}>{T("Features", "Huduma")}</a>
+          <a href="#how" onClick={go} {...spyLink("how")}>{T("How it works", "Inavyofanya kazi")}</a>
+          <a href="#faq" onClick={go} {...spyLink("faq")}>{T("Questions", "Maswali")}</a>
           <a href={APP}>{T("Log in", "Ingia")}</a>
           <a href={pilot} target="_blank" rel="noopener">{T("Join the pilot", "Jiunge na majaribio")}</a>
           <div className="hp-menu-lang"><Lang dark /></div>
