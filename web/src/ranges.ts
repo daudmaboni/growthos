@@ -1,6 +1,6 @@
-// Date ranges, grouped the way Meta Ads Manager groups them, so a figure here can be compared
-// with the same range there. Like Ads Manager, "Last N days" ends yesterday (today is still
-// in progress) and weeks start on Sunday. All days are local days in the workspace time zone.
+// Date ranges, grouped the way Meta Ads Manager groups them. "Last N days" includes today, like
+// the Meta Ads Manager phone app (desktop presets end yesterday; use Custom to match those).
+// Weeks start on Sunday. All days are local days in the workspace time zone.
 import type { Period } from "./metrics";
 
 export type PresetKey =
@@ -47,11 +47,11 @@ export function resolveRange(sel: RangeSel, today: string): Period {
     case "today": return span(today, today, "current");
     case "yesterday": return span(yest, yest, "current");
     case "today_yesterday": return span(yest, today, "current");
-    case "last_7": return span(addDays(today, -7), yest, "current");
-    case "last_14": return span(addDays(today, -14), yest, "current");
-    case "last_28": return span(addDays(today, -28), yest, "current");
-    case "last_30": return span(addDays(today, -30), yest, "current");
-    case "last_90": return span(addDays(today, -90), yest, "current");
+    case "last_7": return span(addDays(today, -6), today, "current");
+    case "last_14": return span(addDays(today, -13), today, "current");
+    case "last_28": return span(addDays(today, -27), today, "current");
+    case "last_30": return span(addDays(today, -29), today, "current");
+    case "last_90": return span(addDays(today, -89), today, "current");
     case "this_week": return span(weekStart, today, "current");
     case "last_week": return span(addDays(weekStart, -7), addDays(weekStart, -1), "current");
     case "this_month": return span(monthStart, today, "current");

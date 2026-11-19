@@ -8,7 +8,7 @@ import { RangeSel, resolveRange, daysBetween } from "./ranges";
 
 // Ad spend is read from a local copy of Meta's daily numbers. When a chosen range (with its
 // comparison period) reaches further back than that copy, pull the missing days from Meta once,
-// so "Last 90 days" here matches "Last 90 days" in Ads Manager.
+// so "Last 90 days" here matches the same dates in Ads Manager.
 const BACKFILL_KEY = (ws: string) => "itaos:ads-backfill:" + ws;
 const backfilling = new Set<string>();
 async function backfillAds(ws: string, from: string, today: string, earliest: string | null): Promise<boolean> {

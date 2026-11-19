@@ -6,11 +6,12 @@ const today = "2026-11-18"; // a Wednesday
 const r = (key: any) => { const p = resolveRange({ key }, today); return [p.from, p.to, p.days]; };
 
 describe("date ranges match Ads Manager", () => {
-  it("Last N days end yesterday", () => {
-    expect(r("last_30")).toEqual(["2026-10-19", "2026-11-17", 30]); // as in the Ads Manager screenshot
-    expect(r("last_7")).toEqual(["2026-11-11", "2026-11-17", 7]);
-    expect(r("last_14")).toEqual(["2026-11-04", "2026-11-17", 14]);
-    expect(r("last_28")).toEqual(["2026-10-21", "2026-11-17", 28]);
+  it("Last N days include today, like the Meta phone app", () => {
+    expect(r("last_30")).toEqual(["2026-10-20", today, 30]);
+    expect(r("last_7")).toEqual(["2026-11-12", today, 7]);
+    expect(r("last_14")).toEqual(["2026-11-05", today, 14]);
+    expect(r("last_28")).toEqual(["2026-10-22", today, 28]);
+    expect(resolveRange({ key: "last_90" }, "2026-11-19")).toMatchObject({ from: "2026-08-22", to: "2026-11-19", days: 90 });
   });
   it("today, yesterday and both", () => {
     expect(r("today")).toEqual([today, today, 1]);
@@ -28,10 +29,10 @@ describe("date ranges match Ads Manager", () => {
     expect(resolveRange({ key: "custom", from: "2026-11-30", to: "2026-11-10" }, today)).toMatchObject({ from: "2026-11-10", to: today, days: 9 });
   });
   it("comparison is the same number of days just before", () => {
-    expect(comparisonOf(resolveRange({ key: "last_7" }, today))).toMatchObject({ from: "2026-11-04", to: "2026-11-10", days: 7 });
+    expect(comparisonOf(resolveRange({ key: "last_7" }, today))).toMatchObject({ from: "2026-11-05", to: "2026-11-11", days: 7 });
   });
   it("labels", () => {
-    expect(rangeText(resolveRange({ key: "last_30" }, today), "en")).toBe("19 Oct – 17 Nov 2026");
+    expect(rangeText(resolveRange({ key: "last_30" }, today), "en")).toBe("20 Oct – 18 Nov 2026");
     expect(rangeText(resolveRange({ key: "today" }, today), "sw")).toBe("18 Nov 2026");
   });
 });
