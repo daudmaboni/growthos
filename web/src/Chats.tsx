@@ -549,6 +549,7 @@ function special(m: Msg): string | null {
   if (m.type === "errors" || b === "[errors]" || m.type === "unsupported") return "⚠ Message WhatsApp didn't share (e.g. a poll, view-once or a newer message type)";
   if (m.type === "sticker" || b === "[sticker]") return "🙂 Sticker";
   if (m.type === "video" && b === "[video]") return "🎬 Video";
+  if (m.type === "media_placeholder" || b === "[media_placeholder]") return "📎 Photo, voice note or file from an older chat (WhatsApp didn't share it)";
   if (m.type === "image" && b === "[image]") return "🖼 Photo (not saved)";
   if (m.type === "document" && b === "[document]") return "📄 Document (not saved)";
   if (m.type === "location" || b === "[location]") return "📍 Location";
@@ -754,12 +755,12 @@ function MediaView({ m, T }: { m: Msg; T: Tr }) {
   }, [m.media?.path]);
   const r = m.media?.receipt;
   const isPdf = m.media?.mime === "application/pdf";
-  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha")).join("\n");
+  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha") && l !== "[image]" && l !== "[document]").join("\n");
   return (
     <span className="mv">
       {url && (isPdf
         ? <a href={url} target="_blank" rel="noopener noreferrer">📄 {T("Open PDF", "Fungua PDF")}</a>
-        : <img src={url} alt={T("Image from customer", "Picha kutoka kwa mteja")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
+        : <img src={url} alt={m.direction === "in" ? T("Image from customer", "Picha kutoka kwa mteja") : T("Image you sent", "Picha uliyotuma")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
       {caption && <span>{caption}</span>}
       {r?.is_receipt ? <span className="mv-tag">🧾 {T("Payment screenshot", "Picha ya malipo")}{r.amount ? ` · ${Math.round(r.amount).toLocaleString("en-US")}` : ""}{r.txn_code ? ` · ${r.txn_code}` : ""}</span>
         : r ? <span className="mv-tag muted">{r.notes ?? T("Not a payment", "Si malipo")}</span> : null}

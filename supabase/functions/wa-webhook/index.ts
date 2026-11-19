@@ -107,6 +107,39 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
       if (!to) { console.error("echo without recipient; skipped", m?.type); continue; }
       const conv = await conversationFor(ctx, to);
       await saveMessage(ctx, conv.id, m, "out", "app_echo");
+      if (m.type === "image" || m.type === "document") await captureMedia(ctx.db, ctx.ws, m.id, m, undefined, false);
+    }
+  } else if (field === "history" && (value.messages || value.message_echoes)) {
+    // Stage 2 of history media: the first pass sent photos, voice notes and files as type
+    // "media_placeholder" with no content; Meta then sends each one again here, same message id,
+    // with the real type and a media id (only for media from the last ~14 days).
+    let mediaKey: string | null | undefined;
+    const items = [
+      ...(value.messages ?? []).map((m: any) => ({ m, direction: "in" as const, peer: senderId(m) })),
+      ...(value.message_echoes ?? []).map((m: any) => ({ m, direction: "out" as const, peer: recipientId(m) })),
+    ];
+    for (const { m, direction, peer } of items) {
+      if (!m?.id || m.type === "reaction" || m.type === "unsupported") continue;
+      const { data: upd, error } = await db.from("messages").update({ type: m.type, body: textOf(m), raw: m })
+        .eq("id", m.id).eq("workspace_id", ctx.ws).select("id,conversation_id");
+      if (error) throw new Error("could not save message");
+      let convId = upd?.[0]?.conversation_id as string | undefined;
+      if (!convId) {   // the placeholder never arrived: save it as a normal history message
+        if (!peer) { console.error("history media without customer id; skipped"); continue; }
+        const conv = await conversationFor(ctx, peer);
+        convId = conv.id as string;
+        const { error: insError } = await db.from("messages").upsert({
+          id: m.id, workspace_id: ctx.ws, conversation_id: convId, direction, origin: "history",
+          sent_at: new Date(Number(m.timestamp) * 1000).toISOString(), type: m.type, body: textOf(m), raw: m,
+        }, { onConflict: "id", ignoreDuplicates: true });
+        if (insError) throw new Error("could not save message");
+      }
+      ctx.touched.push(convId!);
+      if (m.type === "image" || m.type === "document") {
+        if (mediaKey === undefined) mediaKey = await dualhookKey(db, ctx.ws);
+        // Customer files are read for receipts; the business's own photos are only stored to show in Chats.
+        await captureMedia(db, ctx.ws, m.id, m, mediaKey, direction === "in");
+      }
     }
   } else if (field === "history") {
     let mediaKey: string | null | undefined;

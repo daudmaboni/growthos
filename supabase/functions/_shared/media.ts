@@ -121,13 +121,14 @@ export function receiptLine(r: Receipt) {
   return `[picha ya malipo] ${parts.join(" · ")}`;
 }
 
-/** Save and read one inbound media message. Never throws: a failure is recorded on the message. */
-export async function captureMedia(db: SupabaseClient, ws: string, msgId: string, m: any, key?: string | null): Promise<"saved" | "skipped" | "failed"> {
+/** Save (and, for customer files, read) one media message. Never throws: a failure is recorded on the message.
+ *  read=false only stores the file so it shows in Chats (e.g. photos the business sent from the phone). */
+export async function captureMedia(db: SupabaseClient, ws: string, msgId: string, m: any, key?: string | null, read = true): Promise<"saved" | "skipped" | "failed"> {
   try {
     const media = m?.[m?.type];
     if (!media?.url && !media?.id) return "skipped";
     const { data: cur } = await db.from("messages").select("media,body").eq("id", msgId).maybeSingle();
-    if (cur?.media?.path && cur.media.receipt) return "skipped";   // already saved and read (replayed event)
+    if (cur?.media?.path && (cur.media.receipt || !read)) return "skipped";   // already saved (and read): replayed event
     if (cur?.media?.path) {   // saved earlier but not read: read the stored copy
       const { data: blob } = await db.storage.from("wa-media").download(cur.media.path);
       if (!blob) return "failed";
@@ -152,6 +153,10 @@ export async function captureMedia(db: SupabaseClient, ws: string, msgId: string
     const { error: upErr } = await db.storage.from("wa-media").upload(path, got.bytes, { contentType: mime, upsert: true });
     if (upErr) { console.error("media store failed", upErr.message); await db.from("messages").update({ media: { error: "could not store", mime } }).eq("id", msgId); return "failed"; }
 
+    if (!read) {
+      await db.from("messages").update({ media: { path, mime, bytes: got.bytes.length } }).eq("id", msgId);
+      return "saved";
+    }
     const { data: w } = await db.from("workspaces").select("name").eq("id", ws).single();
     const receipt = await readReceipt(got.bytes, mime, w?.name ?? "the business");
     const caption = media.caption ? String(media.caption) : "";
