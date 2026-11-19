@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase, callFn, Workspace, canManage, canEdit, when } from "./lib";
 import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./motion";
 
 type Tab = "business" | "profile" | "appearance" | "rules" | "account";
 const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["account", "My profile", "Wasifu wangu"]];
-const CURRENCIES = ["TZS", "KES", "UGX", "RWF", "USD"];
+const CURRENCIES: [string, string, string][] = [["TZS", "Tanzanian shillings", "Shilingi za Tanzania"], ["KES", "Kenyan shillings", "Shilingi za Kenya"], ["UGX", "Ugandan shillings", "Shilingi za Uganda"], ["RWF", "Rwandan francs", "Faranga za Rwanda"], ["USD", "US dollars", "Dola za Marekani"]];
+const TIMEZONES: [string, string][] = [["Africa/Dar_es_Salaam", "Tanzania (Dar es Salaam)"], ["Africa/Nairobi", "Kenya (Nairobi)"], ["Africa/Kampala", "Uganda (Kampala)"], ["Africa/Kigali", "Rwanda (Kigali)"], ["Africa/Johannesburg", "South Africa"], ["Europe/London", "UK (London)"], ["UTC", "UTC"]];
 
 export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "dark" | "light"; onTheme: (t: "dark" | "light", from?: HTMLElement | null) => void }) {
   const [tab, setTab] = useState<Tab>(() => { const t = location.hash.split("/")[1]; return t === "rates" ? "rules" : TABS.some(([k]) => k === t) ? (t as Tab) : "business"; });
@@ -34,7 +36,7 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
       {tab === "business" && <Business ws={ws} onWs={onWs} T={T} />}
       {tab === "profile" && <Profile ws={ws} T={T} />}
       {tab === "appearance" && <Appearance ws={ws} onWs={onWs} theme={theme} onTheme={onTheme} T={T} />}
-      {tab === "rules" && <><Rates ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
+      {tab === "rules" && <><PaymentsCurrency ws={ws} onWs={onWs} T={T} /><Rates ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
       {tab === "account" && <><MyProfile ws={ws} T={T} /><Account email={email} T={T} /></>}
     </div>
   );
@@ -64,28 +66,71 @@ function useSave<T extends Partial<Workspace>>(ws: Workspace, onWs: (w: Workspac
 function Business({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
   const manager = canManage(ws);
   const [name, setName] = useState(ws.name);
-  const [currency, setCurrency] = useState(ws.currency);
   const [show, setShow] = useState<"TZS" | "USD">((ws.display_currency ?? (ws.currency === "USD" ? "USD" : "TZS")) as "TZS" | "USD");
   const { msg, busy, save } = useSave(ws, onWs);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    await save({ name: name.trim(), currency, display_currency: show }, e.currentTarget, T("Saved.", "Imehifadhiwa."));
+    await save({ name: name.trim(), display_currency: show }, e.currentTarget, T("Saved.", "Imehifadhiwa."));
   }
   return (
     <form className="card" onSubmit={submit}>
-      <div><h2>{T("Business", "Biashara")}</h2><span className="small muted">{T("As it appears in the app and reports", "Jinsi inavyoonekana kwenye app na ripoti")}</span></div>
+      <div><h2>{T("Business", "Biashara")}</h2><span className="small muted">{T("Your business name and how money is shown on the dashboard.", "Jina la biashara na jinsi pesa zinavyoonyeshwa kwenye dashibodi.")}</span></div>
       <Field id="s-name" label={T("Business name", "Jina la biashara")}><input id="s-name" required value={name} disabled={!manager} onChange={(e) => setName(e.target.value)} /></Field>
-      <Field id="s-cur" label={T("Sales currency", "Sarafu ya mauzo")} hint={T("What customers pay in. Ad spend may be in another currency; set the rate under Rates.", "Wateja wanalipa kwa sarafu hii. Matangazo yanaweza kuwa sarafu nyingine; weka kiwango kwenye Viwango.")}>
-        <select id="s-cur" value={currency} disabled={!manager} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
-      </Field>
-      <Field id="s-show" label={T("Show money in", "Onyesha pesa kwa")} hint={T("Every amount on the dashboard is shown in this currency. Ad spend (USD from Meta) or sales (TZS) are converted with the exchange rate under Rates.", "Kila kiasi kwenye dashibodi kinaonyeshwa kwa sarafu hii. Matangazo (USD kutoka Meta) au mauzo (TZS) yanabadilishwa kwa kiwango kilicho kwenye Viwango.")}>
+      <Field id="s-show" label={T("Show money in", "Onyesha pesa kwa")} hint={T(`Sales are in ${ws.currency} and Meta bills ads in USD. Everything on the dashboard is turned into the currency you pick here, using the exchange rate in Rules & rates.`, `Mauzo ni ${ws.currency} na Meta inatoza matangazo kwa USD. Kila kitu kwenye dashibodi kinabadilishwa kuwa sarafu unayochagua hapa, kwa kiwango kilicho kwenye Kanuni na viwango.`)}>
         <div className="seg" role="group" id="s-show" aria-label={T("Show money in", "Onyesha pesa kwa")}>
           {(["TZS", "USD"] as const).map((c) => <button key={c} type="button" disabled={!manager} className={show === c ? "on" : ""} aria-pressed={show === c} onClick={() => setShow(c)}>{c === "TZS" ? T("TZS (shillings)", "TZS (shilingi)") : T("USD (dollars)", "USD (dola)")}</button>)}
         </div>
       </Field>
-      <p className="small muted" style={{ margin: 0 }}>{T("Order costs are now typed on each sale: in Chats, when you press \"Yes, money received\".", "Gharama za oda sasa zinaandikwa kwa kila mauzo: kwenye Chats, unapobonyeza \"Ndiyo, pesa imeingia\".")}</p>
       {manager && <SaveRow busy={busy} msg={msg} T={T} />}
     </form>
+  );
+}
+
+/** What customers pay in. TZS for everyone today; changing it asks "are you sure?" because every sale is read in this currency. */
+function PaymentsCurrency({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
+  const manager = canManage(ws);
+  const [pick, setPick] = useState(ws.currency);
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => { setPick(ws.currency); }, [ws.currency]);
+  const label = (c: string) => { const x = CURRENCIES.find(([k]) => k === c); return x ? `${c} · ${T(x[1], x[2])}` : c; };
+  async function confirm() {
+    setBusy(true); setErr("");
+    const { error } = await supabase.from("workspaces").update({ currency: pick }).eq("id", ws.id);
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onWs({ ...ws, currency: pick }); setAsk(false);
+  }
+  function cancel() { setAsk(false); setPick(ws.currency); }
+  return (
+    <section className="card">
+      <div><h2>{T("Payments from customers", "Malipo kutoka kwa wateja")}</h2>
+        <span className="small muted">{T("The currency customers pay you in (M-Pesa, Tigo Pesa, cash). Every sale you record is counted in this currency.", "Sarafu wateja wanayokulipa (M-Pesa, Tigo Pesa, cash). Kila mauzo unayorekodi yanahesabiwa kwa sarafu hii.")}</span></div>
+      <Field id="s-paycur" label={T("Customers pay in", "Wateja wanalipa kwa")}>
+        <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+          <select id="s-paycur" value={pick} disabled={!manager || busy} onChange={(e) => { setPick(e.target.value); if (e.target.value !== ws.currency) setAsk(true); }} style={{ width: 260 }}>
+            {CURRENCIES.map(([c]) => <option key={c} value={c}>{label(c)}</option>)}
+          </select>
+          {ws.currency === "TZS" && <span className="small ok">✓ {T("Shillings, as normal", "Shilingi, kama kawaida")}</span>}
+        </div>
+      </Field>
+      {ws.currency !== "TZS" && <p className="small warnt" style={{ margin: 0 }}>⚠ {T(`Payments are set to ${ws.currency}. If your customers pay in shillings, change this back to TZS or your revenue will be wrong.`, `Malipo yamewekwa ${ws.currency}. Kama wateja wanalipa kwa shilingi, rudisha TZS la sivyo mapato yatakuwa si sahihi.`)}</p>}
+      {err && <span className="err small">{err}</span>}
+      {ask && createPortal(
+        <div className="dr-layer" data-noswipe role="dialog" aria-modal="true" aria-labelledby="cur-ask-h">
+          <div className="dr-scrim" onClick={cancel} aria-hidden />
+          <div className="card dr-modal confirm-modal">
+            <h2 id="cur-ask-h">{T("Are you sure?", "Una uhakika?")}</h2>
+            <p style={{ margin: 0 }}>{T(`Change customer payments from ${ws.currency} to ${pick}?`, `Badilisha malipo ya wateja kutoka ${ws.currency} kwenda ${pick}?`)}</p>
+            <p className="small muted" style={{ margin: 0 }}>{T(`Every sale, old and new, will be read as ${pick}. A sale typed as 205,000 will mean ${pick} 205,000. Only do this if your customers really pay in ${pick}.`, `Kila mauzo, ya zamani na mapya, yatasomwa kama ${pick}. Mauzo ya 205,000 yatamaanisha ${pick} 205,000. Fanya hivi tu kama wateja wanalipa kwa ${pick} kweli.`)}</p>
+            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={cancel} disabled={busy}>{T("No, keep ", "Hapana, baki ")}{ws.currency}</button>
+              <button type="button" className="primary" onClick={confirm} disabled={busy}>{busy ? T("Saving…", "Inahifadhi…") : T(`Yes, change to ${pick}`, `Ndiyo, badilisha kuwa ${pick}`)}</button>
+            </div>
+          </div>
+        </div>, document.body)}
+    </section>
   );
 }
 
@@ -146,6 +191,9 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
   const [tz, setTz] = useState(ws.timezone ?? "Africa/Dar_es_Salaam");
   const { msg, busy, save } = useSave(ws, onWs);
   const manager = canManage(ws);
+  // fx_rate is always "1 ad-currency unit (USD) = N shillings", whatever the sales currency is set to.
+  const fxFrom = ws.fx_base ?? "USD";
+  const fxTo = ws.currency === fxFrom ? "TZS" : ws.currency;
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const v = rate.trim() === "" ? null : Number(rate.replace(/,/g, ""));
@@ -171,9 +219,9 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
   }
   return (
     <form className="card" onSubmit={submit}>
-      <div><h2>{T("Reporting rules", "Kanuni za ripoti")}</h2><span className="small muted">{T("These rules decide how figures are counted. They are applied the same way everywhere and never by AI.", "Kanuni hizi zinaamua jinsi takwimu zinavyohesabiwa. Zinatumika sawa kila mahali, si kwa AI.")}</span></div>
-      <Field id="s-fx" label={T(`Exchange rate: 1 ${ws.fx_base ?? "unit of ad currency"} =`, `Kiwango: ${ws.fx_base ? `1 ${ws.fx_base}` : "kitengo 1 cha sarafu ya tangazo"} =`)} hint={auto
-          ? T(`Updated automatically every few hours from the market rate. Used for return on ad spend and contribution when ads are billed in another currency than ${ws.currency}.`, `Inasasishwa yenyewe kila baada ya saa chache kwa kiwango cha soko. Inatumika kwa mapato kwa tangazo na faida ya mchango.`)
+      <div><h2>{T("Rates and counting rules", "Viwango na kanuni za kuhesabu")}</h2><span className="small muted">{T("How itaOS turns ad dollars into shillings and how it counts days, follow-ups and sales. Applied the same way on every page, never guessed by AI.", "Jinsi itaOS inavyobadilisha dola za matangazo kuwa shilingi na inavyohesabu siku, ufuatiliaji na mauzo. Zinatumika sawa kila ukurasa, si kwa kubahatisha.")}</span></div>
+      <Field id="s-fx" label={T(`Exchange rate: 1 ${fxFrom} =`, `Kiwango: 1 ${fxFrom} =`)} hint={auto
+          ? T("Updated automatically every few hours from the market rate. Used to compare what ads cost (USD) with what customers paid (TZS).", "Inasasishwa yenyewe kila baada ya saa chache kwa kiwango cha soko. Inatumika kulinganisha gharama ya matangazo (USD) na malipo ya wateja (TZS).")
           : T("You set this rate yourself. It stays until you change it.", "Umeweka kiwango hiki wewe mwenyewe. Kinabaki hadi ukibadilishe.")}>
         <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
           <label className="row" style={{ gap: 6, cursor: manager ? "pointer" : "default" }}><input type="radio" name="fx-mode" checked={auto} disabled={!manager} onChange={() => setAuto(true)} />{T("Automatic", "Kiotomatiki")}</label>
@@ -181,23 +229,25 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
         </div>
         {auto ? (
           <div className="row" style={{ gap: 10, marginTop: 6 }}>
-            <b>{ws.fx_auto !== false && ws.fx_rate ? `${Number(ws.fx_rate).toLocaleString()} ${ws.currency}` : "–"}</b>
+            <b>{ws.fx_auto !== false && ws.fx_rate ? `${Number(ws.fx_rate).toLocaleString()} ${fxTo}` : "–"}</b>
             {ws.fx_auto !== false && ws.fx_updated_at && <span className="small muted">{T("updated", "imesasishwa")} {when(ws.fx_updated_at)}</span>}
             {manager && ws.fx_auto !== false && <button type="button" className="small" disabled={fetching} onClick={refreshRate}>{fetching ? "…" : T("Update now", "Sasisha sasa")}</button>}
           </div>
         ) : (
-          <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{ws.currency}</span></div>
+          <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{fxTo}</span></div>
         )}
         {fxErr && <span className="small err">{fxErr}</span>}
       </Field>
-      <Field id="s-fu" label={T("Follow-up is due after (hours)", "Ufuatiliaji unafika baada ya (saa)")} hint={T("A warm chat with no message from you for this long appears in Actions.", "Chat yenye nia bila ujumbe wako kwa muda huu inaonekana kwenye Vitendo.")}>
+      <Field id="s-fu" label={T("Remind me to follow up after (hours)", "Nikumbushe kufuatilia baada ya (saa)")} hint={T("A customer who showed interest but got no message from you for this long shows up in Actions.", "Mteja aliyeonyesha nia bila ujumbe wako kwa muda huu anaonekana kwenye Vitendo.")}>
         <input id="s-fu" inputMode="numeric" style={{ width: 160 }} value={hours} disabled={!manager} onChange={(e) => setHours(e.target.value)} />
       </Field>
-      <Field id="s-win" label={T("Conversion window (days)", "Dirisha la uthibitisho (siku)")} hint={T("A paid order counts for a chat only if it was paid within this many days of the chat starting.", "Oda inahesabiwa kwa chat tu ikilipwa ndani ya siku hizi tangu chat ianze.")}>
+      <Field id="s-win" label={T("Count a sale for a chat if paid within (days)", "Hesabu mauzo kwa chat ikilipwa ndani ya (siku)")} hint={T("Example: 30 means a customer who starts chatting on 1 Nov and pays by 30 Nov counts as a sale from that chat (and its ad).", "Mfano: 30 maana yake mteja akianza chat 1 Nov na akalipa kabla ya 30 Nov, inahesabiwa mauzo ya chat hiyo (na tangazo lake).")}>
         <input id="s-win" inputMode="numeric" style={{ width: 160 }} value={win} disabled={!manager} onChange={(e) => setWin(e.target.value)} />
       </Field>
-      <Field id="s-tz" label={T("Timezone", "Saa za eneo")} hint={T("Days and periods are counted in this timezone.", "Siku na vipindi vinahesabiwa kwa saa hizi.")}>
-        <input id="s-tz" style={{ width: 260 }} value={tz} disabled={!manager} onChange={(e) => setTz(e.target.value)} />
+      <Field id="s-tz" label={T("Your time zone", "Saa za eneo lako")} hint={T("\"Today\" and \"yesterday\" start at midnight in this time zone.", "\"Leo\" na \"jana\" zinaanza saa sita usiku kwa saa hizi.")}>
+        <select id="s-tz" style={{ width: 260 }} value={tz} disabled={!manager} onChange={(e) => setTz(e.target.value)}>
+          {(TIMEZONES.some(([k]) => k === tz) ? TIMEZONES : [[tz, tz] as [string, string], ...TIMEZONES]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
       </Field>
       {manager && <SaveRow busy={busy} msg={msg} T={T} />}
     </form>
@@ -236,12 +286,13 @@ function Profile({ ws, T }: { ws: Workspace; T: Tr }) {
   }
   return (
     <form className="card" onSubmit={submit}>
-      <div><h2>{T("Business profile", "Wasifu wa biashara")}</h2><span className="small muted">{T("The only facts Kito may state when drafting replies or content ideas. Visible to everyone in this workspace and to nobody else.", "Ukweli pekee ambao Kito anaweza kutaja akiandika rasimu. Inaonekana kwa wote wa workspace hii tu.")}{p.updated_at ? ` · ${T("last edited", "imehaririwa")} ${when(p.updated_at)}` : ""}</span></div>
-      <div><h3>{T("Products and prices", "Bidhaa na bei")}</h3>
+      <div><h2>{T("Business profile", "Wasifu wa biashara")}</h2><span className="small muted">{T("Tell Kito about your business. Kito only uses what is written here when it drafts replies or content, so keep prices and delivery up to date. Only people in this workspace can see it.", "Mweleze Kito kuhusu biashara yako. Kito anatumia tu kilichoandikwa hapa akiandika majibu au maudhui, hivyo weka bei na usafirishaji sahihi. Wanaoona ni watu wa workspace hii tu.")}{p.updated_at ? ` · ${T("last edited", "imehaririwa")} ${when(p.updated_at)}` : ""}</span></div>
+      <div><h3>{T("Products and prices", "Bidhaa na bei")} <span className="small muted">(TZS)</span></h3>
+        {p.products.length === 0 && <p className="small muted" style={{ margin: "4px 0 0" }}>{T("No products yet. Add each product with its price so Kito never quotes a wrong price.", "Bado hakuna bidhaa. Ongeza kila bidhaa na bei yake ili Kito asitaje bei isiyo sahihi.")}</p>}
         {p.products.map((x, i) => (
           <div className="row" key={i} style={{ marginTop: 6 }}>
             <input placeholder={T("Product", "Bidhaa")} value={x.name} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)) })} />
-            <input placeholder={T("Price", "Bei")} style={{ width: 120 }} value={x.price} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)) })} />
+            <input placeholder={T("Price, e.g. 155,000", "Bei, mfano 155,000")} style={{ width: 160 }} value={x.price} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)) })} />
             <input placeholder={T("Note (size, pack, what it is for)", "Maelezo")} value={x.note} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, note: e.target.value } : y)) })} />
             {editor && <button type="button" className="small" onClick={() => set({ products: p.products.filter((_, j) => j !== i) })}>×</button>}
           </div>
