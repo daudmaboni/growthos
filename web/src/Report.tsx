@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { Workspace, fmt, pct, money, dur } from "./lib";
 import { useGrowthData } from "./data";
+import { FilterBar, useFilters } from "./Filters";
+import { weeklySummary } from "./summary";
 import DateRange from "./DateRange";
 import { RangeSel, loadRange, saveRange } from "./ranges";
 import { diagnose, Finding } from "./diagnosis";
@@ -15,7 +17,9 @@ export default function Report({ ws }: { ws: Workspace }) {
   const setRange = (r: RangeSel) => { setRangeState(r); saveRange("report", r); };
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const g = useGrowthData(ws, range);
+  const [filters, setFilters] = useFilters("report");
+  const g = useGrowthData(ws, range, { filters });
+  const [copied, setCopied] = useState(false);
   const { mx, prev } = g;
   const findings = useMemo(() => (mx ? diagnose(mx, g.convs, g.orders, ws.timezone) : []), [mx, g.convs, g.orders, ws.timezone]);
   const pageRef = usePageEnter<HTMLDivElement>((root) => {
@@ -53,7 +57,9 @@ export default function Report({ ws }: { ws: Workspace }) {
         </div>
         <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
       </div>
+      <FilterBar value={filters} onChange={setFilters} options={g.options} lang={lang} />
       {g.err && <p className="err">{g.err}</p>}
+      <WeeklySummaryCard text={weeklySummary(mx, prev, findings, { lang, business: ws.name, currency: ws.currency })} T={T} copied={copied} onCopied={() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }} />
 
       <section className="card">
         <div><h2>{T("Most likely bottleneck", "Kikwazo kikubwa zaidi")}</h2><span className="small muted">{T("Ranked by how many customers it touches and how urgent it is. Observed facts come first; the interpretation is labelled as a hypothesis.", "Zimepangwa kwa idadi ya wateja na uharaka. Ukweli ulioonekana unakuja kwanza; tafsiri imeandikwa kama dhana.")}</span></div>
@@ -104,5 +110,23 @@ function FindingCard({ f, rank, lang }: { f: Finding; rank: number; lang: "sw" |
         {f.orderIds?.length ? <> · <a href={"#chats/orders=" + f.orderIds.join(",")}>{T(`${f.orderIds.length} orders →`, `Oda ${f.orderIds.length} →`)}</a></> : null}
       </span>
     </div>
+  );
+}
+
+/** Results, bottlenecks and missing data in a few lines, ready to read or send on WhatsApp. */
+function WeeklySummaryCard({ text, T, copied, onCopied }: { text: string; T: (en: string, sw: string) => string; copied: boolean; onCopied: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="card weekly-summary">
+      <div className="row between">
+        <div><h2>{T("Weekly summary", "Muhtasari wa wiki")}</h2><span className="small muted">{T("Built from your numbers and the rules below. No AI.", "Imetengenezwa kutoka takwimu zako na kanuni zilizo chini. Hakuna AI.")}</span></div>
+        <div className="row" style={{ gap: 6 }}>
+          <button className="small" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? T("Hide", "Ficha") : T("Show", "Onyesha")}</button>
+          <button className="small" onClick={async () => { try { await navigator.clipboard.writeText(text); onCopied(); } catch { setOpen(true); } }}>{copied ? T("Copied ✓", "Imenakiliwa ✓") : T("Copy", "Nakili")}</button>
+          <a className="btn small primary" href={"https://wa.me/?text=" + encodeURIComponent(text)} target="_blank" rel="noopener noreferrer">{T("Send on WhatsApp ↗", "Tuma WhatsApp ↗")}</a>
+        </div>
+      </div>
+      {open && <pre className="summary-text">{text}</pre>}
+    </section>
   );
 }

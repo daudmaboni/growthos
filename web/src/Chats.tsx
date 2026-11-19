@@ -4,6 +4,7 @@
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
+import { AssignChat } from "./team";
 import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
 
@@ -571,6 +572,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
             {kitoStale(r) && <p className="wa-sum cc-reading">✦ {T("New messages since Kito's last read. Kito is reading them now; this updates by itself.", "Kuna ujumbe mpya tangu Kito asome. Kito anausoma sasa; hii itajisasisha yenyewe.")}</p>}
             {r.kito_summary && <p className={"wa-sum" + (kitoStale(r) ? " stale" : "")}>{r.kito_summary}</p>}
             {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
+            <AssignChat ws={ws} conversationId={r.id} />
           </div>
           {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); onChange(); }} />}
           {editor && !confirmed && st.key !== "check" && !recording && (

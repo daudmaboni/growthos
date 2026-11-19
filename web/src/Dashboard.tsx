@@ -4,6 +4,7 @@ import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "
 import { Workspace, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
+import { FilterBar, useFilters } from "./Filters";
 import DateRange from "./DateRange";
 import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
@@ -15,7 +16,8 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const D = (k: string) => DEFINITIONS[k]?.[lang] ?? "";
-  const g = useGrowthData(ws, range, { cache: true });
+  const [filters, setFilters] = useFilters("dashboard");
+  const g = useGrowthData(ws, range, { cache: true, filters });
   const { mx, prev, ads, daily, loading, err } = g;
   const rawAdCur = mx?.adCurrency ?? ws.currency;
   // Every amount on this page is shown in one currency (Settings → Currency). Ad spend comes from
@@ -97,6 +99,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
         </div>
       </div>
+      <FilterBar value={filters} onChange={setFilters} options={g.options ?? { campaigns: [], ads: [], products: [] }} lang={lang} />
       {err && <p className="err">{err}</p>}
       {failed && failed.events > 0 && <div className="finding warn"><b>{T(`${failed.events} WhatsApp events failed to process`, `Matukio ${failed.events} ya WhatsApp hayajachakatwa`)}</b><span className="small">{T("Some chats may be incomplete. Replay them from ", "Baadhi ya chats zinaweza kuwa hazijakamilika. Zirudie kutoka ")}<a href="#connect">Connections</a>.</span></div>}
       {noData ? (

@@ -1,6 +1,7 @@
 // Orders for one chat: record, correct, reverse. Every change is audited by the database.
 import { useEffect, useState } from "react";
 import { supabase, Workspace, Order, Outcome, L, amt, when, orderNet, canEdit } from "./lib";
+import { AssignSelect } from "./team";
 
 type Ev = { id: number; action: string; actor: string | null; at: string; before: any; after: any };
 
@@ -134,6 +135,7 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
           </div>
           {(Number(o.discount) > 0 || Number(o.refund_amount) > 0) && <span className="small muted">{T("gross", "jumla")} {amt(Number(o.amount), o.currency)}{Number(o.discount) > 0 ? ` − ${T("discount", "punguzo")} ${amt(Number(o.discount), o.currency)}` : ""}{Number(o.refund_amount) > 0 ? ` − ${T("refund", "marejesho")} ${amt(Number(o.refund_amount), o.currency)}` : ""}</span>}
           {o.status === "paid" && <span className="small muted">{o.cost != null ? `${T("Cost", "Gharama")} ${amt(Number(o.cost), o.currency)} · ${T("profit before ads", "faida kabla ya matangazo")} ${amt(orderNet(o) - Number(o.cost), o.currency)}` : T("No cost typed yet — add it to see profit.", "Gharama bado haijaandikwa — iongeze uone faida.")}</span>}
+          {o.delivery_issue && <span className={"small" + (o.delivery_resolved_at ? " muted" : " warnt")}>{o.delivery_resolved_at ? "✓ " : "⚠ "}{T("Delivery issue", "Tatizo la usafirishaji")}: {o.delivery_issue}{o.delivery_resolved_at ? ` · ${T("resolved", "imetatuliwa")} ${when(o.delivery_resolved_at)}` : ""}</span>}
           {o.notes && <span className={"small" + (o.notes.includes("⚠") ? " warnt" : "")}>{o.notes.replace(/\s*\[(wamsg|phone):[^\]]*\]/g, "")}</span>}
           <span className="small muted">{T("last change", "badiliko la mwisho")} {when(o.updated_at)} · <button className="small" style={{ padding: 0, border: 0, background: "none", color: "var(--accent)" }} onClick={() => toggleHistory(o)}>{events[o.id] ? T("hide history", "ficha historia") : T("history", "historia")}</button></span>
           {events[o.id] && <div className="small muted" style={{ display: "grid", gap: 2 }}>{events[o.id].map((e) => <span key={e.id}>{when(e.at)} · {e.action}{e.action === "update" && e.before && e.after ? ": " + Object.keys(e.after).filter((k) => JSON.stringify(e.before[k]) !== JSON.stringify(e.after[k]) && !["updated_at", "updated_by"].includes(k)).map((k) => `${k} ${JSON.stringify(e.before[k])} → ${JSON.stringify(e.after[k])}`).join(", ") : ""}{e.actor ? "" : T(" (server)", " (mfumo)")}</span>)}</div>}
@@ -145,6 +147,10 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
               {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Refund amount", "Kiasi cha marejesho"), String(orderNet(o))); const n = v == null ? NaN : Number(v.replace(/[^\d.]/g, "")); if (n >= 0 && n <= orderNet(o)) update(o, { status: "refunded", refund_amount: Number(o.refund_amount) + n }); }}>{T("Refund", "Rudisha pesa")}</button>}
               {o.status !== "cancelled" && <button className="small" disabled={busy === o.id} onClick={() => confirm(T("Cancel this order? It stays in the history as cancelled.", "Ghairi oda hii? Itabaki kwenye historia kama iliyoghairiwa.")) && update(o, { status: "cancelled" })}>{T("Cancel order", "Ghairi oda")}</button>}
               <select value={o.fulfillment_status} disabled={busy === o.id} onChange={(e) => update(o, { fulfillment_status: e.target.value as any })} style={{ padding: "3px 8px" }}>{(["not_applicable", "not_shipped", "shipped", "delivered", "returned"] as const).map((s) => <option key={s} value={s}>{L[lang].fulfillment[s]}</option>)}</select>
+              {o.status === "paid" && "delivery_issue" in o && (o.delivery_issue && !o.delivery_resolved_at
+                ? <button className="small" disabled={busy === o.id} onClick={() => update(o, { delivery_resolved_at: new Date().toISOString() })}>{T("Issue resolved", "Tatizo limetatuliwa")}</button>
+                : <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("What went wrong with the delivery? (e.g. customer not reachable, wrong item, damaged)", "Nini kimeharibika kwenye usafirishaji? (mf. mteja hapatikani, bidhaa si sahihi, imeharibika)"), ""); if (v && v.trim()) update(o, { delivery_issue: v.trim().slice(0, 500) }); }}>{T("Delivery issue…", "Tatizo la usafirishaji…")}</button>)}
+              {"assigned_to" in o && <AssignSelect ws={ws} value={o.assigned_to} label={false} busy={busy === o.id} onChange={(u) => update(o, { assigned_to: u })} />}
             </div>
           )}
         </div>

@@ -683,3 +683,17 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .confirm-modal { position: relative; z-index: 1; width: 100%; max-width: 420px; display: grid; gap: 12px; padding: 22px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .12); animation: dr-pop-in .32s cubic-bezier(.2, .9, .3, 1.15) both; }
 /* "Came from an ad? Yes / No" in the chat's side panel */
 .cc-fromad { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+/* 0033: Needs attention, filters, assignment, weekly summary */
+.att-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.att-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.att-list li:first-child { border-top: 0; }
+.att-list li > span:first-child { display: grid; gap: 2px; min-width: 0; flex: 1 1 220px; }
+.att-list li.bad > span:first-child b::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--bad, #c8372d); margin-right: 7px; transform: translateY(-1px); }
+.filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filterbar select { padding: 6px 10px; border-radius: 999px; max-width: 240px; }
+.filterbar .filternote { flex-basis: 100%; }
+.assign { display: inline-flex; gap: 6px; align-items: center; }
+.assign select { padding: 3px 8px; }
+.assign-row { display: grid; gap: 4px; margin-top: 6px; }
+.weekly-summary .summary-text { white-space: pre-wrap; font: inherit; font-size: 13.5px; line-height: 1.55; background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 10px 0 0; }

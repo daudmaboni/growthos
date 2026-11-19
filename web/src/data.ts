@@ -31,6 +31,36 @@ export type Conn = { id: string; provider: string; external_id: string; label: s
 export type Num = { phone_number_id: string; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
 export type Health = { status: string; events: number; oldest: string | null; newest: string | null; exhausted: number };
 
+/** Report filters (Dashboard and Diagnosis). Applied to chats, orders, ads and spend before the
+ *  metrics run, so every number on the page agrees with the filter. Product filters orders only:
+ *  chats don't carry a product. */
+export type Filters = { source?: "ad" | "organic" | "unknown"; campaign?: string; ad?: string; product?: string };
+export type FilterOptions = { campaigns: string[]; ads: { id: string; name: string; campaign: string | null }[]; products: string[] };
+export const activeFilters = (f?: Filters) => !!f && !!(f.source || f.campaign || f.ad || f.product);
+
+/** Pure: narrow the loaded rows to the filter (exported for tests). */
+export function applyFilters<T extends { conversations: Outcome[]; orders: Order[]; daily: (DailyInsight & { ad_id?: string })[]; ads: AdPerf[]; adsPrev: AdPerf[] }>(
+  d: T, f: Filters | undefined, campaignOf: Record<string, string | null>): T {
+  if (!activeFilters(f)) return d;
+  const wantAd = (id: string | null | undefined) => {
+    if (f!.ad) return id === f!.ad;
+    if (f!.campaign) return !!id && campaignOf[id] === f!.campaign;
+    return true;
+  };
+  const byAd = !!(f!.ad || f!.campaign);
+  const nonAdSource = f!.source && f!.source !== "ad";
+  const prod = f!.product?.trim().toLowerCase();
+  return {
+    ...d,
+    conversations: d.conversations.filter((c) => (!f!.source || c.source === f!.source) && (!byAd || wantAd(c.ad_id))),
+    orders: d.orders.filter((o) => (!f!.source || o.conv_source === f!.source) && (!byAd || wantAd(o.ad_id)) && (!prod || (o.product ?? "").toLowerCase() === prod)),
+    // Spend belongs to ads: none for organic/unknown chats; only the chosen ads' spend otherwise.
+    daily: nonAdSource ? [] : byAd ? d.daily.filter((x) => wantAd(x.ad_id)) : d.daily,
+    ads: nonAdSource ? [] : d.ads.filter((a) => wantAd(a.ad_id)),
+    adsPrev: nonAdSource ? [] : d.adsPrev.filter((a) => wantAd(a.ad_id)),
+  };
+}
+
 export type GrowthData = {
   loading: boolean; err: string;
   mx: FunnelMetrics | null; prev: FunnelMetrics | null;
@@ -41,6 +71,7 @@ export type GrowthData = {
   objections: [string, number][];            // objections in unsold chats started this period
   allTime: { orders: number; revenue: number; chats: number } | null;   // every recorded sale, any date
   cached: boolean;                           // numbers shown are from the last visit; fresh ones are loading
+  options: FilterOptions;                    // choices for the filter bar (from all data, not the filtered view)
 };
 
 // Only the columns the metrics, diagnosis and dashboard read. Leaves out Kito's long text
@@ -126,11 +157,12 @@ export function objectionTally(convs: Outcome[], period: { from: string; to: str
   return Object.entries(tally).sort((a, b) => b[1] - a[1]);
 }
 
-const EMPTY = (tz: string): GrowthData => ({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), tz), findings: [], objections: [], allTime: null, cached: false });
+const EMPTY = (tz: string): GrowthData => ({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), tz), findings: [], objections: [], allTime: null, cached: false, options: { campaigns: [], ads: [], products: [] } });
 
-export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: boolean } = {}): GrowthData {
+export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: boolean; filters?: Filters } = {}): GrowthData {
+  const fkey = activeFilters(opts.filters) ? JSON.stringify(opts.filters) : "";
   const [state, setState] = useState<GrowthData>(() => {
-    const hit = opts.cache ? readCache(cacheKey(ws.id, JSON.stringify(range))) : null;
+    const hit = opts.cache ? readCache(cacheKey(ws.id, JSON.stringify(range) + fkey)) : null;
     return hit?.mx ? { ...EMPTY(ws.timezone), ...hit, loading: false, cached: true } : EMPTY(ws.timezone);
   });
   // Background refresh: re-read every 2 min and whenever the tab comes back into view.
@@ -163,7 +195,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
   const again = useRef(false);
   useEffect(() => () => { reqKey.current = ""; }, []);
   useEffect(() => {
-    const rk = JSON.stringify(range);
+    const rk = JSON.stringify(range) + fkey;
     const key = ws.id + "|" + rk + "|" + ws.timezone;
     const keyChanged = reqKey.current !== key;
     reqKey.current = key;
@@ -186,11 +218,11 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
     }
     (async () => {
       try {
-        const [a, ap, c, d, o, e, cn, nm, h, ib, all, first] = await Promise.all([
+        const [a, ap, c, d, o, e, cn, nm, h, ib, all, first, adList] = await Promise.all([
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
-          supabase.from("ad_insights_daily").select("day,spend,currency,impressions,clicks,messaging_conversations").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(20000),
+          supabase.from("ad_insights_daily").select("ad_id,day,spend,currency,impressions,clicks,messaging_conversations").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(20000),
           supabase.from("orders").select("*, conv:conversations!orders_conversation_workspace_fk(source)").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000),
           supabase.from("expenses").select("day,amount,currency,category").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(5000),
           supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id),
@@ -200,6 +232,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           // Every recorded sale, any date, so the Revenue card can be checked against the Bought tab.
           supabase.from("orders").select("conversation_id,amount,discount,refund_amount").eq("workspace_id", ws.id).eq("status", "paid").limit(10000),
           supabase.from("ad_insights_daily").select("day").eq("workspace_id", ws.id).order("day", { ascending: true }).limit(1),
+          supabase.from("ads").select("ad_id,name,campaign_name").eq("workspace_id", ws.id).limit(5000),
         ]);
         if (!live()) return;
         // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
@@ -208,12 +241,26 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         if (!live()) return;
         loadedKey.current = key;
         const firstErr = [a, ap, d, o2, e, cn, nm, h, ib].find((r) => r.error)?.error;
-        const daily = ((d.data as any[]) ?? []).map((r) => ({ day: r.day, spend: Number(r.spend), currency: r.currency, impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks ?? 0), messaging_conversations: Number(r.messaging_conversations ?? 0) }));
-        const orders = (((o2.data as any[]) ?? []).map(({ conv, ...r }) => ({ ...r, conv_source: conv?.source ?? null }))) as Order[];
+        const daily0 = ((d.data as any[]) ?? []).map((r) => ({ ad_id: r.ad_id as string, day: r.day, spend: Number(r.spend), currency: r.currency, impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks ?? 0), messaging_conversations: Number(r.messaging_conversations ?? 0) }));
+        const orders0 = (((o2.data as any[]) ?? []).map(({ conv, ...r }) => ({ ...r, conv_source: conv?.source ?? null }))) as Order[];
+        // Filter choices come from everything loaded; the numbers below use the filtered rows.
+        const adMeta = ((adList.data as any[]) ?? []);
+        const campaignOf: Record<string, string | null> = {};
+        for (const x of adMeta) campaignOf[x.ad_id] = x.campaign_name ?? null;
+        for (const x of [...((a.data as AdPerf[]) ?? []), ...((ap.data as AdPerf[]) ?? [])]) if (!(x.ad_id in campaignOf)) campaignOf[x.ad_id] = x.campaign_name ?? null;
+        const usedAds = new Set<string>([...daily0.map((x) => x.ad_id), ...c.map((x) => x.ad_id).filter(Boolean) as string[]]);
+        const options: FilterOptions = {
+          campaigns: [...new Set(Object.entries(campaignOf).filter(([id, n]) => n && usedAds.has(id)).map(([, n]) => n as string))].sort(),
+          ads: [...usedAds].map((id) => ({ id, name: adMeta.find((x) => x.ad_id === id)?.name ?? ((a.data as AdPerf[]) ?? []).find((x) => x.ad_id === id)?.ad_name ?? id, campaign: campaignOf[id] ?? null }))
+            .sort((x, y) => x.name.localeCompare(y.name)),
+          products: [...new Set(orders0.map((x) => (x.product ?? "").trim()).filter(Boolean))].sort(),
+        };
+        const fd = applyFilters({ conversations: c, orders: orders0, daily: daily0, ads: (a.data as AdPerf[]) ?? [], adsPrev: (ap.data as AdPerf[]) ?? [] }, opts.filters, campaignOf);
+        const daily = fd.daily, orders = fd.orders;
         const expenses = ((e.data as any[]) ?? []).map((x) => ({ day: x.day, amount: Number(x.amount), currency: x.currency, category: x.category }));
-        const base = { ws, conversations: c, daily, orders, expenses };
-        const mx = computeFunnel({ ...base, period, ads: (a.data as AdPerf[]) ?? [] });
-        const prev = computeFunnel({ ...base, period: prevP, ads: (ap.data as AdPerf[]) ?? [] });
+        const base = { ws, conversations: fd.conversations, daily, orders, expenses };
+        const mx = computeFunnel({ ...base, period, ads: fd.ads });
+        const prev = computeFunnel({ ...base, period: prevP, ads: fd.adsPrev });
         const allRows = ((all.data as any[]) ?? []);
         const allTime = all.error ? null : {
           orders: allRows.length,
@@ -222,9 +269,9 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         };
         const next: GrowthData = {
           loading: false, err: firstErr ? "Some data could not be loaded: " + firstErr.message : "",
-          mx, prev, convs: c, ads: (a.data as AdPerf[]) ?? [], adsPrev: (ap.data as AdPerf[]) ?? [], orders, daily, expenses,
+          mx, prev, convs: fd.conversations, ads: fd.ads, adsPrev: fd.adsPrev, orders, daily, expenses,
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
-          findings: diagnose(mx, c, orders, tz).slice(0, 4), objections: objectionTally(c, period, tz), allTime, cached: false,
+          findings: diagnose(mx, fd.conversations, orders, tz).slice(0, 4), objections: objectionTally(fd.conversations, period, tz), allTime, cached: false, options,
         };
         setState(next);
         if (opts.cache) writeCache(ck, next);
@@ -243,6 +290,6 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         }
       }
     })();
-  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.display_currency, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), tick]);
+  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.display_currency, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), fkey, tick]);
   return state;
 }

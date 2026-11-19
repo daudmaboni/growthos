@@ -12,12 +12,13 @@ import Report from "./Report";
 import Actions from "./Actions";
 import Content from "./Content";
 import Kito from "./Kito";
+import Attention from "./Attention";
 import Logo, { KitoLogo } from "./Logo";
 import { hidePreloader } from "./preloader";
 import { useIsPlatformAdmin } from "./adminAccess";
 
-type View = "dashboard" | "kito" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
-const VIEWS: View[] = ["dashboard", "kito", "report", "actions", "chats", "content", "connect", "settings"];
+type View = "dashboard" | "kito" | "attention" | "report" | "actions" | "chats" | "content" | "connect" | "settings";
+const VIEWS: View[] = ["dashboard", "kito", "attention", "report", "actions", "chats", "content", "connect", "settings"];
 const viewFromHash = (): View => {
   const h = location.hash.replace("#", "").split("/")[0];
   return (VIEWS as string[]).includes(h) ? (h as View) : "dashboard";
@@ -119,6 +120,7 @@ export default function App() {
       <PageView view={view}>
       {view === "dashboard" && <Dashboard ws={ws} onWs={setWs} />}
       {view === "kito" && <Kito ws={ws} />}
+      {view === "attention" && <Attention ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
@@ -270,6 +272,7 @@ function GlassTabs({ view, children }: { view: string; children: import("react")
 function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
   const L = (en: string, s: string) => (sw ? s : en);
   return [
+    ["attention", L("Needs attention", "Yanayohitaji hatua"), L("Payments, deliveries, follow-ups, problems", "Malipo, usafirishaji, ufuatiliaji, matatizo"), <Ico d="M12 8v5M12 16.5v.5M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />],
     ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
     ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
     ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],

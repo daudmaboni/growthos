@@ -36,6 +36,7 @@ export type Outcome = {
   kito_evidence: string[] | null; override_by: string | null; override_at: string | null; override_note: string | null;
   paid_orders: number; first_paid_at: string | null; last_paid_at: string | null; last_out_at: string | null; pay_instructions: boolean;
   not_customer?: boolean; kito_party?: "customer" | "delivery" | "supplier" | "staff" | "personal" | "other" | null; party_decided?: boolean; not_customer_note?: string | null;
+  assigned_to?: string | null;   // team member who owns this chat (0033)
 };
 
 export type Order = {
@@ -45,6 +46,7 @@ export type Order = {
   inferred_from: string | null; external_ref: string | null; created_by: string | null; updated_by: string | null; created_at: string; updated_at: string;
   cost?: number | null;       // what this order cost the business (product + delivery), typed when confirming
   conv_source?: string | null; // source of the linked chat (any start date), joined in by the dashboard
+  assigned_to?: string | null; delivery_issue?: string | null; delivery_issue_at?: string | null; delivery_resolved_at?: string | null; // 0033
 };
 export const orderNet = (o: Pick<Order, "amount" | "discount" | "refund_amount">) => Number(o.amount) - Number(o.discount) - Number(o.refund_amount);
 
