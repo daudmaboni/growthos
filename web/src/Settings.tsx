@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase, Workspace, canManage, canEdit, when } from "./lib";
+import { supabase, callFn, Workspace, canManage, canEdit, when } from "./lib";
 import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./motion";
 
 type Tab = "business" | "profile" | "appearance" | "rules" | "account";
@@ -137,6 +137,9 @@ function Replying({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void
 
 function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
   const [rate, setRate] = useState(ws.fx_rate ? String(ws.fx_rate) : "");
+  const [auto, setAuto] = useState(ws.fx_auto !== false);
+  const [fetching, setFetching] = useState(false);
+  const [fxErr, setFxErr] = useState("");
   const [hours, setHours] = useState(String(ws.follow_up_hours ?? 24));
   const [win, setWin] = useState(String(ws.conversion_window_days ?? 30));
   const [tz, setTz] = useState(ws.timezone ?? "Africa/Dar_es_Salaam");
@@ -146,15 +149,45 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
     e.preventDefault();
     const v = rate.trim() === "" ? null : Number(rate.replace(/,/g, ""));
     const h = Number(hours), w = Number(win);
-    if ((v !== null && !(v > 0)) || !(h >= 1 && h <= 720) || !(w >= 1 && w <= 180)) { shake(e.currentTarget); return; }
+    if ((!auto && v !== null && !(v > 0)) || !(h >= 1 && h <= 720) || !(w >= 1 && w <= 180)) { shake(e.currentTarget); return; }
     try { new Intl.DateTimeFormat("en", { timeZone: tz }); } catch { shake(e.currentTarget); return; }
-    await save({ fx_rate: v, follow_up_hours: h, conversion_window_days: w, timezone: tz }, e.currentTarget, T("Saved. Reports now use these rules.", "Imehifadhiwa. Ripoti sasa zinatumia kanuni hizi."));
+    const fx = auto ? { fx_auto: true } : { fx_auto: false, fx_rate: v, fx_source: "manual", fx_updated_at: new Date().toISOString() };
+    const ok = await save({ ...fx, follow_up_hours: h, conversion_window_days: w, timezone: tz }, e.currentTarget, T("Saved. Reports now use these rules.", "Imehifadhiwa. Ripoti sasa zinatumia kanuni hizi."));
+    if (ok && auto && ws.fx_auto === false) refreshRate();
+  }
+  /** Ask the server for today's rate (only works while the rate is automatic). */
+  async function refreshRate() {
+    setFetching(true); setFxErr("");
+    try {
+      const r = await callFn<{ updated: { error?: string; skipped?: string }[] }>("fx-rate", { workspace_id: ws.id });
+      const first = r.updated?.[0];
+      if (first?.error) setFxErr(T("Could not get today's rate. It will try again within the hour.", "Imeshindwa kupata kiwango cha leo. Itajaribu tena ndani ya saa moja."));
+      else if (first?.skipped === "no ad data") setFxErr(T("No ad account data yet, so there is nothing to convert.", "Bado hakuna data ya matangazo, hivyo hakuna cha kubadilisha."));
+      const { data } = await supabase.from("workspaces").select("fx_rate,fx_auto,fx_updated_at,fx_source,fx_base").eq("id", ws.id).single();
+      if (data) { onWs({ ...ws, ...data, fx_auto: true }); if (data.fx_rate) setRate(String(data.fx_rate)); }
+    } catch (e) { setFxErr((e as Error).message); }
+    setFetching(false);
   }
   return (
     <form className="card" onSubmit={submit}>
       <div><h2>{T("Reporting rules", "Kanuni za ripoti")}</h2><span className="small muted">{T("These rules decide how figures are counted. They are applied the same way everywhere and never by AI.", "Kanuni hizi zinaamua jinsi takwimu zinavyohesabiwa. Zinatumika sawa kila mahali, si kwa AI.")}</span></div>
-      <Field id="s-fx" label={T("Exchange rate: 1 unit of ad currency =", "Kiwango: kitengo 1 cha sarafu ya tangazo =")} hint={T(`Only needed when the ad account is billed in another currency (for example US dollars) and sales are in ${ws.currency}. Used for return on ad spend and contribution.`, `Inahitajika tu kama matangazo yanalipwa kwa sarafu nyingine na mauzo ni ${ws.currency}.`)}>
-        <div className="row"><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{ws.currency}</span></div>
+      <Field id="s-fx" label={T(`Exchange rate: 1 ${ws.fx_base ?? "unit of ad currency"} =`, `Kiwango: ${ws.fx_base ? `1 ${ws.fx_base}` : "kitengo 1 cha sarafu ya tangazo"} =`)} hint={auto
+          ? T(`Updated automatically every few hours from the market rate. Used for return on ad spend and contribution when ads are billed in another currency than ${ws.currency}.`, `Inasasishwa yenyewe kila baada ya saa chache kwa kiwango cha soko. Inatumika kwa mapato kwa tangazo na faida ya mchango.`)
+          : T("You set this rate yourself. It stays until you change it.", "Umeweka kiwango hiki wewe mwenyewe. Kinabaki hadi ukibadilishe.")}>
+        <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+          <label className="row" style={{ gap: 6, cursor: manager ? "pointer" : "default" }}><input type="radio" name="fx-mode" checked={auto} disabled={!manager} onChange={() => setAuto(true)} />{T("Automatic", "Kiotomatiki")}</label>
+          <label className="row" style={{ gap: 6, cursor: manager ? "pointer" : "default" }}><input type="radio" name="fx-mode" checked={!auto} disabled={!manager} onChange={() => setAuto(false)} />{T("Set my own", "Weka mwenyewe")}</label>
+        </div>
+        {auto ? (
+          <div className="row" style={{ gap: 10, marginTop: 6 }}>
+            <b>{ws.fx_auto !== false && ws.fx_rate ? `${Number(ws.fx_rate).toLocaleString()} ${ws.currency}` : "–"}</b>
+            {ws.fx_auto !== false && ws.fx_updated_at && <span className="small muted">{T("updated", "imesasishwa")} {when(ws.fx_updated_at)}</span>}
+            {manager && ws.fx_auto !== false && <button type="button" className="small" disabled={fetching} onClick={refreshRate}>{fetching ? "…" : T("Update now", "Sasisha sasa")}</button>}
+          </div>
+        ) : (
+          <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{ws.currency}</span></div>
+        )}
+        {fxErr && <span className="small err">{fxErr}</span>}
       </Field>
       <Field id="s-fu" label={T("Follow-up is due after (hours)", "Ufuatiliaji unafika baada ya (saa)")} hint={T("A warm chat with no message from you for this long appears in Actions.", "Chat yenye nia bila ujumbe wako kwa muda huu inaonekana kwenye Vitendo.")}>
         <input id="s-fu" inputMode="numeric" style={{ width: 160 }} value={hours} disabled={!manager} onChange={(e) => setHours(e.target.value)} />
