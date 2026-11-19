@@ -85,7 +85,9 @@ const CSS = `
 .st-pw{position:relative}.st-pw input{padding-right:64px}
 .st-pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-family:inherit;font-weight:600;font-size:12.5px;color:#2C5A8C;cursor:pointer;padding:6px}
 .st-btn{font-family:inherit;font-weight:600;font-size:14px;border:0;border-radius:10px;padding:11px;background:#16224A;color:#fff;cursor:pointer}
-.st-btn:hover:not(:disabled){background:#22336B}.st-btn:disabled{opacity:.6}
+.st-btn:hover:not(:disabled){background:#22336B}
+.st-btn{border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(22,34,74,.9) linear-gradient(180deg,rgba(255,255,255,.3) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,0) 62%,rgba(255,255,255,.1) 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,.35),inset 0 -2px 4px rgba(0,0,0,.25),0 10px 24px -10px rgba(22,34,74,.6);transition:transform .35s cubic-bezier(.34,1.56,.64,1),filter .25s}
+.st-btn:hover:not(:disabled){background-color:rgba(34,51,107,.95);filter:brightness(1.05)}.st-btn:active:not(:disabled){transform:scale(.97)}.st-btn:disabled{opacity:.6}
 .st-err{margin:0;color:#C8372D;font-size:13px}
 .st-back{text-align:center;color:#5D6580;font-size:13px;text-decoration:none}.st-back:hover{text-decoration:underline}
 .st :focus-visible{outline:2px solid #F7C948;outline-offset:2px}

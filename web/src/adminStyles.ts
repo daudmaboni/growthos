@@ -206,4 +206,22 @@ export const CSS = `
   .ia-lanes{grid-template-columns:repeat(5,minmax(230px,1fr))}.ia-board{padding:20px 16px}
   .ia-check,.ia-form{grid-template-columns:1fr}.ia-counts{grid-template-columns:repeat(2,1fr)}.ia-lanes::before{display:none}}
 @media (prefers-reduced-motion:reduce){.ia *{animation:none!important;transition:none!important}}
+
+/* ---- Liquid glass (iOS 26 style) on buttons, toggles and the sidebar navigation ---- */
+.ia{--lg-sheen:linear-gradient(180deg,rgba(255,255,255,.95) 0%,rgba(255,255,255,.4) 50%,rgba(255,255,255,.2) 100%);--lg-tint:linear-gradient(180deg,rgba(255,255,255,.3) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,0) 62%,rgba(255,255,255,.1) 100%);--lg-blur:blur(16px) saturate(180%);--lg-spring:cubic-bezier(.34,1.56,.64,1)}
+.ia-btn{background:rgba(255,255,255,.6) var(--lg-sheen);border-color:rgba(255,255,255,.95);border-radius:999px;-webkit-backdrop-filter:var(--lg-blur);backdrop-filter:var(--lg-blur);box-shadow:inset 0 1px 1px #fff,inset 0 -1px 2px rgba(20,27,52,.07),0 0 0 .5px rgba(20,27,52,.16),0 6px 16px -10px rgba(20,27,52,.4);transition:transform .35s var(--lg-spring),box-shadow .25s,background-color .25s}
+.ia-btn:hover:not(:disabled){border-color:#fff;background-color:rgba(255,255,255,.88);box-shadow:inset 0 1px 1px #fff,inset 0 -1px 2px rgba(20,27,52,.07),0 0 0 .5px rgba(20,27,52,.22),0 12px 24px -12px rgba(20,27,52,.45)}
+.ia-btn:active:not(:disabled){transform:scale(.96)}
+.ia-btn.primary{background:color-mix(in srgb,var(--navy) 88%,transparent) var(--lg-tint);border-color:rgba(255,255,255,.22);box-shadow:inset 0 1px 1px rgba(255,255,255,.35),inset 0 -2px 4px rgba(0,0,0,.25),0 0 0 .5px rgba(20,27,52,.3),0 10px 24px -10px rgba(22,34,74,.6)}
+.ia-btn.primary:hover:not(:disabled){background:color-mix(in srgb,var(--navy2) 92%,transparent) var(--lg-tint)}
+.ia-seg{background:rgba(20,27,52,.07);border-radius:999px;box-shadow:inset 0 1px 3px rgba(20,27,52,.12),inset 0 0 0 .5px rgba(20,27,52,.06)}
+.ia-seg button{border-radius:999px;transition:transform .35s var(--lg-spring),background-color .25s}
+.ia-seg button.on{background:rgba(255,255,255,.9) var(--lg-sheen);box-shadow:inset 0 1px 1px #fff,inset 0 -1px 1px rgba(20,27,52,.06),0 0 0 .5px rgba(20,27,52,.14),0 4px 12px -6px rgba(20,27,52,.35)}
+.ia-seg button:active:not(:disabled){transform:scale(.96)}
+.ia-navbtn{border-radius:14px;border:1px solid transparent;transition:background-color .25s,border-color .25s,box-shadow .25s,transform .35s var(--lg-spring)}
+.ia-navbtn:hover{background:rgba(255,255,255,.07)}
+.ia-navbtn.on{background:rgba(255,255,255,.12) linear-gradient(180deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 60%);border-color:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 1px rgba(0,0,0,.25),0 8px 20px -12px rgba(0,0,0,.6);-webkit-backdrop-filter:var(--lg-blur);backdrop-filter:var(--lg-blur)}
+.ia-navbtn:active{transform:scale(.96)}
+.ia-refresh{border-radius:999px;background:rgba(255,255,255,.1) linear-gradient(180deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 60%);border-color:rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 16px -10px rgba(0,0,0,.6)}
+@media (max-width:820px){.ia-side{background:color-mix(in srgb,var(--navy) 84%,transparent);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%)}}
 `;
