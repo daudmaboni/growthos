@@ -1010,3 +1010,83 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
 }
 @keyframes paid-page-in { from { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .paid-modal { animation-duration: .01s !important; } }
+
+/* ===== Conversation redesign (19 Nov, evening) — modelled on a clean messenger dashboard:
+   white wall, lavender bubbles on both sides, a time under each message, "Chat with" over the name,
+   a flat reply line with a purple square send button, customer photo + name centred in the side panel. ===== */
+.chats {
+  --cv-wall: #ffffff; --cv-bub: #efeff8; --cv-bub-out: #e9e8fb; --cv-ink: #1c1b2e; --cv-meta: #a3a2b5; --cv-line: #ececf2;
+  --cv-chip: #f6f6fa; --cv-send: #5b4fe9;
+}
+:root:not([data-theme="light"]) .chats {
+  --cv-wall: #15151c; --cv-bub: #23222e; --cv-bub-out: #2b2850; --cv-ink: #eeeef5; --cv-meta: #8786a0; --cv-line: #ffffff12;
+  --cv-chip: #1d1c26; --cv-send: #6d62f2;
+}
+
+/* Header: small "Chat with" over a bold name, no clutter */
+.chats .inbox.frame .wa-head { background: var(--cv-wall); border-bottom: 1px solid var(--cv-line); }
+.wa-head-kicker { font-size: 11.5px; color: var(--cv-meta, var(--muted)); letter-spacing: .01em; }
+.chats .inbox.frame .wa-head-main b { font-size: 18px; font-weight: 650; letter-spacing: -0.015em; color: var(--cv-ink); }
+.chats .inbox.frame .wa-head-main .small { display: none; }
+@media (min-width: 900px) { .chats .inbox.frame .wa-head .cc-avatar { display: none; } .chats .inbox.frame .wa-head { padding: 18px 28px 14px; } }
+.chats .inbox.frame button.wa-x, .chats .inbox.frame button.wa-back { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 10px; background: var(--cv-chip); border: 1px solid var(--cv-line); color: var(--cv-ink); font-size: 16px; }
+.chats .inbox.frame button.wa-side-btn { border-radius: 10px; background: var(--cv-chip); border-color: var(--cv-line); }
+.chats .inbox.frame button.wa-side-btn.is-on { background: var(--ib-soft); color: var(--ib-text); border-color: var(--ib-line); }
+@media (min-width: 900px) { .chats .inbox.frame button.wa-back { display: none; } }
+
+/* The wall and the bubbles */
+.chats .inbox.frame .wa-thread { background: var(--cv-wall); gap: 2px; padding: 12px max(28px, calc((100% - 760px) / 2)) 20px; }
+.chats .inbox.frame .wa-day { position: static; margin: 16px 0 6px; }
+.chats .inbox.frame .wa-day span { background: none; border: 0; box-shadow: none; padding: 0; font-size: 11.5px; font-weight: 600; color: var(--cv-meta); }
+.chats .inbox.frame .wa-msg { flex-direction: column; align-items: flex-start; margin-top: 0; }
+.chats .inbox.frame .wa-msg.out { align-items: flex-end; }
+.chats .inbox.frame .wa-msg.first { margin-top: 14px; }
+.chats .inbox.frame .wa-bub { max-width: min(60%, 520px); padding: 11px 16px; border-radius: 18px; border: 0; box-shadow: none;
+  background: var(--cv-bub); color: var(--cv-ink); font-size: 13.5px; line-height: 1.5; }
+.chats .inbox.frame .wa-msg.out .wa-bub { background: var(--cv-bub-out); color: var(--cv-ink); }
+.chats .inbox.frame .wa-msg.in.first .wa-bub { border-top-left-radius: 4px; }
+.chats .inbox.frame .wa-msg.out.first .wa-bub { border-top-right-radius: 4px; }
+.chats .inbox.frame .wa-msg .wa-bub::before { display: none; }
+.chats .inbox.frame .wa-msg.out a { color: var(--ib-text); }
+.chats .inbox.frame .wa-msg.out .wa-special { color: var(--cv-meta); }
+.chats .inbox.frame .wa-meta { display: none; }
+.chats .inbox.frame .wa-stamp { margin: 5px 2px 0; font-size: 11px; color: var(--cv-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chats .inbox.frame .wa-stamp .wa-via { color: var(--ib-text); font-weight: 600; }
+.chats .inbox.frame .wa-stamp .wa-ticks { color: var(--cv-send); letter-spacing: -2px; }
+
+/* What WhatsApp didn't give us: one quiet line */
+.wa-note { align-self: center; max-width: 86%; margin: 12px 0 2px; padding: 4px 12px; border-radius: 12px; text-align: center;
+  font-size: 11.5px; line-height: 1.4; color: var(--cv-meta, var(--muted)); background: var(--cv-chip, var(--raised)); }
+
+/* Reply line: your initial, a flat input with a hairline, Kito, purple square send */
+.chats .inbox.frame .wa-compose.open { background: var(--cv-wall); padding: 10px max(28px, calc((100% - 760px) / 2)) 18px; border-top: 0; }
+.chats .inbox.frame .wa-compose-row.wa-line { display: flex; align-items: center; gap: 12px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.chats .inbox.frame .wa-compose-row.wa-line:focus-within { box-shadow: none; }
+.wa-me { width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; background: var(--ib-soft, var(--raised)); color: var(--ib-text, var(--ink)); }
+.chats .inbox.frame .wa-line textarea { flex: 1; min-height: 40px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--cv-line); border-radius: 0; background: transparent; box-shadow: none; color: var(--cv-ink); font-size: 14px; transition: border-color .2s var(--ease); }
+.chats .inbox.frame .wa-line textarea:focus { border-bottom-color: var(--cv-send); }
+.chats .inbox.frame .wa-line textarea::placeholder { color: var(--cv-meta); }
+.chats .inbox.frame .wa-line button.wa-kito { height: 36px; padding: 0 10px; gap: 6px; border-radius: 10px; border: 0; background: transparent; color: var(--ib-text); font-size: 13px; }
+.chats .inbox.frame .wa-line button.wa-kito:hover:not(:disabled) { background: var(--ib-soft); }
+.chats .inbox.frame .wa-line button.wa-send { width: 40px; height: 40px; border-radius: 10px; background: var(--cv-send); color: #fff; box-shadow: 0 6px 14px -6px var(--cv-send); }
+.chats .inbox.frame .wa-line button.wa-send:hover:not(:disabled) { filter: brightness(1.08); background: var(--cv-send); }
+.chats .inbox.frame .wa-line button.wa-send:disabled { opacity: .45; box-shadow: none; }
+.chats .inbox.frame .wa-compose-note { text-align: center; font-size: 12px; }
+.chats .inbox.frame .wa-compose:not(.open) { background: var(--cv-chip); border-radius: 14px; border: 1px solid var(--cv-line); }
+
+/* Side panel: the customer's photo and name in the middle at the top */
+.wa-profile { display: grid; justify-items: center; gap: 4px; padding: 10px 0 16px; border-bottom: 1px solid var(--cv-line, var(--line)); text-align: center; }
+.wa-profile-av { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; font-weight: 700; margin-bottom: 8px;
+  background: var(--ib-soft-2, var(--raised)); color: var(--ib-text, var(--ink)); box-shadow: 0 0 0 4px var(--cv-wall, var(--card)), 0 0 0 5px var(--cv-line, var(--line)); }
+.wa-profile b { font-size: 17px; letter-spacing: -0.01em; }
+.chats .inbox.frame .wa-side { background: var(--cv-wall); border-left: 1px solid var(--cv-line); padding: 20px; }
+.chats .inbox.frame .wa-card { background: transparent; border: 0; border-bottom: 1px solid var(--cv-line); border-radius: 0; padding: 4px 0 16px; }
+
+@media (max-width: 899px) {
+  .chats .inbox.frame .wa-bub { max-width: 82%; }
+  .chats .inbox.frame .wa-thread { padding: 10px 14px 16px; }
+  .chats .inbox.frame .wa-compose.open { padding: 8px 12px max(12px, env(safe-area-inset-bottom)); }
+  .chats .inbox.frame .wa-head { padding-top: max(10px, env(safe-area-inset-top)); }
+  .wa-me { display: none; }
+  .chats .inbox.frame .wa-line button.wa-kito span:last-child { display: none; }
+}

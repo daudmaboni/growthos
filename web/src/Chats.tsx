@@ -599,13 +599,47 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
   const hhmm = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
   const sideLabel = st.key === "check" ? T("Check payment", "Hakiki malipo") : confirmed ? T("Sale", "Mauzo") : T("Did they buy?", "Amenunua?");
 
-  let lastDay = "", lastDir = "";
+  // Messages are drawn in runs, like a modern chat: one time under the last bubble of a run
+  // (same side, under a minute apart), and "WhatsApp didn't share it" placeholders
+  // shown as one small grey note in the middle instead of fake bubbles.
+  type Row = { kind: "day"; key: string; label: string } | { kind: "note"; key: string; text: string; count: number; dir: string }
+    | { kind: "msg"; key: string; m: Msg; first: boolean; last: boolean };
+  const rows: Row[] = [];
+  if (msgs) {
+    let lastDay = "";
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      const k = dayKey(m.sent_at);
+      if (k !== lastDay) { rows.push({ kind: "day", key: "d" + k, label: dayLabel(k) }); lastDay = k; }
+      const note = hiddenNote(m);
+      if (note) {
+        const prev = rows[rows.length - 1];
+        if (prev?.kind === "note" && prev.text === note) prev.count++;
+        else rows.push({ kind: "note", key: m.id, text: note, count: 1, dir: m.direction });
+        continue;
+      }
+      const prev = rows[rows.length - 1];
+      const joins = prev?.kind === "msg" && prev.m.direction === m.direction && Date.parse(m.sent_at) - Date.parse(prev.m.sent_at) < 60e3;
+      if (joins) prev.last = false;
+      rows.push({ kind: "msg", key: m.id, m, first: !joins, last: true });
+    }
+  }
+  const noteText = (r: { text: string; count: number; dir: string }) => {
+    const who = r.dir === "out" ? T("You sent", "Ulituma") : T("They sent", "Walituma");
+    return r.text === "media"
+      ? T(`${who} ${r.count > 1 ? `${r.count} photos, voice notes or files` : "a photo, voice note or file"} · WhatsApp didn't share ${r.count > 1 ? "them" : "it"}`,
+        `${who} ${r.count > 1 ? `picha/sauti/faili ${r.count}` : "picha, sauti au faili"} · WhatsApp haikushiriki`)
+      : T(`${who} ${r.count > 1 ? `${r.count} messages` : "a message"} WhatsApp didn't share (a poll, view-once or new type)`,
+        `${who} ${r.count > 1 ? `ujumbe ${r.count}` : "ujumbe"} ambao WhatsApp haikushiriki (kura, view-once au aina mpya)`);
+  };
+
   return (
     <div ref={pane} className={"wa-pane" + (side ? " side-open" : "") + (hideSide ? " side-hidden" : "")} role="dialog" aria-label={T(`Chat with ${name}`, `Chat na ${name}`)}>
       <header className="wa-head">
         <button className="wa-back" onClick={onClose} aria-label={T("Back to chats", "Rudi kwenye chats")}>←</button>
         <div className="cc-avatar" aria-hidden>{name.slice(0, 1).toUpperCase()}</div>
         <div className="wa-head-main">
+          <span className="wa-head-kicker">{T("Chat with", "Chat na")}</span>
           <b>{name}</b>
           <span className="small muted">{[phone ? prettyPhone(phone) : null, r.last_message_at ? T(`last message ${agoT(r.last_message_at, T)}`, `ujumbe wa mwisho ${agoT(r.last_message_at, T)}`) : null].filter(Boolean).join(" · ")}</span>
         </div>
@@ -624,27 +658,29 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
           <div className="wa-thread" ref={thread}>
             {!msgs ? <div className="wa-sys">{T("Loading the chat…", "Inapakia chat…")}</div>
               : msgs.length === 0 ? <div className="wa-sys">{T("No messages saved for this customer.", "Hakuna ujumbe uliohifadhiwa kwa mteja huyu.")}</div>
-              : msgs.map((m) => {
-                const k = dayKey(m.sent_at);
-                const sep = k !== lastDay; lastDay = k;
-                const tail = sep || m.direction !== lastDir; lastDir = m.direction;
-                return (
-                  <div key={m.id} style={{ display: "contents" }}>
-                    {sep && <div className="wa-day"><span>{dayLabel(k)}</span></div>}
-                    <div className={"wa-msg " + m.direction + (tail ? " tail" : "")}>
+              : rows.map((row) => row.kind === "day" ? <div key={row.key} className="wa-day"><span>{row.label}</span></div>
+                : row.kind === "note" ? <div key={row.key} className="wa-note">{noteText(row)}</div>
+                : (() => {
+                  const m = row.m;
+                  return (
+                    <div key={row.key} className={"wa-msg " + m.direction + (row.first ? " tail first" : "") + (row.last ? " last" : "")}>
                       <div className="wa-bub">
                         {m.media?.path ? <MediaView m={m} ws={ws} T={T} /> : <span className={"wa-text" + (special(m) ? " wa-special" : "")}>{special(m) ?? m.body ?? ""}</span>}
-                        <span className="wa-meta">{m.origin === "itaos" && <span className="wa-via" title={T("Sent from itaOS", "Imetumwa kutoka itaOS")}>itaOS · </span>}{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden>✓✓</span>}</span>
                       </div>
+                      {row.last && <span className="wa-stamp">{m.origin === "itaos" && <span className="wa-via" title={T("Sent from itaOS", "Imetumwa kutoka itaOS")}>itaOS · </span>}{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden> ✓✓</span>}</span>}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })())}
           </div>
           <Composer r={r} ws={ws} T={T} phone={phone} msgs={msgs} onSent={loadMsgs} />
         </div>
         <aside className="wa-side" aria-label={T("About this customer", "Kuhusu mteja huyu")}>
           <div className="wa-side-head"><b>{T("This customer", "Mteja huyu")}</b><button className="icon wa-side-x" onClick={() => setSide(false)} aria-label={T("Hide", "Ficha")}>✕</button></div>
+          <div className="wa-profile">
+            <div className="wa-profile-av" aria-hidden>{name.slice(0, 1).toUpperCase()}</div>
+            <b>{name}</b>
+            {phone && <span className="small muted">{prettyPhone(phone)}</span>}
+          </div>
           <div className="wa-card">
             <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
             <span className="small muted">{fromOf(r, T, adName)}</span>
@@ -703,6 +739,14 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
       </div>
     </div>
   );
+}
+
+/** Messages WhatsApp never gave us: shown as a small note, not a bubble. */
+function hiddenNote(m: Msg): "media" | "other" | null {
+  const b = (m.body ?? "").trim();
+  if (m.type === "media_placeholder" || b === "[media_placeholder]") return "media";
+  if (m.type === "errors" || b === "[errors]" || m.type === "unsupported") return "other";
+  return null;
 }
 
 /** WhatsApp gives no text for some messages: show what they are instead of "[errors]". */
@@ -776,15 +820,16 @@ function Composer({ r, ws, T, phone, msgs, onSent }: { r: Outcome; ws: Workspace
       {(err || (msgs && left < 3 * 3600e3)) && (
         <div className={"wa-compose-note small" + (err ? " err" : "")}>{err || T(`The 24-hour window closes in ${hours ? `${hours} h ` : ""}${mins} min. After that, only template messages.`, `Dirisha la saa 24 linafungwa baada ya ${hours ? `saa ${hours} ` : ""}dakika ${mins}. Baada ya hapo, template tu.`)}</div>
       )}
-      <div className="wa-compose-row">
-        <button className="wa-kito" onClick={draft} disabled={drafting || sending} title={T("Kito writes a reply from this chat. You check it before sending.", "Kito anaandika jibu kutoka chat hii. Unaliangalia kabla ya kutuma.")}>
-          {drafting ? <span className="kito-spin sm" aria-hidden style={{ marginRight: 0 }} /> : <KitoLogo size={20} />}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
-        </button>
-        <textarea ref={box} rows={1} value={text} placeholder={T("Type a message", "Andika ujumbe")} aria-label={T("Message", "Ujumbe")}
+      <div className="wa-compose-row wa-line">
+        <div className="wa-me" aria-hidden title={ws.name}>{(ws.name || "?").slice(0, 1).toUpperCase()}</div>
+        <textarea ref={box} rows={1} value={text} placeholder={T("Type your message", "Andika ujumbe wako")} aria-label={T("Message", "Ujumbe")}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 900) { e.preventDefault(); send(); } }} />
+        <button className="wa-kito" onClick={draft} disabled={drafting || sending} aria-label={T("Kito, write a reply", "Kito, niandikie jibu")} title={T("Kito writes a reply from this chat. You check it before sending.", "Kito anaandika jibu kutoka chat hii. Unaliangalia kabla ya kutuma.")}>
+          {drafting ? <span className="kito-spin sm" aria-hidden style={{ marginRight: 0 }} /> : <KitoLogo size={18} />}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
+        </button>
         <button className="wa-send" onClick={send} disabled={!text.trim() || sending} aria-label={T("Send", "Tuma")} title={T("Send from your WhatsApp number", "Tuma kutoka namba yako ya WhatsApp")}>
-          {sending ? <span className="wa-spin" /> : <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z" /></svg>}
+          {sending ? <span className="wa-spin" /> : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M21.4 2.6 2.9 10.3c-.8.3-.8 1.5.1 1.8l7 2.2 2.2 7c.3.9 1.5.9 1.8.1l7.7-18.5c.3-.6-.3-1.2-.9-.9z" /></svg>}
         </button>
       </div>
     </div>
