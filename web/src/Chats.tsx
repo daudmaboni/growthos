@@ -8,7 +8,7 @@ import DateRange from "./DateRange";
 import { RangeSel, resolveRange, addDays, loadRange, saveRange, presetLabel } from "./ranges";
 import { AssignChat } from "./team";
 import { useProducts, ProductPicker, itemsCost, itemsLabel, productPhotosReady, itemsFromMatches, type Item, type ProductMatch } from "./Products";
-import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
+import { OrderForm, OrderList, inferredFrom, kitoChecking, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
 
 type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "not" | "ids";
@@ -23,7 +23,7 @@ type Tr = (en: string, sw: string) => string;
 const inFilter = (r: Lite, f: Filter) =>
   f === "all" ? true
   : f === "follow" ? r.outcome !== "sold" && (r.kito_temp === "hot" || r.kito_temp === "warm" || (r.kito_temp == null && r.warm))
-  : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || (r.kito_outcome === "sold" && r.kito_confidence !== "low") || r.outcome_override === "sold")
+  : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && ((r.kito_outcome === "sold" && r.kito_confidence !== "low") || r.outcome_override === "sold")
   : f === "sold" ? Number(r.paid_orders) > 0
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? (r as any).phone_number_id === "import" : r.phone_number_id !== "import");
@@ -77,6 +77,7 @@ type Status = { key: string; text: string; tone: "good" | "warn" | "bad" | "info
 function statusOf(r: Outcome, T: Tr, currency: string): Status {
   if (Number(r.paid_orders) > 0) return { key: "bought", icon: "✓", tone: "good", text: T("Bought", "Amenunua") + (r.sale_amount != null ? ` · ${money(Number(r.sale_amount), currency)}` : "") };
   if (inferredFrom(r)) return { key: "check", icon: "!", tone: "warn", text: T("Says they paid — check your money came in", "Anasema amelipa — hakikisha pesa imeingia") };
+  if (kitoChecking(r)) return { key: "kito_check", icon: "…", tone: "info", text: T("Kito is reading this chat for a payment", "Kito anasoma chat hii kuona malipo") };
   if (r.outcome === "lost") return { key: "lost", icon: "×", tone: "muted", text: T("Didn't buy", "Hakununua") };
   if (r.last_dir === "in") return { key: "waiting", icon: "●", tone: "bad", text: T("Waiting for your reply", "Anasubiri umjibu") };
   if (r.pay_instructions) return { key: "paynum", icon: "●", tone: "info", text: T("Has your payment number, hasn't paid yet", "Ana namba ya malipo, bado hajalipa") };
@@ -186,7 +187,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else if (filter === "not") { /* everyone marked "not a customer" */ }
     else if (filter === "sold") q = q.gt("paid_orders", 0);   // Bought = a sale you recorded, nothing else
     else if (filter === "follow") q = q.neq("outcome", "sold").or("kito_temp.in.(hot,warm),and(kito_temp.is.null,warm.eq.true)");
-    else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,and(kito_outcome.eq.sold,or(kito_confidence.is.null,kito_confidence.neq.low)),outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
+    else if (filter === "signals") q = q.eq("paid_orders", 0).or("and(kito_outcome.eq.sold,or(kito_confidence.is.null,kito_confidence.neq.low)),outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
     else if (filter !== "all") q = q.eq("outcome", filter);
     supabase.from("kito_runs").select("id,trigger,ran_at,checked,failed,remaining,note").eq("workspace_id", ws.id).order("ran_at", { ascending: false }).limit(20)
       .then(({ data }) => setRuns((data as Run[]) ?? []));

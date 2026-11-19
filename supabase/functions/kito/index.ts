@@ -60,7 +60,7 @@ ${chat}
 </chat>
 
 Decide:
-- outcome: "sold" if the customer paid or clearly received/collected the goods (payment message or screenshot, delivery arranged and confirmed, usage instructions given after delivery). "open" if the chat is still in progress: ANY message in the last 2 days means "open" unless the customer clearly said no. "lost" only when the chat went quiet for more than 2 days, or the customer clearly refused. A slow reply by the business is a blocker (business_slow), never by itself a reason for "lost".
+- outcome: "sold" if the customer paid or clearly received/collected the goods (payment message or screenshot, delivery arranged and confirmed, usage instructions given after delivery). Only something that ALREADY happened counts: a question, a "what if" ("je mfano nikichukua dawa…", "kama nikilipa…", "nikitumia zisiponisaidia mnafanyeje?"), a plan ("nitalipa kesho", "nikifika dar") or asking how to pay is NOT payment, even when it uses words like "nimechukua", "nimelipa" or "nimetuma". When unsure whether money really moved, do not say "sold": use "open" and confidence "low". Delivery arranged ("unaletewa na boda", "tutakutumia kesho") is not payment until the customer confirms they paid or received the goods, or the business confirms it got the money. Usage instructions ("Matumizi ya …") count only together with a payment sign (payment message, "[picha ya malipo]", the business confirming payment, or the customer confirming they received the goods). A photo that could not be read ("[image]", "<Media omitted>", "[media_placeholder]") is never payment on its own. "open" if the chat is still in progress: ANY message in the last 2 days means "open" unless the customer clearly said no. "lost" only when the chat went quiet for more than 2 days, or the customer clearly refused. A slow reply by the business is a blocker (business_slow), never by itself a reason for "lost".
 - Judge mainly the latest part of the chat. Many chats have old messages weeks earlier and then a new conversation: the new conversation decides outcome and temperature; old messages are background.
 - Questions about price ("haipungui?", "bei ya mwisho?", "naweza kupata kwa ...?"), how to pay, where you are or delivery are buying signals: temperature at least "warm", usually "hot".
 - label: the furthest stage reached, one of ${JSON.stringify(LABELS)}.
@@ -290,8 +290,20 @@ Deno.serve(async (req) => {
   if (only.length) q = q.in("id", only);
   const { data: all, error } = await q;
   if (error) return json({ error: error.message }, 500);
+  // Chats the word rules flagged as "maybe paid" that Kito hasn't judged yet come first, however old:
+  // Kito, not the word rules, decides whether they go to "Check payment".
+  let flagged: any[] = [];
+  if (!only.length) {
+    let fq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+      .eq("contacts.not_customer", false).eq("payment_signal", true).not("last_message_at", "is", null)
+      .order("last_message_at", { ascending: false }).limit(300);
+    if (wsFilter) fq = fq.eq("workspace_id", wsFilter);
+    const { data: fl } = await fq;
+    flagged = (fl ?? []).filter((c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at));
+  }
   const force = !isCron && body.all === true;
-  const due = (all ?? []).filter((c) => force || !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at));
+  const seen = new Set(flagged.map((c) => c.id));
+  const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at)))];
   const batch = due.slice(0, isCron ? 12 : 20);
 
   const wsInfo = new Map<string, { language: string; currency: string }>();

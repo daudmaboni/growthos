@@ -10,13 +10,20 @@ type Ev = { id: number; action: string; actor: string | null; at: string; before
 export const signalDismissed = (r: Pick<Outcome, "override_by" | "outcome_override">) =>
   !!r.override_by && (r.outcome_override === "open" || r.outcome_override === "lost");
 
-export function inferredFrom(r: Outcome): "kito" | "rules" | "name_mark" | null {
+/** "Says they paid — check your money": only when Kito read the chat and judged the customer really paid
+ *  (or you marked them ✅ in the contact name). Word rules alone never decide: a hit only makes Kito read
+ *  that chat first (see kitoChecking). */
+export function inferredFrom(r: Outcome): "kito" | "name_mark" | null {
   if (signalDismissed(r)) return null;
   if (r.kito_outcome === "sold" && r.kito_confidence !== "low") return "kito";
-  if (r.payment_signal) return "rules";
   if (r.outcome_override === "sold") return "name_mark";
   return null;
 }
+
+/** The word rules saw payment-like words that Kito hasn't judged yet (never read, or new messages since). */
+export const kitoChecking = (r: Pick<Outcome, "payment_signal" | "kito_checked_at" | "last_message_at" | "kito_outcome"> & Partial<Outcome>) =>
+  !!r.payment_signal && !(r.override_by && (r.outcome_override === "open" || r.outcome_override === "lost")) && Number(r.paid_orders ?? 0) === 0
+  && (!r.kito_checked_at || (!!r.last_message_at && Date.parse(r.last_message_at) > Date.parse(r.kito_checked_at)));
 
 /** When the customer paid, read from the chat (database function payment_moment): their receipt or
  *  M-Pesa SMS, "nimetuma", your "Tuma majina ya mpokeaji", or the first usage instructions — never the

@@ -7,6 +7,8 @@
 //      If the message holds a customer's phone number, the sale is put on THAT customer's chat.
 //      The amount is the price in the message, else the customer's receipt from the last 3 days,
 //      else the last price the business sent that customer in the last 30 days. No amount → no order.
+//   In the customer's own chat, either form counts only when the customer sent a payment message or
+//   screenshot in the 3 days before the ✅ (so "175,000✅ ndio bei yetu" is not recorded as a sale).
 //
 // Checks so the same money never counts twice:
 //   - one order per ✅ message (its id is kept in the order's notes);
@@ -149,7 +151,10 @@ export async function confirmTicks(db: SupabaseClient, conversationId: string, m
     const ev = evidence(targetMsgs, t.sentAt, t.amount, currency);
     // "Umelipiwa✅" with no number and no price: only trust it in a chat where the customer
     // showed payment (otherwise it is probably a note to staff, and the amount would be a guess).
-    if (!other && t.amount == null && ev.note.startsWith("⚠ No payment")) continue;
+    // A ✅ in the customer's own chat counts only if the customer sent a payment message or screenshot
+    // in the 3 days before ("175,000✅ ndio bei yetu" is a price, not a payment). Forwarded dispatcher
+    // messages that name the customer's number keep working without it (pay on delivery, cash).
+    if (!other && ev.note.startsWith("⚠ No payment")) continue;
     const amount = t.amount ?? ev.receiptAmount ?? (target ? lastPriceBefore(targetMsgs, t.sentAt) : null);
     if (amount == null) continue;   // nothing says how much: left for the owner to confirm
     // Same customer, same amount, within 3 days → already counted.
