@@ -695,6 +695,41 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filterbar select { padding: 6px 10px; border-radius: 999px; max-width: 240px; }
 .filterbar .filternote { flex-basis: 100%; }
+/* Computer: the dropdowns sit in one row, as before */
+.fb-fields { display: contents; }
+.fb-field { display: contents; }
+.fb-label, .fb-sheet-head, .fb-done, .fb-phone, .fb-scrim { display: none; }
+/* Phone: one Filters button + chips; the choices open in a bottom sheet */
+@media (max-width: 760px) {
+  .filterbar { display: grid; gap: 6px; }
+  .fb-phone { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  button.fb-toggle { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 12px; font-weight: 650; font-size: 14px;
+    background: var(--card); border: 1px solid var(--line-2); color: var(--ink); }
+  button.fb-toggle.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+  .fb-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-grid; place-items: center; font-size: 12px; background: var(--accent); color: var(--on-accent); }
+  .fb-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+  .fb-chips::-webkit-scrollbar { display: none; }
+  .fb-none { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button.fb-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    background: var(--raised); border: 1px solid var(--line); color: var(--ink); max-width: 200px; }
+  button.fb-chip span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.fb-chip span:last-child { font-size: 11px; opacity: .6; }
+  .fb-fields { display: none; }
+  .filterbar.open .fb-scrim { display: block; position: fixed; inset: 0; z-index: 120; background: #0000008c; animation: fb-fade .2s ease both; }
+  .filterbar.open .fb-fields { display: grid; gap: 14px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 121; max-height: 85dvh; overflow-y: auto;
+    padding: 16px 16px max(18px, env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: var(--panel); border-top: 1px solid var(--line-2);
+    box-shadow: 0 -20px 50px -20px #000a; animation: fb-up .28s cubic-bezier(.2, .8, .2, 1) both; }
+  .filterbar.open .fb-sheet-head { display: flex; align-items: center; justify-content: space-between; }
+  .filterbar.open .fb-sheet-head b { font-size: 18px; }
+  .filterbar.open .fb-field { display: grid; gap: 6px; }
+  .filterbar.open .fb-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .filterbar.open .fb-field select { max-width: none; width: 100%; height: 46px; padding: 0 14px; border-radius: 12px; font-size: 15px; }
+  .filterbar.open .fb-done { display: block; width: 100%; height: 48px; border-radius: 14px; font-size: 15px; margin-top: 4px; }
+  .filterbar.open .fb-clear { justify-self: center; }
+}
+@keyframes fb-up { from { transform: translateY(100%); } }
+@keyframes fb-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .filterbar.open .fb-fields, .filterbar.open .fb-scrim { animation: none; } }
 .assign { display: inline-flex; gap: 6px; align-items: center; }
 .assign select { padding: 3px 8px; }
 .assign-row { display: grid; gap: 4px; margin-top: 6px; }
