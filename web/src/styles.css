@@ -411,11 +411,19 @@ nav.tabs a, .bottomnav a, .bottomnav button, .sheet-item { position: relative; }
 .dr-trigger { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: var(--r-sm); background: var(--card); box-shadow: var(--shadow-sm); font-weight: 500; }
 .dr-trigger b { font-weight: 650; }
 .dr-trigger .dr-dates { color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.dr-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; display: grid; grid-template-columns: 210px auto; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--shadow-lg); overflow: hidden; animation: dr-in .18s var(--ease); }
+.dr-pop { display: grid; grid-template-columns: 210px auto; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--shadow-lg); overflow: hidden; }
+/* the picker opens as a centred dialog over a blurred, frozen page (desktop and phone) */
+.dr-layer { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; }
+.dr-scrim { position: absolute; inset: 0; background: rgba(8, 10, 14, .3); -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); animation: dr-fade .22s var(--ease) both; touch-action: none; }
+.dr-pop.dr-modal { position: relative; max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .12); animation: dr-pop-in .32s cubic-bezier(.2, .9, .3, 1.15) both; }
+.dr-modal .dr-list { max-height: none; }
+.dr-layer.closing .dr-scrim { animation: dr-fade-out .18s var(--ease) both; }
+.dr-layer.closing .dr-modal { animation: dr-pop-out .18s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes dr-pop-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+@keyframes dr-pop-out { to { opacity: 0; transform: scale(.97); } }
 @keyframes dr-in { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes dr-fade { from { opacity: 0; } } @keyframes dr-fade-out { to { opacity: 0; } }
-@keyframes dr-up { from { transform: translateY(100%); } } @keyframes dr-down { to { transform: translateY(100%); } }
-@media (prefers-reduced-motion: reduce) { .dr-scrim, .dr-pop.dr-sheet { animation-duration: .01s !important; } }
+@media (prefers-reduced-motion: reduce) { .dr-scrim, .dr-pop.dr-modal { animation-duration: .01s !important; } }
 /* while a sheet is open the bottom nav steps aside */
 .bottomnav { transition: opacity .25s var(--ease), transform .35s var(--ease); }
 html.sheet-open .bottomnav { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(20px); }
@@ -444,24 +452,18 @@ button.dr-day:active:not(:disabled) { transform: none; }
 .dr-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; grid-column: 2; padding: 0 16px 14px; }
 @media (max-width: 860px) {
   .dr-pop { grid-template-columns: 1fr; }
-  /* phone: the picker is an iOS-style bottom sheet over a blurred page that can't scroll */
-  .dr-scrim { position: fixed; inset: 0; z-index: 90; background: rgba(8, 10, 14, .32); -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); animation: dr-fade .28s var(--ease) both; touch-action: none; }
-  .dr-scrim.closing { animation: dr-fade-out .24s var(--ease) both; }
-  .dr-pop.dr-sheet { position: fixed; z-index: 91; left: 0; right: 0; top: auto; bottom: 0; border-radius: 24px 24px 0 0; border-bottom: 0; max-height: 88dvh; overflow: auto; overscroll-behavior: contain;
-    animation: dr-up .42s cubic-bezier(.22, 1, .36, 1) both; transition: transform .3s cubic-bezier(.22, 1, .36, 1); }
-  .dr-pop.dr-sheet.closing { animation: dr-down .24s cubic-bezier(.4, 0, 1, 1) both; }
-  .dr-grip { position: sticky; top: 0; z-index: 2; display: grid; place-items: center; height: 22px; background: var(--panel); cursor: grab; touch-action: none; }
-  .dr-grip span { width: 38px; height: 5px; border-radius: 99px; background: var(--line-2); }
+  .dr-layer { padding: 12px; }
+  .dr-pop.dr-modal { width: 100%; max-width: 440px; max-height: calc(100dvh - 24px); }
   .dr-pop .dr-foot { grid-column: 1; }
   .dr-pop .dr-list { grid-row: auto; }
-  .dr-sheet .dr-cal { padding-bottom: 14px; }
-  .dr-sheet .dr-list { padding: 4px 8px 10px; overflow: visible; }
+  .dr-modal .dr-cal { padding-bottom: 14px; }
+  .dr-modal .dr-list { padding: 4px 8px 10px; overflow: visible; }
   /* Cancel / Update stay pinned above the phone's gesture bar while the sheet scrolls */
-  .dr-sheet .dr-foot { position: sticky; bottom: 0; z-index: 2; flex-direction: column-reverse; align-items: stretch; gap: 8px;
+  .dr-modal .dr-foot { position: sticky; bottom: 0; z-index: 2; flex-direction: column-reverse; align-items: stretch; gap: 8px;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -10px 24px -18px rgba(0, 0, 0, .35); }
-  .dr-sheet .dr-foot .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .dr-sheet .dr-foot .row button { min-height: 46px; font-size: 15px; }
-  .dr-sheet .dr-foot > .small { text-align: center; font-size: 12px; }
+  .dr-modal .dr-foot .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dr-modal .dr-foot .row button { min-height: 46px; font-size: 15px; }
+  .dr-modal .dr-foot > .small { text-align: center; font-size: 12px; }
   .dr-list { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--line); max-height: none; }
   .dr-list hr, .dr-h { grid-column: 1 / -1; }
   .dr-months { grid-template-columns: 238px; justify-content: center; }
