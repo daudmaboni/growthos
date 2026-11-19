@@ -73,10 +73,12 @@ function installPopup() {
 function keepStatusBarInStep() {
   const set = () => {
     const m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute("content", document.documentElement.dataset.theme === "dark" ? "#0d0e10" : "#ffffff");
+    const d = document.documentElement.dataset;
+    // Sign-in pages have no white top bar, so the status bar takes the grey page colour there.
+    if (m) m.setAttribute("content", d.theme === "dark" ? "#0d0e10" : d.screen === "auth" ? "#eceef2" : "#ffffff");
   };
   set();
-  new MutationObserver(set).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  new MutationObserver(set).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-screen"] });
 }
 
 export function onPwaChange(f: () => void) { listeners.add(f); return () => { listeners.delete(f); }; }

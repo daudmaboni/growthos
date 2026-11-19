@@ -123,6 +123,8 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .err { color: var(--bad); font-size: 14px; } .ok { color: var(--good); font-size: 14px; }
 .center { min-height: 80vh; display: grid; place-items: center; padding: 18px; }
 .auth { width: min(420px, 100%); box-shadow: var(--shadow-lg); }
+/* Sign-in: card centred in the full phone screen, clear of the status bar and home indicator */
+.center:has(> .auth) { min-height: 100vh; min-height: 100dvh; box-sizing: border-box; padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)); }
 .bubbles { display: grid; gap: 6px; padding: 10px; background: var(--paper); border-radius: var(--r-md); margin-top: 8px; max-height: 380px; overflow: auto; }
 .bub { max-width: 80%; padding: 7px 11px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; border: 1px solid var(--line); background: var(--raised); }
 .bub.out { justify-self: end; background: var(--accent-soft); }

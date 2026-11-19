@@ -10,6 +10,13 @@ export function initialLang(): Lang {
   try { const v = localStorage.getItem(LANG_KEY); if (v === "sw" || v === "en") return v; } catch { /* storage unavailable */ }
   return "sw";
 }
+/** Sign-in pages sit on the grey page colour, so the phone status bar should too (see pwa.ts). */
+function useAuthScreen() {
+  useEffect(() => {
+    document.documentElement.dataset.screen = "auth";
+    return () => { delete document.documentElement.dataset.screen; };
+  }, []);
+}
 function saveLang(l: Lang) { try { localStorage.setItem(LANG_KEY, l); } catch { /* storage unavailable */ } }
 
 const T = {
@@ -135,6 +142,7 @@ type Mode = "signin" | "signup" | "link" | "forgot";
 type Sent = { kind: "signup" | "link" | "reset"; email: string } | null;
 
 export function AuthScreen() {
+  useAuthScreen();
   const [lang, setLang] = useState<Lang>(initialLang);
   const [mode, setMode] = useState<Mode>(() => (/[?&]signup\b/.test(location.search) ? "signup" : "signin"));
   const [business, setBusiness] = useState("");
@@ -290,6 +298,7 @@ export function AuthScreen() {
 
 /* ---------- after a reset link ---------- */
 export function SetNewPassword({ email, onDone }: { email: string; onDone: () => void }) {
+  useAuthScreen();
   const [lang, setLang] = useState<Lang>(initialLang);
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
