@@ -58,16 +58,16 @@ export function ProductPicker({ ws, products, items, onChange, T }: {
         <div className="pp-lines">
           {items.map((x, k) => (
             <div key={(x.product_id ?? x.name) + k} className="pp-line">
-              <span>{x.name}</span>
+              <span className="pp-name">{x.name}</span>
               <span className="pp-qty">
                 <button type="button" aria-label={T("one less", "punguza moja")} onClick={() => setQty(k, x.qty - 1)}>−</button>
                 <b>{x.qty}</b>
                 <button type="button" aria-label={T("one more", "ongeza moja")} onClick={() => setQty(k, x.qty + 1)}>+</button>
               </span>
-              <span className="small muted">{x.unit_cost != null ? money(x.qty * x.unit_cost, ws.currency) : T("no cost set", "gharama haijawekwa")}</span>
+              <span className="pp-cost small muted">{x.unit_cost != null ? money(x.qty * x.unit_cost, ws.currency) : T("no cost set", "gharama haijawekwa")}</span>
             </div>
           ))}
-          <span className="small">{total != null ? <>{T("Cost of these", "Gharama ya hizi")}: <b>{money(total, ws.currency)}</b></> : <span className="warnt">{T("Some products have no cost yet. Add it in My products, or type the cost below.", "Baadhi ya bidhaa hazina gharama. Iweke kwenye Bidhaa zangu, au andika gharama hapa chini.")}</span>}</span>
+          <span className="pp-total small">{total != null ? <>{T("Cost of these", "Gharama ya hizi")}: <b>{money(total, ws.currency)}</b></> : <span className="warnt">{T("Some products have no cost yet. Add it in My products, or type the cost below.", "Baadhi ya bidhaa hazina gharama. Iweke kwenye Bidhaa zangu, au andika gharama hapa chini.")}</span>}</span>
         </div>
       )}
     </div>
