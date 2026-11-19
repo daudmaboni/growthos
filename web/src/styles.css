@@ -736,3 +736,12 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .wa-side .cc-pay-fields { grid-template-columns: minmax(0, 1fr); }
 .wa-side input, .wa-side select, .wa-side textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
 .wa-side .cc-ask, .wa-side .wa-card { overflow-wrap: anywhere; }
+/* 19 Nov: red until pressed, green once pressed — "Yes, money received" and "Came from an ad? Yes" */
+.cc-ask-btns button.pay-yes { background: #d93636; border-color: #d93636; color: #fff; font-weight: 700; }
+.cc-ask-btns button.pay-yes:hover:not(:disabled) { background: #bf2c2c; border-color: #bf2c2c; }
+.cc-ask-btns button.pay-yes.done, .cc-ask-btns button.pay-yes.done:disabled { background: #1f8a4c; border-color: #1f8a4c; color: #fff; opacity: 1; }
+.cc-fromad .seg button.yes:not(.on) { background: #d93636; color: #fff; }
+.cc-fromad .seg button.yes:not(.on):hover:not(:disabled) { background: #bf2c2c; }
+.coming-soon { display: grid; gap: 8px; justify-items: start; max-width: 560px; }
+.coming-soon h2 { margin: 0; }
+.coming-soon p { margin: 0; }

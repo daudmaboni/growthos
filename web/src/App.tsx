@@ -125,7 +125,7 @@ export default function App() {
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
-      {view === "products" && <Products ws={ws} />}
+      {view === "products" && (PRODUCTS_PAGE_READY ? <Products ws={ws} /> : <ComingSoon sw={ws.language === "sw"} />)}
       {view === "content" && <Content ws={ws} />}
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
@@ -270,6 +270,19 @@ function GlassTabs({ view, children }: { view: string; children: import("react")
   );
 }
 
+/** My products page is parked as "Coming soon" (19 Nov 2026). Its code stays; picking products when
+ *  recording a sale still works. Set to true to bring the page back. */
+const PRODUCTS_PAGE_READY = false;
+function ComingSoon({ sw }: { sw: boolean }) {
+  return (
+    <div className="card coming-soon">
+      <span className="chip">{sw ? "Inakuja hivi karibuni" : "Coming soon"}</span>
+      <h2>{sw ? "Bidhaa zangu" : "My products"}</h2>
+      <p className="muted">{sw ? "Ukurasa huu bado unaandaliwa. Kwa sasa chagua bidhaa alizochukua mteja unaporekodi mauzo kwenye chat." : "This page is still being worked on. For now, pick the products a customer took when you record the sale in their chat."}</p>
+    </div>
+  );
+}
+
 /** Sections that live under "More" (top bar on computers, sheet on phones). */
 function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
   const L = (en: string, s: string) => (sw ? s : en);
@@ -277,7 +290,7 @@ function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
     ["attention", L("Needs attention", "Yanayohitaji hatua"), L("Payments, deliveries, follow-ups, problems", "Malipo, usafirishaji, ufuatiliaji, matatizo"), <Ico d="M12 8v5M12 16.5v.5M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />],
     ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
     ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
-    ["products", L("My products", "Bidhaa zangu"), L("Prices, costs and photos", "Bei, gharama na picha"), <Ico d="M21 8 12 3 3 8v8l9 5 9-5V8ZM3 8l9 5 9-5M12 13v8" />],
+    ["products", L("My products", "Bidhaa zangu"), PRODUCTS_PAGE_READY ? L("Prices, costs and photos", "Bei, gharama na picha") : L("Coming soon", "Inakuja hivi karibuni"), <Ico d="M21 8 12 3 3 8v8l9 5 9-5V8ZM3 8l9 5 9-5M12 13v8" />],
     ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
     ["connect", L("Connections", "Miunganisho"), L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
     ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],

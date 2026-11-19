@@ -787,6 +787,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   }, [products, r.id]);
   const [dupOk, setDupOk] = useState(false);
   const [dup, setDup] = useState<string | null>(null);
+  const [paidDone, setPaidDone] = useState(false);   // the button turns green once the sale is saved
 
   async function yes() {
     const a = Number(amount.replace(/[^\d.]/g, ""));
@@ -820,7 +821,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
     });
     setBusy(false);
     if (error) setErr(error.code === "23505" ? T(`Transaction ${txn} is already recorded for another sale. The same payment can't count twice.`, `Muamala ${txn} tayari umerekodiwa kwa mauzo mengine. Malipo hayo hayawezi kuhesabiwa mara mbili.`) : error.message);
-    else onDone();
+    else { setPaidDone(true); setTimeout(onDone, 1100); }
   }
   async function no() {
     setBusy(true); setErr("");
@@ -863,7 +864,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
       </div>
       {dup && <span className="warnt small">⚠ {dup}</span>}
       <div className="cc-ask-btns">
-        <button className="small primary" disabled={busy} onClick={yes}>✓ {T("Yes, money received", "Ndiyo, pesa imeingia")}</button>
+        <button className={"small pay-yes" + (paidDone ? " done" : "")} disabled={busy || paidDone} onClick={yes}>{paidDone ? "✓ " : ""}{paidDone ? T("Money received — saved", "Pesa imeingia — imehifadhiwa") : T("Yes, money received", "Ndiyo, pesa imeingia")}</button>
         <button className="small" disabled={busy} onClick={no}>✗ {T("No, nothing came in", "Hapana, haijaingia")}</button>
       </div>
       <span className="small muted">{T("\"Yes\" records the sale, so it shows in your revenue right away.", "\"Ndiyo\" inarekodi mauzo, na yanaonekana kwenye mapato papo hapo.")}</span>
