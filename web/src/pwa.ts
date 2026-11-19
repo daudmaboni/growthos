@@ -16,9 +16,57 @@ export function startPwa() {
   window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("service worker", e)); });
   // A tapped notification in an open window that the worker can't navigate.
   navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.type === "open" && typeof e.data.url === "string") location.href = e.data.url; });
-  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e as InstallEvent; notify(); });
-  window.addEventListener("appinstalled", () => { deferred = null; notify(); });
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e as InstallEvent; notify(); setTimeout(installPopup, 1500); });
+  window.addEventListener("appinstalled", () => { deferred = null; notify(); document.getElementById("itaos-install")?.remove(); });
+  // iPhone has no install prompt: show the Add to Home Screen steps instead (Safari only).
+  if (isIOS() && !isInstalled() && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent)) setTimeout(installPopup, 2500);
   keepStatusBarInStep();
+}
+
+const POPUP_KEY = "itaos-install-popup";
+const POPUP_QUIET_DAYS = 3;
+
+/** Bottom pop-up on any page (homepage, login, app) inviting the visitor to install itaOS.
+ *  Plain DOM so it works on the homepage too. "Not now" hides it for a few days. */
+function installPopup() {
+  if (isInstalled() || document.getElementById("itaos-install") || location.pathname.startsWith("/app/admin")) return;
+  if (!deferred && !isIOS()) return;
+  try { const t = Number(localStorage.getItem(POPUP_KEY) || 0); if (Date.now() - t < POPUP_QUIET_DAYS * 864e5) return; } catch { /* storage unavailable */ }
+  let lang: string | null = null;
+  try { lang = localStorage.getItem("itaos-lang"); } catch { /* ignore */ }
+  const sw = lang ? lang === "sw" : location.pathname.startsWith("/app");
+  const T = (en: string, s: string) => (sw ? s : en);
+  const dark = document.documentElement.dataset.theme === "dark";
+  const bg = dark ? "#16181c" : "#ffffff", fg = dark ? "#f2f3f5" : "#131a2a", muted = dark ? "#a3a8b3" : "#5b6170", line = dark ? "#2a2d33" : "#e6e8ec";
+  const ios = !deferred;
+  const el = document.createElement("div");
+  el.id = "itaos-install";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", T("Install itaOS", "Sakinisha itaOS"));
+  el.style.cssText = `position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:10000;max-width:440px;margin:0 auto;background:${bg};color:${fg};border:1px solid ${line};border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.22);padding:16px;font:15px/1.4 Geist,Inter,system-ui,sans-serif;transform:translateY(130%);transition:transform .45s cubic-bezier(.22,1,.36,1)`;
+  el.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center">
+      <img src="/icons/icon-192.png" alt="" width="48" height="48" style="border-radius:12px;flex:none">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:16px">${T("Get the itaOS app", "Pakua app ya itaOS")}</div>
+        <div style="color:${muted};font-size:13px">${ios
+          ? T("Tap <b>Share</b> (the square with an up arrow), then <b>Add to Home Screen</b>.", "Bonyeza <b>Share</b> (kiboksi chenye mshale wa juu), kisha <b>Add to Home Screen</b>.")
+          : T("Open it from your home screen and get a notification when a customer writes.", "Ifungue kutoka skrini ya simu na upate arifa mteja akiandika.")}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button type="button" data-x style="font-family:inherit;font-weight:600;font-size:14px;padding:9px 16px;border-radius:999px;border:1px solid ${line};background:transparent;color:${fg};cursor:pointer">${T("Not now", "Baadaye")}</button>
+      ${ios ? "" : `<button type="button" data-go style="font-family:inherit;font-weight:600;font-size:14px;padding:9px 18px;border-radius:999px;border:0;background:#131a2a;color:#fff;cursor:pointer;${dark ? "background:#f5c84c;color:#131a2a;" : ""}">${T("Install", "Sakinisha")}</button>`}
+    </div>`;
+  const close = (quiet: boolean) => {
+    if (quiet) { try { localStorage.setItem(POPUP_KEY, String(Date.now())); } catch { /* ignore */ } }
+    el.style.transform = "translateY(130%)";
+    setTimeout(() => el.remove(), 500);
+  };
+  el.querySelector("[data-x]")?.addEventListener("click", () => close(true));
+  el.querySelector("[data-go]")?.addEventListener("click", async () => { const ok = await promptInstall(); close(!ok); });
+  document.body.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = "none"; }));
 }
 
 /** The phone's status bar follows the itaOS theme (light/dark), not the system. */

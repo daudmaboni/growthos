@@ -5,11 +5,11 @@
 //  - Pages: network first; the last good copy of the app opens if the network is down.
 //  - /assets/* (Vite files with a hash in the name, never change): cache first.
 // Every deploy to main is picked up on the next open because pages always try the network first.
-const VERSION = "itaos-v1";
+const VERSION = "itaos-v2";
 const SHELL = "/app";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(VERSION).then((c) => c.add(new Request(SHELL, { cache: "reload" }))).catch(() => {}));
+  event.waitUntil(caches.open(VERSION).then((c) => c.addAll([new Request("/", { cache: "reload" }), new Request(SHELL, { cache: "reload" })])).catch(() => {}));
   self.skipWaiting();
 });
 
@@ -30,13 +30,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
       try {
         const res = await fetch(req);
-        if (res.ok && url.pathname.startsWith("/app")) {
+        // Keep the last good homepage and app page so the installed app opens offline.
+        const key = url.pathname === "/" ? "/" : url.pathname.startsWith("/app") ? SHELL : null;
+        if (res.ok && key) {
           const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put(SHELL, copy)).catch(() => {});
+          caches.open(VERSION).then((c) => c.put(key, copy)).catch(() => {});
         }
         return res;
       } catch {
-        const cached = (await caches.match(req)) || (await caches.match(SHELL));
+        const cached = (await caches.match(url.pathname === "/" ? "/" : SHELL)) || (await caches.match(SHELL)) || (await caches.match("/"));
         return cached || new Response("<h1>No connection</h1><p>itaOS needs the internet. Try again when you're back online.</p>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
     })());
