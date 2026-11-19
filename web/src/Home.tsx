@@ -108,11 +108,8 @@ export default function Home() {
               <div className="hp-float f3">{T("Ad → Sale", "Tangazo → Mauzo")}<b>{T("3 days", "Siku 3")}</b></div>
             </div>
           </div>
-        </section>
-
-        {/* VIDEO */}
-        <section className="hp-video">
-          <div className="hp-w">
+        {/* VIDEO (inside the green hero) */}
+          <div className="hp-w hp-video">
             <div className="hp-video-card">
               <video autoPlay muted loop playsInline preload="metadata" poster="/video/itaos-kinetic-poster.jpg"
                 aria-label={T("itaOS in 18 seconds: customers see your ad, message you on WhatsApp and pay with Lipa namba. itaOS shows which ad made the sale.",
@@ -122,6 +119,7 @@ export default function Home() {
               </video>
             </div>
           </div>
+
         </section>
 
         {/* REAL RESULT — Kayani Herbs (pilot business), 19 Nov 2026, figures from itaOS; shown with Kayani's permission */}
