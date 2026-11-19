@@ -1,7 +1,7 @@
 import type { ReactNode, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
-import { Workspace, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency, moneyInput } from "./lib";
+import { Workspace, AdPerf, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency, moneyInput } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
 import { FilterBar, useFilters } from "./Filters";
@@ -10,7 +10,6 @@ import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
 import PaidOrders from "./PaidOrders";
-import "./dashboard.css";
 
 export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Workspace) => void }) {
   const [range, setRangeState] = useState<RangeSel>(() => loadRange("dashboard", { key: "last_7" }));
@@ -171,17 +170,23 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
             {(mx.warmNoFollowUp.value ?? 0) > 0 && <a href="#actions" className="small">{T("Open the follow-up queue →", "Fungua foleni ya ufuatiliaji →")}</a>}
           </section>
           <section className="card">
-            <h2>{T("Data coverage & sources", "Ukamilifu wa data na vyanzo")}</h2>
-            <ul className="dmini">
-            <Cov label={T("Ad account", "Akaunti ya matangazo")} ok={adsConn.length > 0 && adsConn.every((c) => c.status === "active")} note={adsConn.length ? `${T("last successful sync", "usawazishaji wa mwisho")} ${ago(lastSync)}${adsConn.some((c) => c.last_error) ? " · " + T("last run had an error", "mara ya mwisho kulikuwa na hitilafu") : ""}` : T("not connected", "haijaunganishwa")} />
-            <Cov label="WhatsApp" ok={waConn.length > 0} note={waConn.length ? `${g.nums.map((n) => n.display_phone ?? n.phone_number_id).join(", ")} · ${T("history", "historia")}: ${g.nums[0]?.history_status ?? "–"}` : T("not connected; using uploaded chat exports", "haijaunganishwa; chats zilizopakiwa tu")} />
-            <Cov label={T("Webhook events", "Matukio ya webhook")} ok={!failed || failed.events === 0} note={g.health.length ? g.health.map((h) => `${h.status}: ${h.events}`).join(" · ") : T("none received yet", "hakuna bado")} />
-            <Cov label={T("Chat sources known", "Vyanzo vya chats vinajulikana")} ok={(mx.coverage.knownSourceShare ?? 0) >= 0.5} note={mx.coverage.knownSourceShare == null ? "–" : pct(mx.coverage.knownSourceShare) + " " + T("of chats have a known source", "ya chats zina chanzo")} />
-            <Cov label={T("Read by Kito", "Zimesomwa na Kito")} ok={(mx.coverage.kitoReadShare ?? 0) >= 0.7} note={mx.coverage.kitoReadShare == null ? "–" : pct(mx.coverage.kitoReadShare) + " " + T("of chats this period", "ya chats kipindi hiki")} />
-            <Cov label={T("Exchange rate", "Kiwango cha kubadilisha")} ok={!mx.coverage.fxNeeded || mx.coverage.fxSet} note={!mx.coverage.fxNeeded ? T("not needed", "haihitajiki") : mx.coverage.fxSet ? `1 ${rawAdCur} = ${fmt(ws.fx_rate)} ${ws.currency} · ${ws.fx_auto !== false ? T("automatic", "kiotomatiki") : T("set by you", "umeweka wewe")}` : T("needed for return on ad spend", "inahitajika kwa mapato kwa tangazo")} />
-            <Cov label={T("Order costs", "Gharama za oda")} ok={mx.coverage.ordersMissingCost === 0 || mx.coverage.expensesCount > 0} note={mx.coverage.ordersMissingCost ? T(`${mx.coverage.ordersMissingCost} paid orders this period have no cost`, `Oda ${mx.coverage.ordersMissingCost} kipindi hiki hazina gharama`) : mx.ordersPaid.value ? T(`every order has a cost · ${money(W(mx.coverage.orderCosts), wsCur)}`, `kila oda ina gharama · ${money(W(mx.coverage.orderCosts), wsCur)}`) : T("no paid orders this period", "hakuna oda kipindi hiki")} />
-            <Cov label={T("Orders", "Oda")} ok={(mx.ordersPaid.value ?? 0) > 0 || (mx.chats.value ?? 0) === 0} note={`${fmt(mx.ordersPaid.value)} ${T("paid", "zilizolipwa")} · ${money(W(mx.revenueManual.value), wsCur)} ${T("confirmed by you", "umethibitisha")} · ${money(W(mx.revenueImported.value), wsCur)} ${T("imported", "zimeingizwa")}${mx.ordersUnlinked.value ? ` · ${mx.ordersUnlinked.value} ${T("not linked to a chat", "hazijaunganishwa na chat")}` : ""}`} />
-            </ul>
+            {(() => {
+              const cov: { label: string; ok: boolean; note: string }[] = [
+              { label: T("Ad account", "Akaunti ya matangazo"), ok: adsConn.length > 0 && adsConn.every((c) => c.status === "active"), note: adsConn.length ? `${T("last successful sync", "usawazishaji wa mwisho")} ${ago(lastSync)}${adsConn.some((c) => c.last_error) ? " · " + T("last run had an error", "mara ya mwisho kulikuwa na hitilafu") : ""}` : T("not connected", "haijaunganishwa") },
+              { label: "WhatsApp", ok: waConn.length > 0, note: waConn.length ? `${g.nums.map((n) => n.display_phone ?? n.phone_number_id).join(", ")} · ${T("history", "historia")}: ${g.nums[0]?.history_status ?? "–"}` : T("not connected; using uploaded chat exports", "haijaunganishwa; chats zilizopakiwa tu") },
+              { label: T("Webhook events", "Matukio ya webhook"), ok: !failed || failed.events === 0, note: g.health.length ? g.health.map((h) => `${h.status}: ${h.events}`).join(" · ") : T("none received yet", "hakuna bado") },
+              { label: T("Chat sources known", "Vyanzo vya chats vinajulikana"), ok: (mx.coverage.knownSourceShare ?? 0) >= 0.5, note: mx.coverage.knownSourceShare == null ? "–" : pct(mx.coverage.knownSourceShare) + " " + T("of chats have a known source", "ya chats zina chanzo") },
+              { label: T("Read by Kito", "Zimesomwa na Kito"), ok: (mx.coverage.kitoReadShare ?? 0) >= 0.7, note: mx.coverage.kitoReadShare == null ? "–" : pct(mx.coverage.kitoReadShare) + " " + T("of chats this period", "ya chats kipindi hiki") },
+              { label: T("Exchange rate", "Kiwango cha kubadilisha"), ok: !mx.coverage.fxNeeded || mx.coverage.fxSet, note: !mx.coverage.fxNeeded ? T("not needed", "haihitajiki") : mx.coverage.fxSet ? `1 ${rawAdCur} = ${fmt(ws.fx_rate)} ${ws.currency} · ${ws.fx_auto !== false ? T("automatic", "kiotomatiki") : T("set by you", "umeweka wewe")}` : T("needed for return on ad spend", "inahitajika kwa mapato kwa tangazo") },
+              { label: T("Order costs", "Gharama za oda"), ok: mx.coverage.ordersMissingCost === 0 || mx.coverage.expensesCount > 0, note: mx.coverage.ordersMissingCost ? T(`${mx.coverage.ordersMissingCost} paid orders this period have no cost`, `Oda ${mx.coverage.ordersMissingCost} kipindi hiki hazina gharama`) : mx.ordersPaid.value ? T(`every order has a cost · ${money(W(mx.coverage.orderCosts), wsCur)}`, `kila oda ina gharama · ${money(W(mx.coverage.orderCosts), wsCur)}`) : T("no paid orders this period", "hakuna oda kipindi hiki") },
+              { label: T("Orders", "Oda"), ok: (mx.ordersPaid.value ?? 0) > 0 || (mx.chats.value ?? 0) === 0, note: `${fmt(mx.ordersPaid.value)} ${T("paid", "zilizolipwa")} · ${money(W(mx.revenueManual.value), wsCur)} ${T("confirmed by you", "umethibitisha")} · ${money(W(mx.revenueImported.value), wsCur)} ${T("imported", "zimeingizwa")}${mx.ordersUnlinked.value ? ` · ${mx.ordersUnlinked.value} ${T("not linked to a chat", "hazijaunganishwa na chat")}` : ""}` }];
+              const bad = cov.filter((c) => !c.ok).length;
+              return <>
+                <div className="row between"><h2>{T("Data coverage & sources", "Ukamilifu wa data na vyanzo")}</h2>
+                  <span className={"cov-sum " + (bad ? "warn" : "ok")}>{bad ? T(`${bad} to check`, `${bad} za kuangalia`) : T("All good", "Yote sawa")}</span></div>
+                <ul className="cov">{[...cov].sort((x, y) => Number(x.ok) - Number(y.ok)).map((c) => <Cov key={c.label} {...c} T={T} />)}</ul>
+              </>;
+            })()}
             <ProvenanceLegend lang={lang} />
           </section>
         </div>
@@ -206,25 +211,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           </section>
         </div>
 
-        <section className="card">
-          <h2>{T("Ads: chats vs confirmed paying customers", "Matangazo: chats dhidi ya wateja waliothibitishwa")}</h2>
-          <div className="scroll"><table>
-            <thead><tr><th>#</th><th>Ad</th><th className="n">Spend ({adCur})</th><th className="n">Clicks</th><th className="n">Chats (Meta)</th><th className="n">Chats seen</th><th className="n">Price shared</th><th className="n">{T("Signals", "Dalili")}</th><th className="n">{T("Paid (confirmed)", "Oda zilizolipwa")}</th><th className="n">{T("Cost / sale", "Gharama / mauzo")}</th></tr></thead>
-            <tbody>
-              {ads.map((a, i) => (
-                <tr key={a.ad_id}>
-                  <td className="rank">{String(i + 1).padStart(2, "0")}</td>
-                  <td><b>{a.ad_name ?? a.ad_id}</b><div className="small muted">{a.campaign_name}</div></td>
-                  <td className="n">{amt(A(Number(a.spend)), adCur)}</td><td className="n">{fmt(a.clicks)}</td><td className="n">{fmt(a.platform_conversations)}</td><td className="n">{fmt(a.chats)}</td>
-                  <td className="n">{fmt(a.priced)}</td><td className="n muted">{fmt(a.payment_signals)}</td><td className="n"><b>{fmt(a.sold)}</b></td>
-                  <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no confirmed sales", "hakuna mauzo yaliyothibitishwa")}</span> : "–") : amt(A(Number(a.spend) / Number(a.sold)), adCur)}</td>
-                </tr>
-              ))}
-              {!ads.length && <tr><td colSpan={10} className="muted small">{T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.")}</td></tr>}
-            </tbody>
-          </table></div>
-          <p className="small muted" style={{ margin: 0 }}>{T("“Chats seen” are chats itaOS linked to the ad through WhatsApp’s ad referral: a matched link, not proof the ad caused a purchase. “Signals” are inferred payments (words, screenshots, Kito) and are not counted as sales. Cost per sale uses only paid orders recorded in itaOS and paid within the conversion window.", "“Chats seen” ni chats ambazo itaOS imeziunganisha na tangazo kupitia referral ya WhatsApp: ni uhusiano, si uthibitisho kuwa tangazo limesababisha ununuzi. “Dalili” ni malipo yaliyokisiwa (maneno, picha, Kito) na hayahesabiwi kama mauzo. Gharama kwa mauzo hutumia oda zilizolipwa na kurekodiwa itaOS ndani ya dirisha la uthibitisho.")}</p>
-        </section>
+        <AdsTable ads={ads} daily={g.daily} today={g.today} adCur={adCur} A={A} T={T} />
       </>)}
     </div>
   );
@@ -242,8 +229,14 @@ function periodText(p: { from: string; to: string }, lang: "sw" | "en") {
   return p.from === p.to ? f(p.to, true) : `${f(p.from, !same)}–${f(p.to, true)}`;
 }
 
-function Cov({ label, ok, note }: { label: string; ok: boolean; note: string }) {
-  return <li><span><span className={"status-dot " + (ok ? "on" : "err")} />{label}</span><b>{note}</b></li>;
+function Cov({ label, ok, note, T }: { label: string; ok: boolean; note: string; T: (en: string, sw: string) => string }) {
+  return (
+    <li className={ok ? "ok" : "bad"}>
+      <span className="cov-ic" aria-hidden>{ok ? "✓" : "!"}</span>
+      <div><strong>{label}</strong><small>{note}</small></div>
+      <em>{ok ? T("OK", "Sawa") : T("Check", "Angalia")}</em>
+    </li>
+  );
 }
 
 /** KPI tile. Pass `n` + `f` to count the value up on load instead of showing `v` at once. */
@@ -302,4 +295,75 @@ function greeting(lang: "sw" | "en", tz?: string | null) {
   try { if (tz) h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(new Date())); } catch { /* bad tz: keep device hour */ }
   if (lang === "sw") return h < 5 ? "Habari za usiku" : h < 12 ? "Habari za asubuhi" : h < 16 ? "Habari za mchana" : h < 19 ? "Habari za jioni" : "Habari za usiku";
   return h < 5 ? "Hello, night owl" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+type Run = "on" | "review" | "issue" | "off" | "unknown";
+/** Meta's delivery status → what the owner needs to know. */
+function runState(status: string | null | undefined, spentRecently: boolean): Run {
+  const st = (status ?? "").toUpperCase();
+  if (st === "ACTIVE") return "on";
+  if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(st)) return "review";
+  if (["WITH_ISSUES", "DISAPPROVED", "PENDING_BILLING_INFO"].includes(st)) return "issue";
+  if (st) return "off";
+  return spentRecently ? "on" : "unknown";   // no status stored yet: spending in the last 2 days counts as running
+}
+const RUN_ORDER: Record<Run, number> = { on: 0, review: 1, issue: 2, unknown: 3, off: 4 };
+
+function RunBadge({ r, T }: { r: Run; T: (en: string, sw: string) => string }) {
+  const label = { on: T("Running", "Linaendelea"), review: T("In review", "Linakaguliwa"), issue: T("Problem", "Tatizo"), off: T("Stopped", "Limesimama"), unknown: T("Not known", "Haijulikani") }[r];
+  return <span className={"run run-" + r} title={label}><i aria-hidden />{label}</span>;
+}
+
+const FOLD = 6;
+function AdsTable({ ads, daily, today, adCur, A, T }: { ads: AdPerf[]; daily: { ad_id?: string; day: string; spend: number }[]; today: string; adCur: string;
+  A: (n: number | null | undefined) => number | null; T: (en: string, sw: string) => string }) {
+  const [show, setShow] = useState<"running" | "all">(() => { try { return (localStorage.getItem("itaos:ads-show") as "running" | "all") || "running"; } catch { return "running"; } });
+  const [open, setOpen] = useState(false);
+  const pick = (v: "running" | "all") => { setShow(v); setOpen(false); try { localStorage.setItem("itaos:ads-show", v); } catch { /* ignore */ } };
+  const rows = useMemo(() => {
+    const yday = new Date(new Date(today + "T00:00:00Z").getTime() - 864e5).toISOString().slice(0, 10);
+    const recent = new Set(daily.filter((d) => d.ad_id && d.spend > 0 && d.day >= yday).map((d) => d.ad_id!));
+    return ads.map((a) => ({ a, r: runState(a.status, recent.has(a.ad_id)) }))
+      .sort((x, y) => RUN_ORDER[x.r] - RUN_ORDER[y.r] || Number(y.a.spend) - Number(x.a.spend));
+  }, [ads, daily, today]);
+  const running = rows.filter((x) => x.r === "on" || x.r === "review" || x.r === "issue");
+  const list = show === "running" ? running : rows;
+  const shown = open ? list : list.slice(0, FOLD);
+  const hidden = list.length - shown.length;
+  return (
+    <section className="card">
+      <div className="row between">
+        <div><h2>{T("Ads: chats vs confirmed paying customers", "Matangazo: chats dhidi ya wateja waliothibitishwa")}</h2>
+          <span className="small muted">{T(`${running.length} running · ${rows.length - running.length} stopped. Running ads first, most spend at the top.`, `${running.length} yanaendelea · ${rows.length - running.length} yamesimama. Yanayoendelea kwanza, matumizi makubwa juu.`)}</span></div>
+        <div className="seg" role="radiogroup" aria-label={T("Which ads", "Matangazo gani")}>
+          <button role="radio" aria-checked={show === "running"} className={show === "running" ? "on" : ""} onClick={() => pick("running")}>{T("Running", "Yanayoendelea")} <em>{running.length}</em></button>
+          <button role="radio" aria-checked={show === "all"} className={show === "all" ? "on" : ""} onClick={() => pick("all")}>{T("All", "Yote")} <em>{rows.length}</em></button>
+        </div>
+      </div>
+      <div className="scroll"><table className="ads-t">
+        <thead><tr><th>#</th><th>Ad</th><th>{T("Status", "Hali")}</th><th className="n">Spend ({adCur})</th><th className="n">Clicks</th><th className="n">Chats (Meta)</th><th className="n">Chats seen</th><th className="n">Price shared</th><th className="n">{T("Signals", "Dalili")}</th><th className="n">{T("Paid (confirmed)", "Oda zilizolipwa")}</th><th className="n">{T("Cost / sale", "Gharama / mauzo")}</th></tr></thead>
+        <tbody>
+          {shown.map(({ a, r }, i) => (
+            <tr key={a.ad_id} className={r === "off" || r === "unknown" ? "dim" : ""}>
+              <td className="rank">{String(i + 1).padStart(2, "0")}</td>
+              <td><b>{a.ad_name ?? a.ad_id}</b><div className="small muted">{a.campaign_name}</div></td>
+              <td><RunBadge r={r} T={T} /></td>
+              <td className="n">{amt(A(Number(a.spend)), adCur)}</td><td className="n">{fmt(a.clicks)}</td><td className="n">{fmt(a.platform_conversations)}</td><td className="n">{fmt(a.chats)}</td>
+              <td className="n">{fmt(a.priced)}</td><td className="n muted">{fmt(a.payment_signals)}</td><td className="n"><b>{fmt(a.sold)}</b></td>
+              <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no confirmed sales", "hakuna mauzo yaliyothibitishwa")}</span> : "–") : amt(A(Number(a.spend) / Number(a.sold)), adCur)}</td>
+            </tr>
+          ))}
+          {!list.length && <tr><td colSpan={11} className="muted small">{!ads.length ? T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.") : T("No ad is running right now. Tap All to see the stopped ones.", "Hakuna tangazo linaloendelea sasa. Bofya Yote kuona yaliyosimama.")}</td></tr>}
+        </tbody>
+      </table></div>
+      {list.length > FOLD && (
+        <button className="fold" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+          {open ? T("Show less", "Onyesha machache") : T(`Show ${hidden} more`, `Onyesha ${hidden} zaidi`)} <span aria-hidden className={open ? "up" : ""}>▾</span>
+        </button>
+      )}
+      <details className="note"><summary>{T("What these columns mean", "Maana ya safu hizi")}</summary>
+        <p className="small muted">{T("“Chats seen” are chats itaOS linked to the ad through WhatsApp’s ad referral: a matched link, not proof the ad caused a purchase. “Signals” are inferred payments (words, screenshots, Kito) and are not counted as sales. Cost per sale uses only paid orders recorded in itaOS and paid within the conversion window. Status comes from Meta Ads Manager.", "“Chats seen” ni chats ambazo itaOS imeziunganisha na tangazo kupitia referral ya WhatsApp: ni uhusiano, si uthibitisho kuwa tangazo limesababisha ununuzi. “Dalili” ni malipo yaliyokisiwa (maneno, picha, Kito) na hayahesabiwi kama mauzo. Gharama kwa mauzo hutumia oda zilizolipwa na kurekodiwa itaOS ndani ya dirisha la uthibitisho. Hali inatoka Meta Ads Manager.")}</p>
+      </details>
+    </section>
+  );
 }

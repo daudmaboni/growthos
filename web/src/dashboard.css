@@ -1,6 +1,5 @@
 /* Dashboard, in the admin business-card style: navy + yellow, Bricolage Grotesque headings, Instrument Sans text,
    flat white cards with a thin border, and soft grey rows for lists. Scoped to the Dashboard page (.dash-ia). */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:wght@400..700&display=swap');
 
 .dash-ia {
   --navy: #16224A; --navy2: #22336B; --yellow: #F7C948; --lav: #A9B3D6; --track: #E4E7EF; --row: #F1F2F6;
@@ -94,3 +93,37 @@ body:has(.dash-ia) { background: #F1F2F6; }
 
 /* Loading skeletons in the same tones */
 .dash-ia .skeleton { border-radius: 14px; }
+
+/* Ads table: status badge, stopped rows faded, fold button */
+.dash-ia .run { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px 3px 7px; border-radius: 999px; white-space: nowrap; background: var(--row); color: var(--muted); }
+.dash-ia .run i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; position: relative; flex: none; }
+.dash-ia .run-on { background: var(--good-soft); color: var(--good); }
+.dash-ia .run-on i::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid currentColor; animation: dash-ping 1.8s ease-out infinite; }
+.dash-ia .run-review { background: #F7C94838; color: #8A6100; }
+:root:not([data-theme="light"]) .dash-ia .run-review { color: var(--yellow); }
+.dash-ia .run-issue { background: var(--bad-soft); color: var(--bad); }
+.dash-ia .run-off i { background: transparent; border: 1.5px solid currentColor; }
+@keyframes dash-ping { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+.dash-ia tr.dim td { color: var(--muted); }
+.dash-ia tr.dim td b { color: var(--ink-2); font-weight: 600; }
+.dash-ia .seg button em { font-style: normal; font-size: 11.5px; color: var(--muted); margin-left: 2px; }
+.dash-ia .seg button.on em { color: var(--ink); }
+.dash-ia .fold { justify-self: center; display: inline-flex; align-items: center; gap: 8px; background: var(--row); border: 0; border-radius: 999px; padding: 8px 18px; font-weight: 600; color: var(--ink); }
+.dash-ia .fold:hover:not(:disabled) { background: var(--track); }
+.dash-ia .fold span { transition: transform .25s; display: inline-block; } .dash-ia .fold span.up { transform: rotate(180deg); }
+.dash-ia details.note summary, .dash-ia details summary { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+.dash-ia details.note p { margin: 6px 0 0; }
+
+/* Data coverage: one row per source, problems first */
+.dash-ia .cov-sum { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.dash-ia .cov-sum.ok { background: var(--good-soft); color: var(--good); } .dash-ia .cov-sum.warn { background: var(--bad-soft); color: var(--bad); }
+.dash-ia .cov { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dash-ia .cov li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 10px; background: var(--row); }
+.dash-ia .cov-ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font: 700 13px var(--display); color: #fff; background: var(--good); }
+.dash-ia .cov li.bad .cov-ic { background: var(--bad); }
+.dash-ia .cov li strong { display: block; font-size: 13.5px; font-weight: 600; }
+.dash-ia .cov li small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.35; overflow-wrap: anywhere; }
+.dash-ia .cov li em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--good); }
+.dash-ia .cov li.bad em { color: var(--bad); }
+.dash-ia .cov li.bad { background: var(--bad-soft); }
+@media (prefers-reduced-motion: reduce) { .dash-ia .run-on i::after { animation: none; } }

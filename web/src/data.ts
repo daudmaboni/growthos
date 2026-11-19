@@ -238,7 +238,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         const period = resolveRange(range, today, dataStart);
         const prevP = comparisonOf(period);
         const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
-        const [a, ap, c, d, o, e, cn, nm, h, ib, all, first, adList] = await Promise.all([
+        const [a, ap, c, d, o, e, cn, nm, h, ib, all, first, adList, adSt] = await Promise.all([
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
@@ -253,6 +253,8 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           supabase.from("orders").select("conversation_id,amount,discount,refund_amount").eq("workspace_id", ws.id).eq("status", "paid").limit(10000),
           supabase.from("ad_insights_daily").select("day").eq("workspace_id", ws.id).order("day", { ascending: true }).limit(1),
           supabase.from("ads").select("ad_id,name,campaign_name").eq("workspace_id", ws.id).limit(5000),
+          // Separate so an older database without the status column still loads everything else.
+          supabase.from("ads").select("ad_id,effective_status").eq("workspace_id", ws.id).limit(5000),
         ]);
         if (!live()) return;
         // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
@@ -276,6 +278,9 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           products: [...new Set(orders0.map((x) => (x.product ?? "").trim()).filter(Boolean))].sort(),
         };
         const fd = applyFilters({ conversations: c, orders: orders0, daily: daily0, ads: (a.data as AdPerf[]) ?? [], adsPrev: (ap.data as AdPerf[]) ?? [] }, opts.filters, campaignOf);
+        const statusOf: Record<string, string | null> = {};
+        if (!adSt.error) for (const x of (adSt.data as any[]) ?? []) statusOf[x.ad_id] = x.effective_status ?? null;
+        fd.ads = fd.ads.map((x) => ({ ...x, status: statusOf[x.ad_id] ?? null }));
         const daily = fd.daily, orders = fd.orders;
         const expenses = ((e.data as any[]) ?? []).map((x) => ({ day: x.day, amount: Number(x.amount), currency: x.currency, category: x.category }));
         const base = { ws, conversations: fd.conversations, daily, orders, expenses };

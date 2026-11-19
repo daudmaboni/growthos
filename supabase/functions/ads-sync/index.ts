@@ -52,6 +52,22 @@ async function syncWindow(db: ReturnType<typeof admin>, conn: any, token: string
   return rows;
 }
 
+// Current delivery status of every ad in the account, so the Dashboard can show which ads run now.
+// Best effort: a failure here never fails the spend sync.
+async function syncStatuses(db: ReturnType<typeof admin>, conn: any, token: string) {
+  const params = new URLSearchParams({ fields: "id,effective_status", limit: "500",
+    filtering: JSON.stringify([{ field: "effective_status", operator: "IN", value: ALL_STATUSES }]) });
+  let next: string | null = `${conn.external_id}/ads?${params}`;
+  const now = new Date().toISOString();
+  let pages = 0;
+  while (next && pages++ < 40) {
+    const page: any = await graph(next, token);
+    const rows = (page.data ?? []).map((r: any) => ({ workspace_id: conn.workspace_id, ad_id: r.id, ad_account_id: conn.external_id, effective_status: r.effective_status ?? null, status_synced_at: now }));
+    if (rows.length) await db.from("ads").upsert(rows, { onConflict: "ad_id" });
+    next = page.paging?.next ?? null;
+  }
+}
+
 async function syncConnection(db: ReturnType<typeof admin>, conn: any, days: number) {
   const token = await readToken(db, conn.token_secret_id);
   // A day either side of "today" so every workspace time zone's local days are covered.
@@ -71,6 +87,7 @@ async function syncConnection(db: ReturnType<typeof admin>, conn: any, days: num
       rows += await syncWindow(db, conn, token, since, until, false);
     }
   }
+  try { await syncStatuses(db, conn, token); } catch (e) { console.error("ad status sync failed", (e as Error).message); }
   await db.from("connections").update({ last_sync_at: new Date().toISOString(), status: "active", last_error: null }).eq("id", conn.id);
   return rows;
 }

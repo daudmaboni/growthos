@@ -59,6 +59,8 @@ export type Task = {
 export type AdPerf = {
   ad_id: string; ad_name: string | null; campaign_name: string | null; spend: number; impressions: number; clicks: number; platform_conversations: number;
   chats: number; replied: number; priced: number; payment_signals: number; sold: number; revenue: number; cost_per_sale: number | null;
+  /** Meta delivery status (ACTIVE, PAUSED, CAMPAIGN_PAUSED, ...), when the ads sync has stored it. */
+  status?: string | null;
 };
 
 export const fmt = (n: number | null | undefined) => (n == null || !isFinite(n) ? "–" : Math.round(n).toLocaleString("en-US"));
