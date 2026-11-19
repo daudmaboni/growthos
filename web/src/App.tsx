@@ -1,6 +1,7 @@
 import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
 import { AppTip } from "./PhoneApp";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { enterShell, enterTiles, shake, switchTheme, applyThemeMode, usePageEnter, select, type ThemeMode } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
@@ -43,11 +44,26 @@ export default function App() {
   // One button cycles the three looks: light → graphite (Dualhook-style dark) → navy dark → light.
   const NEXT: Record<ThemeMode, ThemeMode> = { light: "graphite", graphite: "dark", dark: "light" };
   const toggleTheme = () => setThemeFrom(NEXT[theme]);
-  const setLanguage = async (l: "sw" | "en") => {
-    if (!ws || ws.language === l) return;
-    setWs({ ...ws, language: l }); // instant; everyone in the workspace sees the new default
+  // Language switch = the same curtain wipe as the itaos.app homepage: the pill slides, a green panel
+  // sweeps up over the app, the language changes behind it, then the panel lifts off the top.
+  const [langPill, setLangPill] = useState<"sw" | "en" | null>(null);
+  const [curtain, setCurtain] = useState<{ phase: "idle" | "cover" | "reveal"; label: string }>({ phase: "idle", label: "" });
+  const saveLanguage = async (l: "sw" | "en") => {
+    if (!ws) return;
+    setWs({ ...ws, language: l }); // everyone in the workspace sees the new default
     const { error } = await supabase.from("workspaces").update({ language: l }).eq("id", ws.id);
     if (error) setWs(ws);
+  };
+  const setLanguage = (l: "sw" | "en") => {
+    if (!ws || ws.language === l || curtain.phase !== "idle") return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { void saveLanguage(l); return; }
+    setLangPill(l);
+    setCurtain({ phase: "cover", label: l === "sw" ? "Kiswahili" : "English" });
+    window.setTimeout(() => {
+      void saveLanguage(l);
+      window.setTimeout(() => setCurtain((c) => ({ ...c, phase: "reveal" })), 120);
+      window.setTimeout(() => { setCurtain({ phase: "idle", label: "" }); setLangPill(null); }, 120 + 700);
+    }, 620);
   };
   const isPlatformAdmin = useIsPlatformAdmin(session ? session.user.id : null);
   const [staffOnly, setStaffOnly] = useState(false); // a Pondi staff account with no business of its own
@@ -102,6 +118,9 @@ export default function App() {
 
   return (
     <div className={"shell view-" + view + (view === "chats" ? "" : " dash-ia")} ref={shellRef}>
+      {createPortal(<div className={"app-curtain " + curtain.phase} aria-hidden="true">
+        <div className="app-curtain-in"><Logo size={44} /><span>{curtain.label}</span></div>
+      </div>, document.body)}
       <header className="topbar">
         <div className="brand"><a className="home" href="#dashboard" aria-label="itaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>itaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <GlassTabs view={view}>
@@ -111,8 +130,9 @@ export default function App() {
           <TopMore view={view} sw={ws.language === "sw"} badges={badges} />
         </GlassTabs>
         <div className="actions">
-          <div className="seg" role="group" aria-label="Language">
-            {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
+          <div className={"seg lang-seg" + ((langPill ?? ws.language) === "en" ? " is-en" : "")} role="group" aria-label="Language">
+            <span className="lang-thumb" aria-hidden="true" />
+            {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={(langPill ?? ws.language) === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
           </div>
           <button ref={themeBtn} className="icon" onClick={toggleTheme}
             aria-label={theme === "light" ? "Switch to graphite dark" : theme === "graphite" ? "Switch to navy dark" : "Switch to light mode"}
