@@ -5,7 +5,7 @@ import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./mot
 
 type Tab = "business" | "profile" | "appearance" | "rules" | "account";
 const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["profile", "Business profile", "Wasifu wa biashara"], ["appearance", "Appearance", "Muonekano"], ["rules", "Rules & rates", "Kanuni na viwango"], ["account", "My profile", "Wasifu wangu"]];
-const CURRENCIES: [string, string, string][] = [["TZS", "Tanzanian shillings", "Shilingi za Tanzania"], ["KES", "Kenyan shillings", "Shilingi za Kenya"], ["UGX", "Ugandan shillings", "Shilingi za Uganda"], ["RWF", "Rwandan francs", "Faranga za Rwanda"], ["USD", "US dollars", "Dola za Marekani"]];
+const CURRENCIES: [string, string, string][] = [["TZS", "Tanzanian shillings", "Shilingi za Tanzania"], ["KES", "Kenyan shillings", "Shilingi za Kenya"], ["UGX", "Ugandan shillings", "Shilingi za Uganda"], ["RWF", "Rwandan francs", "Faranga za Rwanda"]];  // customers pay in local money; USD is for ad spend only, never for sales
 const TIMEZONES: [string, string][] = [["Africa/Dar_es_Salaam", "Tanzania (Dar es Salaam)"], ["Africa/Nairobi", "Kenya (Nairobi)"], ["Africa/Kampala", "Uganda (Kampala)"], ["Africa/Kigali", "Rwanda (Kigali)"], ["Africa/Johannesburg", "South Africa"], ["Europe/London", "UK (London)"], ["UTC", "UTC"]];
 
 export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "dark" | "light"; onTheme: (t: "dark" | "light", from?: HTMLElement | null) => void }) {
@@ -110,7 +110,7 @@ function PaymentsCurrency({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace)
       <Field id="s-paycur" label={T("Customers pay in", "Wateja wanalipa kwa")}>
         <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
           <select id="s-paycur" value={pick} disabled={!manager || busy} onChange={(e) => { setPick(e.target.value); if (e.target.value !== ws.currency) setAsk(true); }} style={{ width: 260 }}>
-            {CURRENCIES.map(([c]) => <option key={c} value={c}>{label(c)}</option>)}
+            {(CURRENCIES.some(([c]) => c === ws.currency) ? CURRENCIES : [[ws.currency, ws.currency, ws.currency] as [string, string, string], ...CURRENCIES]).map(([c]) => <option key={c} value={c}>{label(c)}</option>)}
           </select>
           {ws.currency === "TZS" && <span className="small ok">✓ {T("Shillings, as normal", "Shilingi, kama kawaida")}</span>}
         </div>
