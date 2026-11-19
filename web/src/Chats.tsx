@@ -410,9 +410,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
         <div className="small" style={{ display: "grid", gap: 6, marginTop: 8 }}>
           <span>{T("Kito, the assistant inside itaOS, reads every WhatsApp chat and writes what happened and what to do next. It updates by itself every 15 minutes.",
             "Kito, msaidizi ndani ya itaOS, anasoma kila chat ya WhatsApp na kuandika kilichotokea na hatua inayofuata. Anajisasisha mwenyewe kila dakika 15.")}</span>
-          <span>{T("A customer only counts as \"Bought\" after you record the sale. If someone says they paid, check your M-Pesa / bank first, then press \"Yes, record sale\".",
-            "Mteja anahesabiwa \"Amenunua\" pale tu unaporekodi mauzo. Mtu akisema amelipa, angalia M-Pesa / benki kwanza, kisha bonyeza \"Ndiyo, rekodi mauzo\".")}</span>
-          <span><a href="#connect">{T("Import past sales from a CSV file →", "Ingiza mauzo ya zamani kutoka faili la CSV →")}</a></span>
+          <span>{T("A customer only counts as \"Bought\" after you record the sale. If someone says they paid, check your M-Pesa / bank first, then press \"Yes, money received\".",
+            "Mteja anahesabiwa \"Amenunua\" pale tu unaporekodi mauzo. Mtu akisema amelipa, angalia M-Pesa / benki kwanza, kisha bonyeza \"Ndiyo, pesa imeingia\".")}</span>
           <span className="row" style={{ gap: 6 }}>
             <button className="small" onClick={recheck} disabled={rechecking}>{T("Re-check all chats with the latest rules", "Kagua chat zote upya kwa kanuni mpya")}</button>
           </span>

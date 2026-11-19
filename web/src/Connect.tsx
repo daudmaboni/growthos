@@ -2,11 +2,8 @@ import { enterCards, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, canManage, when, ago } from "./lib";
 import { loginForAds, embeddedSignup, metaConfigured } from "./meta";
-import ImportChats from "./ImportChats";
-import ImportCsv from "./ImportCsv";
 
 type Health = { status: string; events: number; oldest: string | null; newest: string | null; exhausted: number };
-type Batch = { id: string; kind: string; file_name: string | null; created_count: number; skipped_count: number; rejected_count: number; created_at: string };
 
 type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
 type Num = { phone_number_id: string; connection_id: string | null; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
@@ -23,14 +20,12 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const [showD360, setShowD360] = useState(false);
   const [dh, setDh] = useState<{ webhook_url: string; verify_token: string } | null>(null);
   const [health, setHealth] = useState<Health[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
   const manager = canManage(ws);
 
   useEffect(() => {
     supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id).then(({ data }) => setConns((data as Conn[]) ?? []));
     supabase.from("wa_numbers").select("phone_number_id,connection_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id).then(({ data }) => setNums((data as Num[]) ?? []));
     supabase.rpc("webhook_health", { p_ws: ws.id }).then(({ data }) => setHealth((data as Health[]) ?? []));
-    supabase.from("import_batches").select("id,kind,file_name,created_count,skipped_count,rejected_count,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(10).then(({ data }) => setBatches((data as Batch[]) ?? []));
   }, [ws.id, tick]);
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -257,17 +252,6 @@ export default function Connect({ ws }: { ws: Workspace }) {
           </details>
         )}
       </section>
-      <ImportChats ws={ws} />
-      <ImportCsv ws={ws} onImported={() => setTick((t) => t + 1)} />
-      {batches.length > 0 && (
-        <section className="card">
-          <h2>Import history</h2>
-          <div className="scroll"><table>
-            <thead><tr><th>When</th><th>What</th><th>File</th><th className="n">Created</th><th className="n">Skipped</th><th className="n">Rejected</th></tr></thead>
-            <tbody>{batches.map((b) => <tr key={b.id}><td className="small">{when(b.created_at)}</td><td>{b.kind}</td><td className="small muted">{b.file_name ?? "–"}</td><td className="n">{b.created_count}</td><td className="n">{b.skipped_count}</td><td className="n">{b.rejected_count}</td></tr>)}</tbody>
-          </table></div>
-        </section>
-      )}
     </div>
   );
 }
