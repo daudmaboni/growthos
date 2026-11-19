@@ -25,14 +25,20 @@ export default function Home() {
     return "sw";
   });
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const [swapping, setSwapping] = useState(false);
-  // Switching language: the text fades and blurs out, the words change, then it fades back in.
+  // Language switch = curtain wipe (like the reference's intro): a green panel sweeps up over the page,
+  // the language changes behind it, then the panel lifts off the top.
+  const [curtain, setCurtain] = useState<{ phase: "idle" | "cover" | "reveal"; label: string }>({ phase: "idle", label: "" });
   const pick = (l: Lang) => {
-    if (l === lang || swapping) return;
+    if (l === lang || curtain.phase !== "idle") return;
     try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { setLang(l); return; }
-    setSwapping(true);
-    window.setTimeout(() => { setLang(l); requestAnimationFrame(() => setSwapping(false)); }, 220);
+    setMenu(false);
+    setCurtain({ phase: "cover", label: l === "sw" ? "Kiswahili" : "English" });
+    window.setTimeout(() => {
+      setLang(l);
+      window.setTimeout(() => setCurtain((c) => ({ ...c, phase: "reveal" })), 120);
+      window.setTimeout(() => setCurtain({ phase: "idle", label: "" }), 120 + 700);
+    }, 620);
   };
 
   useEffect(() => {
@@ -43,7 +49,7 @@ export default function Home() {
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   useEffect(() => { document.body.style.overflow = menu ? "hidden" : ""; }, [menu]);
 
-  // Video card: tilted back when it enters the screen, flat by the time its top reaches 25% of the screen.
+  // Video card: tilted back like ponditech.com when it comes into view, straightening as it scrolls up.
   const tiltRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = tiltRef.current;
@@ -52,14 +58,30 @@ export default function Home() {
     const run = () => {
       raf = 0;
       const vh = innerHeight, top = el.parentElement!.getBoundingClientRect().top;
-      let p = Math.min(1, Math.max(0, (vh - top) / (vh * 0.75)));
-      p = 1 - Math.pow(1 - p, 2);
+      // 0 = fully tilted while the card's top is in the lower 30% of the screen; 1 = flat once it reaches 15%.
+      const p = Math.min(1, Math.max(0, (vh * 0.7 - top) / (vh * 0.55)));
       el.style.transform = `rotateX(${(26 * (1 - p)).toFixed(2)}deg) scale(${(0.92 + 0.08 * p).toFixed(3)})`;
     };
     const on = () => { if (!raf) raf = requestAnimationFrame(run); };
     run();
     addEventListener("scroll", on, { passive: true }); addEventListener("resize", on);
     return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, []);
+
+  // Content rises in as it scrolls into view (headings, cards, steps, questions).
+  useEffect(() => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) return;
+    const els = Array.from(document.querySelectorAll<HTMLElement>(
+      ".hp main section:not(.hp-hero) h2, .hp-feat-art, .hp-feat-txt, .hp-intro p, .hp-trust-grid > div, .hp-how li, .hp-q, .hp-proof-card, .hp-end .hp-pill"));
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { threshold: 0.15, rootMargin: "0px 0px -8% 0px" });
+    els.forEach((el) => {
+      const sib = el.parentElement ? Array.from(el.parentElement.children).filter((c) => c.matches(".hp-trust-grid > div, .hp-how li, .hp-q")).indexOf(el) : -1;
+      if (sib > 0) el.style.transitionDelay = `${sib * 90}ms`;
+      el.classList.add("rv"); io.observe(el);
+    });
+    return () => io.disconnect();
   }, []);
 
   const go = () => setMenu(false);
@@ -73,7 +95,10 @@ export default function Home() {
   );
 
   return (
-    <div className={"hp" + (swapping ? " swapping" : "")}>
+    <div className={"hp" + (menu ? " menu-open" : "")}>
+      <div className={"hp-curtain " + curtain.phase} aria-hidden="true">
+        <div className="hp-curtain-in"><Logo size={44} /><span>{curtain.label}</span></div>
+      </div>
       <header className="hp-bar">
         <div className="hp-w hp-bar-in">
           <a href="/" className="hp-logo" aria-label="itaOS home"><Logo size={30} /><span>itaOS</span></a>
@@ -267,7 +292,8 @@ export default function Home() {
         <section id="mission" className="hp-mission">
           <div className="hp-w">
             <p className="hp-mission-k">{T("Our mission", "Lengo letu")}</p>
-            <h2>{lang === "sw" ? <>Kusaidia kila biashara Tanzania kuona mauzo yake <u>kweli</u> yanatoka wapi.</> : <>Help every business in Tanzania see where its sales <u>really</u> come from.</>}</h2>
+            <ScrollWords key={lang} mark={lang === "sw" ? "kweli" : "really"}
+              text={T("Help every business in Tanzania see where its sales really come from.", "Kusaidia kila biashara Tanzania kuona mauzo yake kweli yanatoka wapi.")} />
             <p className="hp-mission-p">{T("Too many good businesses spend on ads and hope. We think you should know. itaOS is built in Dar es Salaam by ", "Biashara nyingi nzuri zinatumia pesa kwenye matangazo na kubahatisha. Tunaamini unastahili kujua. itaOS imetengenezwa Dar es Salaam na ")}
               <a href={PONDI_SITE} target="_blank" rel="noopener">Pondi Technologies</a>{T(", for the way people here actually buy.", ", kwa namna watu wa hapa wanavyonunua kweli.")}</p>
           </div>
@@ -438,4 +464,34 @@ function Count({ to, decimals = 0 }: { to: number; decimals?: number }) {
     return () => { io.disconnect(); cancelAnimationFrame(raf); };
   }, [to, decimals]);
   return <span ref={ref} className="num">{fmt(to)}</span>;
+}
+
+/** A sentence whose words light up one by one as it scrolls through the screen (the reference's dim-to-bright line). */
+function ScrollWords({ text, mark }: { text: string; mark?: string }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const words = text.split(" ");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const spans = Array.from(el.querySelectorAll<HTMLSpanElement>("span.w"));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { spans.forEach((s) => s.classList.add("lit")); return; }
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const r = el.getBoundingClientRect(), vh = innerHeight;
+      // starts lighting when the line's middle is at 85% of the screen, fully lit at 45%
+      const p = Math.min(1, Math.max(0, (vh * 0.85 - (r.top + r.height / 2)) / (vh * 0.4)));
+      const n = Math.round(p * spans.length);
+      spans.forEach((s, i) => s.classList.toggle("lit", i < n));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(run); };
+    run();
+    addEventListener("scroll", on, { passive: true }); addEventListener("resize", on);
+    return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, [text]);
+  return (
+    <h2 ref={ref} className="hp-words" aria-label={text}>
+      {words.map((w, i) => <span key={i} aria-hidden="true" className={"w" + (mark && w.replace(/[.,]/g, "") === mark ? " mark" : "")}>{w}{i < words.length - 1 ? " " : ""}</span>)}
+    </h2>
+  );
 }
