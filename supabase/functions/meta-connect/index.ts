@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       // @ts-ignore EdgeRuntime is provided by Supabase; keeps the first sync alive after we respond
       EdgeRuntime.waitUntil(fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ads-sync`, {
         method: "POST", headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ days: 30, workspace_id: ws, connection_id: connection!.id }),
+        body: JSON.stringify({ days: 190, workspace_id: ws, connection_id: connection!.id }),
       }).catch(() => {}));
       return json({ ok: true });
     }

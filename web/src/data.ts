@@ -1,10 +1,31 @@
 // Loads everything the dashboard and the weekly report need for a period plus its comparison
 // period, then runs the central metrics. One place, so both views agree.
 import { useEffect, useRef, useState } from "react";
-import { supabase, Workspace, Outcome, AdPerf, Order, localDay } from "./lib";
+import { supabase, Workspace, Outcome, AdPerf, Order, localDay, callFn } from "./lib";
 import { diagnose, Finding } from "./diagnosis";
 import { computeFunnel, comparisonOf, FunnelMetrics, DailyInsight, Expense } from "./metrics";
-import { RangeSel, resolveRange } from "./ranges";
+import { RangeSel, resolveRange, daysBetween } from "./ranges";
+
+// Ad spend is read from a local copy of Meta's daily numbers. When a chosen range (with its
+// comparison period) reaches further back than that copy, pull the missing days from Meta once,
+// so "Last 90 days" here matches "Last 90 days" in Ads Manager.
+const BACKFILL_KEY = (ws: string) => "itaos:ads-backfill:" + ws;
+const backfilling = new Set<string>();
+async function backfillAds(ws: string, from: string, today: string, earliest: string | null): Promise<boolean> {
+  if (earliest && earliest <= from) return false;
+  let asked: string | null = null;
+  try { asked = localStorage.getItem(BACKFILL_KEY(ws)); } catch { /* storage off */ }
+  if (asked && asked <= from) return false; // already fetched this far back; Meta had nothing older
+  if (backfilling.has(ws)) return false;
+  backfilling.add(ws);
+  try {
+    const r = await callFn<{ synced: { rows?: number; error?: string }[] }>("ads-sync", { workspace_id: ws, days: Math.min(daysBetween(from, today) + 2, 400) });
+    if (r.synced.some((x) => x.error)) return false;
+    try { localStorage.setItem(BACKFILL_KEY(ws), from); } catch { /* storage off */ }
+    return true;
+  } catch { return false; }
+  finally { backfilling.delete(ws); }
+}
 
 export type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
 export type Num = { phone_number_id: string; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
@@ -165,7 +186,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
     }
     (async () => {
       try {
-        const [a, ap, c, d, o, e, cn, nm, h, ib, all] = await Promise.all([
+        const [a, ap, c, d, o, e, cn, nm, h, ib, all, first] = await Promise.all([
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
@@ -178,6 +199,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           supabase.from("import_batches").select("kind,created_at,created_count").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(5),
           // Every recorded sale, any date, so the Revenue card can be checked against the Bought tab.
           supabase.from("orders").select("conversation_id,amount,discount,refund_amount").eq("workspace_id", ws.id).eq("status", "paid").limit(10000),
+          supabase.from("ad_insights_daily").select("day").eq("workspace_id", ws.id).order("day", { ascending: true }).limit(1),
         ]);
         if (!live()) return;
         // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
@@ -206,6 +228,12 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         };
         setState(next);
         if (opts.cache) writeCache(ck, next);
+        // Range reaches past the synced ad data: fetch the older days from Meta, then reload.
+        const hasAds = ((cn.data as Conn[]) ?? []).some((x) => x.provider === "meta_ads" && x.status !== "disconnected");
+        if (hasAds && !first.error) {
+          const earliest = ((first.data as any[]) ?? [])[0]?.day ?? null;
+          backfillAds(ws.id, prevP.from, today, earliest).then((got) => { if (got && live()) setTick((x) => x + 1); });
+        }
       } catch (err) {
         if (live() && !silent) setState((s) => ({ ...s, loading: false, cached: false, err: (err as Error).message }));
       } finally {

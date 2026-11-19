@@ -8,14 +8,20 @@ const MSG_ACTIONS = new Set([
 
 function ymd(d: Date) { return d.toISOString().slice(0, 10); }
 
-async function syncConnection(db: ReturnType<typeof admin>, conn: any, days: number) {
-  const token = await readToken(db, conn.token_secret_id);
-  const until = new Date(); const since = new Date(Date.now() - (days - 1) * 864e5);
+// Ads Manager totals include ads that were later paused, archived or deleted. The insights API
+// leaves deleted/archived ads out unless asked, so ask for every status.
+const ALL_STATUSES = ["ACTIVE", "PAUSED", "DELETED", "ARCHIVED", "CAMPAIGN_PAUSED", "ADSET_PAUSED",
+  "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO", "IN_PROCESS", "WITH_ISSUES"];
+const MAX_DAYS = 400;   // Meta keeps 37 months; 400 covers "Last 90 days" plus its comparison period with room
+const CHUNK_DAYS = 30;  // one Meta request per 30 days keeps large accounts under Meta's response limits
+
+async function syncWindow(db: ReturnType<typeof admin>, conn: any, token: string, since: string, until: string, withFilter: boolean) {
   const params = new URLSearchParams({
     level: "ad", time_increment: "1", limit: "500",
     fields: "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,reach,clicks,actions,account_currency",
-    time_range: JSON.stringify({ since: ymd(since), until: ymd(until) }),
+    time_range: JSON.stringify({ since, until }),
   });
+  if (withFilter) params.set("filtering", JSON.stringify([{ field: "ad.effective_status", operator: "IN", value: ALL_STATUSES }]));
   let next: string | null = `${conn.external_id}/insights?${params}`;
   let rows = 0;
   while (next) {
@@ -43,6 +49,28 @@ async function syncConnection(db: ReturnType<typeof admin>, conn: any, days: num
     rows += ins.length;
     next = page.paging?.next ?? null;
   }
+  return rows;
+}
+
+async function syncConnection(db: ReturnType<typeof admin>, conn: any, days: number) {
+  const token = await readToken(db, conn.token_secret_id);
+  // A day either side of "today" so every workspace time zone's local days are covered.
+  const end = Date.now() + 864e5;
+  const start = Date.now() - days * 864e5;
+  let rows = 0;
+  let withFilter = true;
+  // Newest window first, so recent numbers land even if an old window fails.
+  for (let hi = end; hi > start; hi -= CHUNK_DAYS * 864e5) {
+    const lo = Math.max(start, hi - (CHUNK_DAYS - 1) * 864e5);
+    const since = ymd(new Date(lo)), until = ymd(new Date(hi));
+    try { rows += await syncWindow(db, conn, token, since, until, withFilter); }
+    catch (e) {
+      // If Meta ever rejects the status filter, carry on without it rather than syncing nothing.
+      if (!withFilter || !/filtering|effective_status|code 100\b/i.test((e as Error).message)) throw e;
+      withFilter = false;
+      rows += await syncWindow(db, conn, token, since, until, false);
+    }
+  }
   await db.from("connections").update({ last_sync_at: new Date().toISOString(), status: "active", last_error: null }).eq("id", conn.id);
   return rows;
 }
@@ -51,7 +79,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const db = admin();
   const body = await req.json().catch(() => ({}));
-  const days = Math.min(Math.max(Number(body.days ?? 30), 1), 90);
+  const days = Math.min(Math.max(Math.round(Number(body.days ?? 30)) || 30, 1), MAX_DAYS);
   const auth = req.headers.get("Authorization") ?? "";
   const cronSecret = Deno.env.get("CRON_SECRET");
   const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret;
