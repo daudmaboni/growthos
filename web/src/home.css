@@ -143,13 +143,62 @@ html.hp-page body { background: #fff; }
 .hp-foot nav a:hover { text-decoration: underline; }
 .hp-foot p { font-size: 14px; }
 
+/* Language switch (Swahili first) */
+.hp-lang { display: inline-flex; background: #ffffff26; border-radius: 999px; padding: 3px; gap: 2px; }
+.hp-lang button { border: 0; background: none; color: #ffffffcc; font: 700 13px/1 "Geist", system-ui, sans-serif; padding: 7px 11px; border-radius: 999px; cursor: pointer; }
+.hp-lang button.on { background: #fff; color: var(--g); }
+.hp-menu-lang { margin-top: 18px; }
+.hp-menu-lang .hp-lang { background: #ffffff1f; }
+.hp-menu-lang .hp-lang button { font-size: 16px; padding: 10px 16px; }
+
+/* Hero buttons */
+.hp-hero-cta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.hp-ghost { display: inline-flex; align-items: center; justify-content: center; padding: 15px 28px; border-radius: 999px; border: 2px solid #ffffff66; color: #fff; font-weight: 700; font-size: 17px; transition: background .2s ease; }
+.hp-ghost:hover { background: #ffffff1a; }
+
+/* Kinetic video under the hero */
+.hp-video { margin-top: -40px; position: relative; z-index: 2; }
+.hp-video-card { background: #0f0f10; border-radius: 28px; padding: 10px; box-shadow: 0 40px 80px -40px #0a3d2999, 0 2px 6px #0000000d; }
+.hp-video-card video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 20px; background: #0f0f10; object-fit: cover; }
+
+/* Your data is safe */
+.hp-trust { padding: 72px 0 24px; }
+.hp-trust h2 { font-size: clamp(28px, 3.4vw, 40px); text-align: center; }
+.hp-trust-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 40px; }
+.hp-trust-grid > div { background: var(--soft); border-radius: 22px; padding: 24px; }
+.hp-trust-grid b { display: block; font-size: 18px; margin-bottom: 8px; }
+.hp-trust-grid p { color: var(--ink-2); font-size: 15.5px; }
+
+/* Questions */
+.hp-faq { padding: 56px 0 8px; }
+.hp-faq h2 { font-size: clamp(28px, 3.4vw, 40px); text-align: center; margin-bottom: 32px; }
+.hp-q { max-width: 760px; margin: 0 auto; border-bottom: 1px solid var(--line); }
+.hp-q summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 4px; font-weight: 700; font-size: 18px; }
+.hp-q summary::-webkit-details-marker { display: none; }
+.hp-q summary span { font-size: 24px; color: var(--g); transition: transform .2s ease; }
+.hp-q[open] summary span { transform: rotate(45deg); }
+.hp-q p { padding: 0 4px 22px; color: var(--ink-2); }
+
+/* Links inside text */
+.hp-mission-p a { color: var(--mint); text-decoration: underline; text-underline-offset: 3px; }
+.hp-foot p a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* WhatsApp button */
+.hp-wa { position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 58px; height: 58px; border-radius: 50%; background: #25d366; color: #fff !important; display: grid; place-items: center; box-shadow: 0 14px 30px -10px #0000005c; transition: transform .2s ease; }
+.hp-wa:hover { transform: scale(1.06); }
+
 @media (prefers-reduced-motion: reduce) { .hp-float { animation: none; } }
 
 @media (max-width: 900px) {
   .hp-nav { display: none; }
   .hp-burger { display: flex; }
-  .hp-hero { padding: 36px 0 110px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 44px), 0 100%); }
+  .hp-hero { padding: 28px 0 90px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 44px), 0 100%); }
   .hp-hero-in, .hp-feat-in { grid-template-columns: 1fr; gap: 40px; }
+  .hp-hero-in { gap: 18px; }
+  .hp-hero-txt p { margin: 16px 0 22px; }
+  .hp-hero-art { padding: 0; }
+  .hp-trust-grid { grid-template-columns: 1fr 1fr; }
+  .hp-video { margin-top: -24px; }
   .hp-feat.flip .hp-feat-art { order: 0; }
   .hp-feat { padding: 36px 0; }
   .hp-feat-art { min-height: 0; padding: 32px 16px; }
@@ -159,6 +208,11 @@ html.hp-page body { background: #fff; }
   .hp { font-size: 16px; }
   .hp-hero-txt p { font-size: 17px; }
   .hp-hero-txt .hp-pill { width: 100%; }
+  .hp-hero-cta .hp-ghost { width: 100%; padding: 13px 24px; }
+  .hp-trust-grid { grid-template-columns: 1fr; }
+  .hp-video-card { padding: 6px; border-radius: 18px; }
+  .hp-video-card video { border-radius: 13px; }
+  .hp-wa { width: 52px; height: 52px; right: 14px; bottom: 14px; }
   .ph { width: 248px; }
   .hp-float { font-size: 13px; }
   .hp-float.f1, .hp-float.f2 { right: -6px; }

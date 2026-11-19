@@ -12,9 +12,8 @@ exports), links chats to ad referrals where available, shows where conversations
 | **Diagnosis** | Weekly, rule-based bottleneck findings (unanswered, slow reply, low intent, price, no follow-up, payment friction, unconfirmed payments, fulfilment, data gaps) with counts, sample size, confidence, observed facts vs hypothesis, missing data and links to the supporting chats/orders. |
 | **Actions** | Follow-up queue (configurable hours) → tasks that can be assigned, snoozed, completed or dismissed, with history. Kito drafts replies in Kiswahili and English grounded in the chat and the business profile. **Drafts are never sent.** |
 | **Chats** | Why each chat is labelled (rules, Kito evidence quotes, owner corrections), record / correct / refund / cancel orders with a full audit trail, mark lost/open with a note. |
-| **Content** | Honest "not connected" state (no Meta content permissions yet); manual post records with defined engagement metrics, theme comparison, inquiry/sale linkage via source label with coverage, and an idea/calendar workflow of editable drafts. |
-| **Connections** | Meta ads + WhatsApp connection and sync status, webhook event health with owner/admin replay, WhatsApp chat upload, guided CSV import (orders, expenses, past inquiries), import history. |
-| **Settings** | Business, **business profile** (products, prices, delivery, payment, tone, FAQs, constraints), appearance, **rules & rates** (exchange rate, follow-up hours, conversion window, timezone), account. |
+| **Connections** | Owners see Connected / Needs attention per WhatsApp number and ad account, with a "Message Pondi" button. Pondi does the setup: Dualhook webhook, API key and images in staff admin (/app/admin → business → WhatsApp setup); Facebook ad login at `#connect/setup` inside the business's own login. |
+| **Settings** | Business, **business profile** (products, prices, delivery, payment, tone, FAQs, constraints), appearance, **rules & rates** (exchange rate, follow-up hours, conversion window, timezone, and "How itaOS reads your chats": the business's own ad opening message, location reply and after-payment message — see migration 0042), account. |
 
 ## Structure
 - `web/` — Vite + React app (Netlify: itaos — custom domain itaos.app)
@@ -26,10 +25,9 @@ exports), links chats to ad referrals where available, shows where conversations
   - `ads-sync` — ad-level daily insights. Three explicit paths: scheduled `sync_all` (cron secret), one named workspace+connection (internal first sync), or a member's own workspace.
   - `meta-connect` — Facebook Login (ads) and Embedded Signup (WhatsApp). Owner/admin only; refuses accounts already connected to another workspace.
   - `wa-webhook` — stores each verified change before acknowledging, processes idempotently, bounded automatic retries, owner/admin replay.
-  - `csv-import` — dry-run validation, duplicate detection and in-workspace chat matching, then import with provenance.
-  - `chat-import` — WhatsApp `.txt/.zip` export upload and re-analysis.
+  - `chat-import` — re-checks chats with the current rules (the old name is kept; uploads were removed 19 Nov 2026).
   - `kito-ask` — Ask Kito: Claude plans and runs read-only queries through `public.kito_query` with the user's own token (RLS + workspace pin + read-only transaction), returns a structured answer, logs it in `kito_asks`.
-  - `kito` — AI labelling with evidence quotes; on-demand reply drafts and content ideas (drafts only).
+  - `kito` — AI labelling with evidence quotes; on-demand reply drafts (drafts only). Respects the per-business monthly AI limit (migration 0044).
   - `_shared/` — `signals.ts` (Kiswahili/English chat rules), `csv.ts`, `webhook.ts`, `db.ts`.
 - `supabase/tests/` — SQL authorization tests run against a throwaway local Postgres.
 
