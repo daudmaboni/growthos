@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, AUTH_LINK_ERROR } from "./lib";
-import { enterTiles, shake, usePageEnter, select } from "./motion";
+import { enterTiles, enterCards, shake, usePageEnter, select } from "./motion";
 import Logo from "./Logo";
 
 /* ---------- language (before a workspace exists) ---------- */
@@ -85,6 +85,28 @@ const T = {
   wsFail: { en: "Couldn't create the workspace. Please try again.", sw: "Imeshindwa kufungua biashara. Tafadhali jaribu tena." },
   wsLost: { en: "Your email is confirmed, but this browser lost your sign-in. Please sign in again to continue.", sw: "Barua pepe yako imethibitishwa, ila kivinjari hiki kimepoteza uingiaji wako. Tafadhali ingia tena uendelee." },
   signInAgain: { en: "Sign in again", sw: "Ingia tena" },
+  // new layout
+  welcomeBack: { en: "Welcome back", sw: "Karibu tena" },
+  welcomeSub: { en: "Sign in to see which ads are bringing you sales.", sw: "Ingia uone matangazo yapi yanakuletea mauzo." },
+  newTitle: { en: "Create your account", sw: "Fungua akaunti yako" },
+  newSub: { en: "Takes less than a minute. Then connect your WhatsApp.", sw: "Inachukua chini ya dakika moja. Kisha unganisha WhatsApp yako." },
+  close: { en: "Back to the itaOS homepage", sw: "Rudi ukurasa wa mwanzo wa itaOS" },
+  // celebration after sign-up
+  stepDone: { en: "{b}, your first step is done!", sw: "{b}, hatua ya kwanza imekamilika!" },
+  stepDoneNoName: { en: "Your first step is done!", sw: "Hatua ya kwanza imekamilika!" },
+  s1: { en: "Account", sw: "Akaunti" },
+  s2: { en: "Confirm email", sw: "Thibitisha barua pepe" },
+  s3: { en: "Connect WhatsApp", sw: "Unganisha WhatsApp" },
+  s4: { en: "First sale", sw: "Mauzo ya kwanza" },
+  // showcase panel
+  flow: { en: "Ads → WhatsApp → Sales", sw: "Matangazo → WhatsApp → Mauzo" },
+  chatMsg: { en: "Hi, how much is it? I saw your ad on Instagram.", sw: "Habari, bei ni ngapi? Nimeona tangazo lenu Instagram." },
+  fromAd: { en: "From ad: Friday offer", sw: "Kutoka tangazo: Ofa ya Ijumaa" },
+  paid: { en: "Order paid", sw: "Oda imelipwa" },
+  paidSub: { en: "Instagram ad → WhatsApp", sw: "Tangazo Instagram → WhatsApp" },
+  week: { en: "Sales, last 7 days", sw: "Mauzo, siku 7 zilizopita" },
+  newChats: { en: "+12 new chats today", sw: "+12 gumzo mpya leo" },
+  kito: { en: "Kito replied in 8 seconds", sw: "Kito amejibu ndani ya sekunde 8" },
 } as const;
 type Key = keyof typeof T;
 export const tr = (lang: Lang, k: Key, vars: Record<string, string> = {}) =>
@@ -137,12 +159,102 @@ function GoogleMark() {
   return ok ? <span className="auth-g-wrap" aria-hidden="true"><img className="auth-g" src={GOOGLE_G} alt="" width={18} height={18} onError={() => setOk(false)} /></span> : null;
 }
 
+/* ---------- layout: form panel + itaOS showcase ---------- */
+const Icon = {
+  biz: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 4.6 4h14.8L21 9.5M3 9.5h18M3 9.5c0 1.4 1.1 2.5 2.5 2.5S8 10.9 8 9.5m0 0c0 1.4 1.1 2.5 2.5 2.5h3c1.4 0 2.5-1.1 2.5-2.5m0 0c0 1.4 1.1 2.5 2.5 2.5S21 10.9 21 9.5M4.5 12v8h15v-8M9.5 20v-5h5v5" /></svg>,
+  mail: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></svg>,
+  lock: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="3" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /><circle cx="12" cy="15.5" r="1.2" /></svg>,
+  eye: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></svg>,
+  eyeOff: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.6c.5-.1.9-.1 1.4-.1 6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7M6.6 6.6C3.9 8.3 2.5 12 2.5 12S6 18.5 12 18.5c1.8 0 3.3-.5 4.6-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>,
+  x: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>,
+  check: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>,
+};
+
+/** The right-hand panel (top banner on phones): what itaOS does, shown as floating product cards. */
+function Showcase({ lang }: { lang: Lang }) {
+  const t = (k: Key) => tr(lang, k);
+  const ref = usePageEnter<HTMLDivElement>((el) => { enterCards(select(el, ".ax-float"), { y: 30, stagger: 0.09, delay: 0.15 }); });
+  const bars = [38, 52, 30, 86, 44, 70, 60];
+  return (
+    <aside className="ax-show" ref={ref} aria-hidden="true">
+      <div className="ax-show-copy">
+        <span className="ax-eyebrow">{t("flow")}</span>
+        <p className="ax-headline">{t("tagline")}</p>
+      </div>
+      <div className="ax-stage">
+        <div className="ax-float ax-chat">
+          <div className="ax-chat-head"><span className="ax-av" style={{ background: "#f5c84c", color: "#131a2a" }}>AM</span>
+            <div><b>Asha M.</b><span className="ax-wa">● WhatsApp · 09:41</span></div></div>
+          <p className="ax-bubble">{t("chatMsg")}</p>
+          <div className="ax-chat-foot"><span className="ax-src">{t("fromAd")}</span><span className="ax-kito"><span className="ax-kito-dot" />{t("kito")}</span></div>
+        </div>
+        <div className="ax-float ax-order">
+          <div className="ax-order-ghost" />
+          <div className="ax-order-card">
+            <span className="ax-tick">{Icon.check}</span>
+            <div><span className="ax-order-l">{t("paid")}</span><b className="ax-order-v">TZS 45,000</b><span className="ax-order-s">{t("paidSub")}</span></div>
+          </div>
+        </div>
+        <div className="ax-float ax-week">
+          <span className="ax-week-l">{t("week")}</span>
+          <b className="ax-week-v">TZS 1.2M</b>
+          <div className="ax-bars">{bars.map((h, i) => <i key={i} className={i === 3 ? "hi" : ""} style={{ height: h + "%" }} />)}</div>
+        </div>
+        <div className="ax-float ax-people">
+          <div className="ax-stack"><span className="ax-av" style={{ background: "#ffd9a8" }}>JK</span><span className="ax-av" style={{ background: "#c9e7d6" }}>NS</span><span className="ax-av" style={{ background: "#d9dcff" }}>RM</span></div>
+          <span>{t("newChats")}</span>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/** Shared frame for every sign-in screen (sign in, create account, emails sent, new password, name your business). */
+export function AuthShell({ lang, children, showcase = true }: { lang: Lang; children: React.ReactNode; showcase?: boolean }) {
+  useAuthScreen();
+  return (
+    <div className="ax">
+      <div className={"ax-split" + (showcase ? "" : " solo")}>
+        <section className="ax-side">{children}</section>
+        {showcase && <Showcase lang={lang} />}
+        <a className="ax-notch" href="/" aria-label={tr(lang, "close")} title={tr(lang, "close")}><span>{Icon.x}</span></a>
+      </div>
+    </div>
+  );
+}
+
+function Brand({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  return <div className="auth-top"><div className="row ax-brand"><Logo size={34} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>;
+}
+
+function Field({ id, label, icon, children, extra }: { id: string; label: string; icon: React.ReactNode; children: React.ReactNode; extra?: React.ReactNode }) {
+  return (
+    <div className="ax-field">
+      <div className="auth-label-row"><label htmlFor={id}>{label}</label>{extra}</div>
+      <div className="ax-input"><span className="ax-ico">{icon}</span>{children}</div>
+    </div>
+  );
+}
+
+/** The hexagon badge from the "first step" screen, in itaOS yellow with the ita. dot. */
+function StepBadge() {
+  return (
+    <svg className="ax-badge" viewBox="0 0 120 132" aria-hidden="true">
+      <defs>
+        <linearGradient id="axHex" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffe08a" /><stop offset=".55" stopColor="#f5c84c" /><stop offset="1" stopColor="#e9a92a" /></linearGradient>
+      </defs>
+      <path d="M60 4c3 0 6 .8 8.6 2.3l37 21.4c5.3 3 8.4 8.6 8.4 14.7v47.2c0 6-3.1 11.6-8.4 14.7l-37 21.4a17.2 17.2 0 0 1-17.2 0l-37-21.4C9.1 101.2 6 95.6 6 89.6V42.4c0-6 3.1-11.6 8.4-14.7l37-21.4C54 4.8 57 4 60 4Z" fill="url(#axHex)" />
+      <g fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1.6">{[0, 60, 120].map((r) => <ellipse key={r} cx="60" cy="66" rx="30" ry="14" transform={`rotate(${r} 60 66)`} />)}</g>
+      <path d="m44 67 11 11 22-24" fill="none" stroke="#131a2a" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /* ---------- sign in / create account ---------- */
 type Mode = "signin" | "signup" | "link" | "forgot";
-type Sent = { kind: "signup" | "link" | "reset"; email: string } | null;
+type Sent = { kind: "signup" | "link" | "reset"; email: string; business?: string } | null;
 
 export function AuthScreen() {
-  useAuthScreen();
   const [lang, setLang] = useState<Lang>(initialLang);
   const [mode, setMode] = useState<Mode>(() => (/[?&]signup\b/.test(location.search) ? "signup" : "signin"));
   const [business, setBusiness] = useState("");
@@ -154,7 +266,7 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<Sent>(null);
   const [resent, setResent] = useState(false);
-  const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.05 }); }, [mode, !!sent]);
+  const formRef = usePageEnter<HTMLFormElement>((f) => { enterTiles(select(f, ":scope > *"), { stagger: 0.04 }); }, [mode, !!sent]);
   const t = (k: Key, v?: Record<string, string>) => tr(lang, k, v);
   const redirect = location.origin + "/app";
   const googleOn = useGoogleEnabled();
@@ -195,7 +307,7 @@ export function AuthScreen() {
         // With email confirmation on, an existing address comes back as a user with no identities.
         if (data.user && (data.user.identities?.length ?? 0) === 0) return fail("already registered");
         setBusy(false);
-        if (!data.session) setSent({ kind: "signup", email: em });
+        if (!data.session) setSent({ kind: "signup", email: em, business: business.trim() });
         return;
       }
       if (mode === "link") {
@@ -218,87 +330,95 @@ export function AuthScreen() {
 
   if (sent) {
     const body = sent.kind === "signup" ? "checkSignup" : sent.kind === "link" ? "checkLink" : "checkReset";
+    const celebrate = sent.kind === "signup";
     return (
-      <div className="center">
-        <form className="card auth" ref={formRef} onSubmit={(e) => e.preventDefault()}>
-          <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
-          <div className="auth-mail" aria-hidden="true">✉</div>
-          <h2 style={{ margin: 0 }}>{t("checkTitle")}</h2>
-          <p style={{ margin: 0 }}>{t(body, { e: sent.email })}</p>
+      <AuthShell lang={lang}>
+        <form className="ax-form ax-done" ref={formRef} onSubmit={(e) => e.preventDefault()}>
+          <Brand lang={lang} setLang={setLang} />
+          {celebrate ? <StepBadge /> : <div className="auth-mail" aria-hidden="true">{Icon.mail}</div>}
+          <div className="ax-head">
+            <h2>{celebrate ? (sent.business ? t("stepDone", { b: sent.business }) : t("stepDoneNoName")) : t("checkTitle")}</h2>
+            <p>{t(body, { e: sent.email })}</p>
+          </div>
+          {celebrate && (
+            <ol className="ax-steps">
+              {(["s1", "s2", "s3", "s4"] as const).map((k, i) => (
+                <li key={k} className={i === 0 ? "done" : i === 1 ? "now" : ""}><span>{i === 0 ? Icon.check : i + 1}</span>{t(k)}</li>
+              ))}
+            </ol>
+          )}
           <p className="muted small" style={{ margin: 0 }}>{t("spam")}</p>
-          {sent.kind === "signup" && <button type="button" disabled={busy} onClick={() => resend(sent.email)}>{t("resend")}</button>}
-          {resent && <p className="ok" role="status">{t("resent")}</p>}
-          {err && <p className="err" role="alert">{err}</p>}
-          <button type="button" className="small link-btn" onClick={() => { setSent(null); setResent(false); go("signin"); }}>{t("back")}</button>
+          {celebrate && <button type="button" className="ax-ghost" disabled={busy} onClick={() => resend(sent.email)}>{t("resend")}</button>}
+          {resent && <p className="ok" role="status" style={{ margin: 0 }}>{t("resent")}</p>}
+          {err && <p className="err" role="alert" style={{ margin: 0 }}>{err}</p>}
+          <div className="ax-foot"><button type="button" className="link-btn small" onClick={() => { setSent(null); setResent(false); go("signin"); }}>{t("back")}</button></div>
         </form>
-      </div>
+      </AuthShell>
     );
   }
 
   const tabbed = mode === "signin" || mode === "signup";
+  const title = mode === "signin" ? t("welcomeBack") : mode === "signup" ? t("newTitle") : mode === "forgot" ? t("resetTitle") : t("sendLink");
+  const sub = mode === "signin" ? t("welcomeSub") : mode === "signup" ? t("newSub") : mode === "forgot" ? t("resetBody") : "";
   return (
-    <div className="center">
-      <form className="card auth" ref={formRef} onSubmit={submit} noValidate>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
-        {tabbed ? (
-          <>
-            <p className="muted" style={{ margin: 0 }}>{t("tagline")}</p>
-            <div className="seg auth-tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "on" : ""} onClick={() => go("signin")}>{t("signIn")}</button>
-              <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
-            </div>
-            {googleOn && (<>
-              <button type="button" className="auth-google" disabled={busy} onClick={google}><GoogleMark /><span>{mode === "signup" ? t("googleUp") : t("google")}</span></button>
-              {IN_APP && <p className="muted small" style={{ margin: 0 }}>{t("inApp")}</p>}
-              <div className="auth-or"><span>{t("or")}</span></div>
-            </>)}
-          </>
-        ) : (
-          <div><h2 style={{ margin: "0 0 4px" }}>{mode === "forgot" ? t("resetTitle") : t("sendLink")}</h2>
-            {mode === "forgot" && <p className="muted small" style={{ margin: 0 }}>{t("resetBody")}</p>}</div>
-        )}
-
-        {mode === "signup" && (
-          <div className="auth-field"><label htmlFor="biz"><b>{t("business")}</b></label>
-            <input id="biz" required autoComplete="organization" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder={t("businessPh")} /></div>
-        )}
-        <div className="auth-field"><label htmlFor="email"><b>{t("email")}</b></label>
-          <input id="email" type="email" required autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@business.co.tz" /></div>
-        {(mode === "signin" || mode === "signup") && (
-          <div className="auth-field">
-            <div className="auth-label-row"><label htmlFor="pw"><b>{t("password")}</b></label>
-              {mode === "signin" && <button type="button" className="link-btn small" onClick={() => go("forgot")}>{t("forgot")}</button>}</div>
-            <div className="auth-pw">
-              <input id="pw" type={showPw ? "text" : "password"}
-                autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
-              <button type="button" className="link-btn small" aria-pressed={showPw} onClick={() => setShowPw(!showPw)}>{showPw ? t("hide") : t("show")}</button>
-            </div>
-            {mode === "signup" && <span className="muted small">{t("pwHint")}</span>}
+    <AuthShell lang={lang}>
+      <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
+        <Brand lang={lang} setLang={setLang} />
+        {tabbed && (
+          <div className="seg auth-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "on" : ""} onClick={() => go("signin")}>{t("signIn")}</button>
+            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
           </div>
         )}
+        <div className="ax-head"><h2>{title}</h2>{sub && <p>{sub}</p>}</div>
 
-        <button className="primary" disabled={busy}>
+        {mode === "signup" && (
+          <Field id="biz" label={t("business")} icon={Icon.biz}>
+            <input id="biz" required autoComplete="organization" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder={t("businessPh")} />
+          </Field>
+        )}
+        <Field id="email" label={t("email")} icon={Icon.mail}>
+          <input id="email" type="email" required autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@business.co.tz" />
+        </Field>
+        {tabbed && (
+          <Field id="pw" label={t("password")} icon={Icon.lock}
+            extra={mode === "signin" ? <button type="button" className="link-btn small" onClick={() => go("forgot")}>{t("forgot")}</button> : <span className="muted small">{t("pwHint")}</span>}>
+            <input id="pw" type={showPw ? "text" : "password"} placeholder="••••••••"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="button" className="ax-eye" aria-pressed={showPw} aria-label={showPw ? t("hide") : t("show")} title={showPw ? t("hide") : t("show")} onClick={() => setShowPw(!showPw)}>{showPw ? Icon.eyeOff : Icon.eye}</button>
+          </Field>
+        )}
+
+        <button className="primary ax-cta" disabled={busy}>
           {busy ? t("wait") : mode === "signin" ? t("signIn") : mode === "signup" ? t("createAccount") : mode === "link" ? t("sendLink") : t("sendReset")}
         </button>
         {err && <p className="err" role="alert" style={{ margin: 0 }}>{err === "LINK" ? t("linkExpired") : err}</p>}
-        {canResend && <button type="button" className="small" disabled={busy} onClick={() => resend(email.trim().toLowerCase())}>{t("resend")}</button>}
+        {canResend && <button type="button" className="ax-ghost" disabled={busy} onClick={() => resend(email.trim().toLowerCase())}>{t("resend")}</button>}
         {resent && <p className="ok" role="status" style={{ margin: 0 }}>{t("resent")}</p>}
 
-        {mode === "signin" && <button type="button" className="link-btn small" onClick={() => go("link")}>{t("useLink")}</button>}
-        {mode === "signup" && <p className="muted small" style={{ margin: 0 }}>{t("terms")} <a href="https://ponditech.com/#terms" target="_blank" rel="noreferrer">{t("termsLink")}</a>.</p>}
-        {!tabbed && <button type="button" className="link-btn small" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
-        <div className="auth-foot">
-          <a href="/" className="small muted">{t("home")}</a>
+        {tabbed && googleOn && (<>
+          <div className="auth-or"><span>{lang === "sw" ? "au" : "or"}</span></div>
+          <button type="button" className="auth-google" disabled={busy} onClick={google}><GoogleMark /><span>{mode === "signup" ? t("googleUp") : t("google")}</span></button>
+          {IN_APP && <p className="muted small" style={{ margin: 0 }}>{t("inApp")}</p>}
+        </>)}
+
+        {mode === "signin" && <button type="button" className="link-btn small ax-center" onClick={() => go("link")}>{t("useLink")}</button>}
+        {mode === "signup" && <p className="muted small ax-center" style={{ margin: 0 }}>{t("terms")} <a href="https://ponditech.com/#terms" target="_blank" rel="noreferrer">{t("termsLink")}</a>.</p>}
+        {!tabbed && <button type="button" className="link-btn small ax-center" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
+
+        <div className="ax-foot">
+          {tabbed
+            ? <span className="small muted">{mode === "signin" ? t("noAccount") : t("haveAccount")} <button type="button" className="link-btn small" onClick={() => go(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? t("createAccount") : t("signIn")}</button></span>
+            : <a href="/" className="small muted">{t("home")}</a>}
           <a href="/app/admin" className="small muted">{t("staff")}</a>
         </div>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
 /* ---------- after a reset link ---------- */
 export function SetNewPassword({ email, onDone }: { email: string; onDone: () => void }) {
-  useAuthScreen();
   const [lang, setLang] = useState<Lang>(initialLang);
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -316,19 +436,21 @@ export function SetNewPassword({ email, onDone }: { email: string; onDone: () =>
     setOk(true); setTimeout(onDone, 900);
   }
   return (
-    <div className="center">
-      <form className="card auth" ref={formRef} onSubmit={submit} noValidate>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
-        <h2 style={{ margin: 0 }}>{tr(lang, "setTitle")}</h2>
-        <p className="muted small" style={{ margin: 0 }}>{tr(lang, "setBody", { e: email })}</p>
-        <div className="auth-field"><label htmlFor="npw"><b>{tr(lang, "newPassword")}</b></label>
-          <div className="auth-pw"><input id="npw" type={show ? "text" : "password"} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="button" className="link-btn small" aria-pressed={show} onClick={() => setShow(!show)}>{show ? tr(lang, "hide") : tr(lang, "show")}</button></div>
-          <span className="muted small">{tr(lang, "pwHint")}</span></div>
-        <button className="primary" disabled={busy || ok}>{busy ? tr(lang, "wait") : tr(lang, "save")}</button>
+    <AuthShell lang={lang}>
+      <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
+        <Brand lang={lang} setLang={setLang} />
+        <div className="ax-head"><h2>{tr(lang, "setTitle")}</h2><p>{tr(lang, "setBody", { e: email })}</p></div>
+        <Field id="npw" label={tr(lang, "newPassword")} icon={Icon.lock} extra={<span className="muted small">{tr(lang, "pwHint")}</span>}>
+          <input id="npw" type={show ? "text" : "password"} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="button" className="ax-eye" aria-pressed={show} aria-label={show ? tr(lang, "hide") : tr(lang, "show")} onClick={() => setShow(!show)}>{show ? Icon.eyeOff : Icon.eye}</button>
+        </Field>
+        <button className="primary ax-cta" disabled={busy || ok}>{busy ? tr(lang, "wait") : tr(lang, "save")}</button>
         {ok && <p className="ok" role="status" style={{ margin: 0 }}>{tr(lang, "saved")}</p>}
         {err && <p className="err" role="alert" style={{ margin: 0 }}>{err}</p>}
       </form>
-    </div>
+    </AuthShell>
   );
 }
+
+/** Building blocks App.tsx uses for "Name your business". */
+export { Brand as AuthBrand, Field as AuthField, Icon as AuthIcon };
