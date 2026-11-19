@@ -52,7 +52,7 @@ export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
   costPerPlatformConversation: { en: "Ad spend ÷ Meta-reported conversations.", sw: "Matumizi ÷ mazungumzo yaliyoripotiwa na Meta." },
   costPerAdChat: { en: "Ad spend ÷ WhatsApp chats with an ad referral.", sw: "Matumizi ÷ chats za WhatsApp zenye referral ya tangazo." },
   costPerQualifiedInquiry: { en: "Ad spend ÷ ad chats where a price was shared.", sw: "Matumizi ÷ chats za matangazo zilizopewa bei." },
-  costPerAttributedSale: { en: "Ad spend ÷ attributed sales from ad chats. A matched estimate.", sw: "Matumizi ÷ mauzo yaliyounganishwa na chats za matangazo. Ni makadirio." },
+  costPerAttributedSale: { en: "Ad spend ÷ sales paid in this period by customers whose chat came from an ad (whenever the chat started). A matched estimate.", sw: "Matumizi ÷ mauzo yaliyolipwa kipindi hiki na wateja waliotoka kwenye tangazo (chat ilipoanza popote). Ni makadirio." },
   returnOnAdSpend: { en: "Attributed revenue from ad chats ÷ ad spend (converted with your exchange rate).", sw: "Mapato yaliyounganishwa na matangazo ÷ matumizi (kwa kiwango chako cha kubadilisha)." },
   contribution: { en: "Profit = revenue − ad spend − what each order cost you (product + delivery) − imported expenses. Shown when every order in the period has a cost; orders without their own cost use your default cost, and then it says \"estimated\". Rent, salaries and other running costs are not taken out unless you import them as expenses.", sw: "Faida = mapato − matangazo − gharama ya kila oda (bidhaa + usafiri) − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama; oda zisizo na gharama yake zinatumia gharama ya kawaida, na hapo inasema \"makadirio\". Kodi, mishahara na gharama nyingine za uendeshaji hazitolewi isipokuwa uziingize kama matumizi." },
 };
@@ -158,7 +158,8 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
     costPerPlatformConversation: spend > 0 ? ratio(spend, platformConv, "platform") : m(null, "platform", { note: "no spend" }),
     costPerAdChat: spend > 0 ? ratio(spend, adChats.length, "matched") : m(null, "matched", { note: "no spend" }),
     costPerQualifiedInquiry: spend > 0 ? ratio(spend, adChats.filter((c) => c.price_shared).length, "matched") : m(null, "matched", { note: "no spend" }),
-    costPerAttributedSale: spend > 0 ? ratio(spend, attributedAd.length, "matched") : m(null, "matched", { note: "no spend" }),
+    // Counted by the day the money came in, like ROAS: a chat that started yesterday and paid today counts today.
+    costPerAttributedSale: spend > 0 ? ratio(spend, adCustomerPaid.length, "matched") : m(null, "matched", { note: "no spend" }),
     returnOnAdSpend: spend > 0 && fx != null ? m(attributedAdRevenue / (spend * fx), "matched", { n: attributedAdRevenue, d: spend * fx }) : m(null, "matched", { note: spend > 0 ? "needs exchange rate" : "no spend" }),
     adCustomerRevenue: m(adCustomerRevenue, "matched"), adCustomerOrders: m(adCustomerPaid.length, "matched"),
     returnOnAdSpendAllAdCustomers: spend > 0 && fx != null ? m(adCustomerRevenue / (spend * fx), "matched", { n: adCustomerRevenue, d: spend * fx }) : m(null, "matched", { note: spend > 0 ? "needs exchange rate" : "no spend" }),

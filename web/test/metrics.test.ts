@@ -62,9 +62,16 @@ describe("cost metrics", () => {
   it("cost per attributed sale uses ad chats only, and ROAS converts with the fx rate", () => {
     const sold = conv({ paid_orders: 1, sale_amount: 104000, first_paid_at: "2026-11-12T00:00:00Z" });
     const organicSold = conv({ source: "organic", ad_id: null, paid_orders: 1, sale_amount: 50000, first_paid_at: "2026-11-12T00:00:00Z" });
-    const mx = computeFunnel({ ...base, conversations: [sold, organicSold], daily });
+    const mx = computeFunnel({ ...base, conversations: [sold, organicSold], daily,
+      orders: [order({ paid_at: "2026-11-12T08:00:00Z", conv_source: "ad" }), order({ paid_at: "2026-11-12T09:00:00Z", conv_source: "organic" })] });
     expect(mx.costPerAttributedSale.value).toBe(20);
     expect(mx.returnOnAdSpend.value).toBeCloseTo(104000 / (20 * 2600));
+  });
+  it("cost per attributed sale counts a sale on the day it was paid, even if the chat started earlier", () => {
+    const today = [{ day: "2026-11-19", spend: 12.61, currency: "USD", impressions: 0, clicks: 0, messaging_conversations: 37 }];
+    const p = { from: "2026-11-19", to: "2026-11-19", days: 1, label: "today" };
+    const mx = computeFunnel({ ...base, period: p, conversations: [], daily: today, orders: [order({ amount: 205000, paid_at: "2026-11-19T11:16:00Z", conv_source: "ad" })] });
+    expect(mx.costPerAttributedSale.value).toBeCloseTo(12.61);
   });
   it("hides ROAS and contribution when the exchange rate is missing", () => {
     const mx = computeFunnel({ ...base, ws: { ...WS, fx_rate: null }, conversations: [], daily, orders: [order()] });
