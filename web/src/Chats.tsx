@@ -370,7 +370,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
 
       {loading ? <div className="cc-list" aria-busy="true">{[0, 1, 2, 3].map((i) => <div className="skeleton cc-skel" key={i} />)}</div>
         : rows.length === 0 ? <div className="empty">{err ? T("Couldn't load the chats. Try again in a moment.", "Imeshindwa kupakia chat. Jaribu tena baada ya muda.") : emptyText}</div> : (
-        <div className={"inbox" + (openRow ? " has-pane" : "")}>
+        <div className={"inbox frame" + (openRow ? " has-pane" : " no-pane")}>
         <div className="cc-list">
           {rows.map((r, i) => {
             // Newest first, grouped by when they last wrote (the follow-up list is sorted by priority instead).
@@ -392,6 +392,16 @@ export default function Chats({ ws }: { ws: Workspace }) {
         </div>
         {openRow && <ChatPane key={openRow.id} r={openRow} ws={ws} T={T} adName={openRow.ad_id ? adNames[openRow.ad_id] : undefined} phone={phoneOf(phones[openRow.contact_id])}
           task={tasks[openRow.id]} onChange={refreshQuiet} onClose={() => setOpenId(null)} startConfirm={openConfirm} />}
+        {!openRow && (
+          <div className="ib-empty" aria-hidden={false}>
+            <KitoLogo size={44} />
+            <b>{T("Pick a customer on the left", "Chagua mteja upande wa kushoto")}</b>
+            <span className="small muted">{T("Their chat opens here, with what Kito knows about them on the right.", "Chat yake itafunguka hapa, na anachojua Kito kuhusu yeye upande wa kulia.")}</span>
+            {filter !== "signals" && count("signals") > 0 && (
+              <button className="small" onClick={() => pick("signals")}>{T(`Check payment · ${count("signals")}`, `Hakiki malipo · ${count("signals")}`)}</button>
+            )}
+          </div>
+        )}
         </div>
       )}
 
@@ -512,6 +522,15 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
   const [confirming, setConfirming] = useState(!!startConfirm);
   const [salesKey, setSalesKey] = useState(0);   // bumped after a sale is saved here, so the sales list reloads
   const [side, setSide] = useState(!!startConfirm);   // details sheet on smaller screens
+  // On a wide screen the customer panel sits beside the chat; the owner can hide it (remembered).
+  const [hideSide, setHideSide] = useState(() => { try { return localStorage.getItem("itaos:chats:hideside") === "1"; } catch { return false; } });
+  const wide = () => window.innerWidth >= 1280;
+  const toggleSide = () => {
+    if (!wide()) { setSide(!side); return; }
+    const v = !hideSide; setHideSide(v);
+    try { localStorage.setItem("itaos:chats:hideside", v ? "1" : "0"); } catch { /* private mode */ }
+  };
+  useEffect(() => { if (startConfirm && hideSide) setHideSide(false); }, [r.id]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const thread = useRef<HTMLDivElement>(null);
@@ -583,7 +602,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
 
   let lastDay = "", lastDir = "";
   return (
-    <div ref={pane} className={"wa-pane" + (side ? " side-open" : "")} role="dialog" aria-label={T(`Chat with ${name}`, `Chat na ${name}`)}>
+    <div ref={pane} className={"wa-pane" + (side ? " side-open" : "") + (hideSide ? " side-hidden" : "")} role="dialog" aria-label={T(`Chat with ${name}`, `Chat na ${name}`)}>
       <header className="wa-head">
         <button className="wa-back" onClick={onClose} aria-label={T("Back to chats", "Rudi kwenye chats")}>←</button>
         <div className="cc-avatar" aria-hidden>{name.slice(0, 1).toUpperCase()}</div>
@@ -593,7 +612,11 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
         </div>
         <div className="wa-head-act">
           {phone && <a className="btn small primary wa-reply" href={waLink(phone)} target="_blank" rel="noopener noreferrer">{T("Reply on WhatsApp ↗", "Mjibu WhatsApp ↗")}</a>}
-          <button className={"small wa-side-btn" + (st.key === "check" ? " warn" : "")} onClick={() => setSide(!side)} aria-expanded={side}>{sideLabel}</button>
+          <button className={"small wa-side-btn" + (st.key === "check" ? " warn" : "") + (hideSide ? "" : " is-on")} onClick={toggleSide} aria-expanded={side || !hideSide}
+            title={T("Show or hide the customer panel", "Onyesha au ficha taarifa za mteja")}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M15 4v16" /></svg>
+            <span>{sideLabel}</span>
+          </button>
           <button className="icon wa-x" onClick={onClose} aria-label={T("Close chat", "Funga chat")} title={T("Close (Esc)", "Funga (Esc)")}>✕</button>
         </div>
       </header>

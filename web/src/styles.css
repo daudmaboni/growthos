@@ -760,3 +760,94 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .paid-row { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
 .paid-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .paid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 14px; }
+
+/* ===== Chats inbox, three panels (chat list · conversation · customer) — calm, one surface, brand yellow for "you are here" ===== */
+:root { --brand: #f5c84c; --on-brand: #131a2a; }
+.inbox.frame {
+  --wa-wall: var(--paper); --wa-head: var(--card); --wa-in: var(--card); --wa-out: color-mix(in srgb, var(--accent) 14%, var(--card));
+  --wa-ink: var(--ink); --wa-meta: var(--muted); --wa-day: var(--card); --wa-line: var(--line); --wa-side: var(--card); --wa-input: transparent;
+}
+.inbox.frame .wa-thread { background-image: none; background-color: var(--wa-wall); }
+.inbox.frame .wa-bub { box-shadow: none; border: 1px solid var(--line); border-radius: 14px; padding: 8px 11px 9px; }
+.inbox.frame .wa-msg.out .wa-bub { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+.inbox.frame .wa-msg.tail.in .wa-bub { border-top-left-radius: 4px; }
+.inbox.frame .wa-msg.tail.out .wa-bub { border-top-right-radius: 4px; }
+.inbox.frame .wa-msg.tail .wa-bub::before { display: none; }
+.inbox.frame .wa-day span { box-shadow: none; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; }
+.inbox.frame .wa-sys { border: 1px solid var(--line); border-radius: 12px; }
+
+/* Reply bar: one rounded pill floating at the bottom of the conversation */
+.inbox.frame .wa-compose { background: var(--wa-wall); border-top: 0; padding: 8px 16px 14px; }
+.inbox.frame .wa-compose.closed, .inbox.frame .wa-compose:not(.open) { margin: 0 16px 14px; padding: 10px 14px; border: 1px dashed var(--line-2); border-radius: 16px; background: var(--card); }
+.inbox.frame .wa-compose-row { align-items: flex-end; gap: 6px; padding: 5px; background: var(--card); border: 1px solid var(--line-2); border-radius: 26px; box-shadow: var(--shadow-sm); transition: border-color .2s var(--ease), box-shadow .2s var(--ease); }
+.inbox.frame .wa-compose-row:focus-within { border-color: color-mix(in srgb, var(--brand) 70%, var(--line-2)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent); }
+.inbox.frame .wa-compose-row textarea { background: transparent; box-shadow: none; padding: 10px 8px; min-height: 40px; color: var(--ink); }
+.inbox.frame button.wa-kito { height: 40px; border-color: transparent; background: var(--raised); color: var(--ink); }
+.inbox.frame button.wa-send { width: 40px; height: 40px; background: var(--brand); color: var(--on-brand); }
+.inbox.frame button.wa-send:hover:not(:disabled) { background: color-mix(in srgb, var(--brand) 85%, #fff); }
+.inbox.frame button.wa-send:disabled { opacity: .4; }
+.inbox.frame .wa-compose-note { padding: 0 8px 4px; }
+
+/* Customer panel */
+.inbox.frame .wa-side { border-left: 1px solid var(--line); padding: 16px; gap: 12px; }
+.inbox.frame .wa-card { background: var(--paper); border-color: var(--line); }
+button.wa-side-btn { display: inline-flex; align-items: center; gap: 6px; }
+button.wa-side-btn svg { flex: none; opacity: .8; }
+
+/* Empty middle panel (computer only) */
+.ib-empty { display: none; }
+
+@media (min-width: 900px) {
+  .inbox.frame { grid-template-columns: 340px minmax(0, 1fr); gap: 0; align-items: stretch; height: calc(100dvh - 24px); min-height: 520px;
+    border: 1px solid var(--line-2); border-radius: var(--r-lg); overflow: hidden; background: var(--card); box-shadow: var(--shadow); }
+  .inbox.frame.has-pane { grid-template-columns: 340px minmax(0, 1fr); }
+
+  /* Left: the chat list as quiet rows, not cards */
+  .inbox.frame > .cc-list { position: static; max-height: none; height: 100%; overflow-y: auto; overscroll-behavior: contain; gap: 2px; padding: 8px; border-right: 1px solid var(--line); background: var(--card); align-content: start; }
+  .inbox.frame .cc { border: 0; border-left: 0; border-radius: 12px; box-shadow: none; background: transparent; overflow: visible; position: relative; }
+  .inbox.frame .cc:hover { box-shadow: none; background: var(--raised); }
+  .inbox.frame .cc-top { grid-template-columns: 40px 1fr; gap: 10px; padding: 10px; border-radius: 12px; }
+  .inbox.frame .cc-top:hover { background: transparent; }
+  .inbox.frame .cc-avatar { width: 40px; height: 40px; font-size: 16px; }
+  .inbox.frame .cc-act, .inbox.frame .cc-next, .inbox.frame .cc-from, .inbox.frame .cc-task { display: none; }
+  .inbox.frame .cc-name { font-size: 14.5px; }
+  .inbox.frame .cc-heat { font-size: 11px; padding: 0 7px; }
+  .inbox.frame .cc-sum { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; opacity: .7; }
+  .inbox.frame .cc-status { font-size: 13px; margin-top: 1px; }
+  .inbox.frame .cc-group { margin: 12px 10px 4px; font-size: 11.5px; }
+  .inbox.frame .cc-list > div:first-child > .cc-group { margin-top: 4px; }
+  .inbox.frame .cc-party { margin: 0 10px 8px; }
+  /* the open chat: soft fill + a yellow bar, like the itaOS dot */
+  .inbox.frame .cc.sel { background: var(--raised); border: 0; box-shadow: none; }
+  .inbox.frame .cc.sel::after { left: 0; right: auto; top: 12px; bottom: 12px; width: 3px; height: auto; margin: 0; border-radius: 3px; background: var(--brand); }
+  .inbox.frame .cc.sel .cc-name { color: var(--ink); }
+  .inbox.frame .cc.sel .cc-avatar { background: var(--brand); color: var(--on-brand); }
+  .inbox.frame button.cc-more { margin: 8px auto; }
+
+  /* Middle + right: the chat fills its column */
+  .inbox.frame .wa-pane { position: static; height: 100%; min-height: 0; border: 0; border-radius: 0; box-shadow: none; animation: none; }
+  .inbox.frame .wa-head { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .inbox.frame .wa-thread { padding: 18px max(20px, calc((100% - 760px) / 2)) 12px; }
+  .inbox.frame .wa-body { grid-template-columns: minmax(0, 1fr) 320px; }
+
+  .ib-empty { display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 24px; background: var(--paper); }
+  .ib-empty b { font-size: 17px; letter-spacing: -0.01em; }
+  .ib-empty .small { max-width: 320px; }
+  .ib-empty button { margin-top: 6px; }
+}
+@media (min-width: 1280px) {
+  button.wa-side-btn { display: inline-flex; }
+  button.wa-side-btn.is-on { background: var(--raised); }
+  .inbox.frame .wa-pane.side-hidden .wa-body { grid-template-columns: minmax(0, 1fr); }
+  .inbox.frame .wa-pane.side-hidden .wa-side { display: none; }
+  .inbox.frame .wa-side-head { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1279px) {
+  .inbox.frame { grid-template-columns: 300px minmax(0, 1fr); }
+  .inbox.frame.has-pane { grid-template-columns: 300px minmax(0, 1fr); }
+  .inbox.frame .wa-body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 899px) {
+  .inbox.frame .wa-compose { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
+  .inbox.frame .wa-compose.closed, .inbox.frame .wa-compose:not(.open) { margin: 0 10px max(10px, env(safe-area-inset-bottom)); }
+}
