@@ -322,7 +322,7 @@ const pageEl = () => document.querySelector<HTMLElement>(".page-view");
 
 /** Wraps the current page. On phones, a new section slides in from the side it lives on
  *  (iOS-style), or rises in gently when it isn't one of the bottom-nav sections. */
-function PageView({ view, children }: { view: View; children: React.ReactNode }) {
+export function PageView({ view, children }: { view: View; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const prev = useRef(view);
   useLayoutEffect(() => {
@@ -333,9 +333,9 @@ function PageView({ view, children }: { view: View; children: React.ReactNode })
     const a = ORDER.indexOf(from), b = ORDER.indexOf(view);
     const dir = a >= 0 && b >= 0 ? Math.sign(b - a) : 0;
     el.animate(dir
-      ? [{ transform: `translateX(${dir * 34}%)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }]
-      : [{ transform: "translateY(16px) scale(.985)", opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: dir ? 460 : 340, easing: "cubic-bezier(.22, 1, .36, 1)" });
+      ? [{ transform: `translateX(${dir * 24}%)`, opacity: 0.35 }, { transform: "translateX(0)", opacity: 1 }]
+      : [{ transform: "translateY(12px)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: dir ? 260 : 220, easing: "cubic-bezier(.2, .9, .3, 1)" });
   }, [view]);
   return <div className="page-view" ref={ref}>{children}</div>;
 }
@@ -414,46 +414,40 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
     const move = (e: TouchEvent) => {
       if (mode === "v") return;
       dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
-      if (!mode) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v"; if (mode === "v") return; }
+      if (!mode) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; mode = Math.abs(dx) > Math.abs(dy) ? "h" : "v"; if (mode === "v") return; x0 += dx > 0 ? 8 : -8; dx = e.touches[0].clientX - x0; }
+      e.preventDefault(); // locked sideways: the page must not scroll up/down during the swipe
       const w = window.innerWidth;
-      setLens(Math.min(ORDER.length - 1, Math.max(0, cur - dx / w * 1.2)), true);
+      setLens(Math.min(ORDER.length - 1, Math.max(0, cur - dx / w)), true);
       const page = pageEl();
       if (page && !reducedMotion()) {
         const edge = (dx > 0 && cur === 0) || (dx < 0 && cur === ORDER.length - 1);
-        const tx = edge ? dx * 0.2 : dx * 0.9; // rubber-band at the first / last section
+        const tx = edge ? dx * 0.18 : dx; // 1:1 with the finger; rubber-band at the first / last section
         page.classList.add("swiping");
         page.style.transition = "none";
-        page.style.transform = `translateX(${tx}px)`;
-        page.style.opacity = String(1 - Math.min(1, Math.abs(tx) / w) * 0.45);
+        page.style.transform = `translate3d(${tx}px,0,0)`;
+        page.style.opacity = String(1 - Math.min(1, Math.abs(tx) / w) * 0.5);
       }
     };
     const end = () => {
-      if (mode !== "h") return;
-      const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
-      const next = Math.abs(dx) > window.innerWidth * 0.28 || (fast && Math.abs(dx) > 40) ? cur + (dx < 0 ? 1 : -1) : cur;
+      if (mode !== "h") { mode = ""; return; }
+      const v = Math.abs(dx) / Math.max(1, Date.now() - t0);
+      const next = Math.abs(dx) > window.innerWidth * 0.2 || (v > 0.3 && Math.abs(dx) > 30) ? cur + (dx < 0 ? 1 : -1) : cur;
       mode = "";
       const page = pageEl();
       if (next >= 0 && next < ORDER.length && next !== cur) {
         navigator.vibrate?.(8);
-        if (page && !reducedMotion()) {
-          // finish the throw: current page slides off, then the next one slides in (see PageView)
-          page.style.transition = "transform .17s cubic-bezier(.4, 0, 1, 1), opacity .17s linear";
-          page.style.transform = `translateX(${dx < 0 ? -45 : 45}%)`;
-          page.style.opacity = "0";
-          setLens(next, false);
-          window.setTimeout(() => go(next), 150);
-        } else go(next);
+        go(next); // the next section slides straight in (PageView)
       } else {
         setLens(cur, false);
         if (page) { // spring back into place
-          page.style.transition = "transform .5s cubic-bezier(.34, 1.35, .64, 1), opacity .3s ease";
+          page.style.transition = "transform .32s cubic-bezier(.3, 1.3, .5, 1), opacity .2s ease";
           page.style.transform = ""; page.style.opacity = "";
-          window.setTimeout(() => { page.style.transition = ""; page.classList.remove("swiping"); }, 520);
+          window.setTimeout(() => { page.style.transition = ""; page.classList.remove("swiping"); }, 340);
         }
       }
     };
     window.addEventListener("touchstart", start, { passive: true });
-    window.addEventListener("touchmove", move, { passive: true });
+    window.addEventListener("touchmove", move, { passive: false });
     window.addEventListener("touchend", end);
     window.addEventListener("touchcancel", end);
     return () => { window.removeEventListener("touchstart", start); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", end); window.removeEventListener("touchcancel", end); };

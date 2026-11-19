@@ -138,10 +138,11 @@ export default function DateRange({ value, onChange, today, tz, lang }: { value:
               <span className="chip">{anchor ? T("Now pick the end date", "Sasa chagua tarehe ya mwisho") : rangeText(dp, lang)}</span>
               {!anchor && <span className="small muted">{dp.days} {dp.days === 1 ? T("day", "siku") : T("days", "siku")} · {T("compared with the", "ikilinganishwa na")} {dp.days} {T("before", "kabla")}</span>}
             </div>
-            <div className="dr-foot">
-              <span className="small muted">{T("Dates are shown in", "Tarehe ziko kwa saa za")} {tz.replace(/_/g, " ")}</span>
-              <div className="row"><button type="button" onClick={close}>{T("Cancel", "Ghairi")}</button><button type="button" className="primary" onClick={apply}>{T("Update", "Sasisha")}</button></div>
-            </div>
+          </div>
+          {/* outside the scroll area's content so it can stay pinned to the bottom of the phone sheet */}
+          <div className="dr-foot">
+            <span className="small muted">{T("Dates are shown in", "Tarehe ziko kwa saa za")} {tz.replace(/_/g, " ")}</span>
+            <div className="row"><button type="button" onClick={close}>{T("Cancel", "Ghairi")}</button><button type="button" className="primary" onClick={apply}>{T("Update", "Sasisha")}</button></div>
           </div>
         </div>
       )}
