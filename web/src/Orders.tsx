@@ -1,6 +1,6 @@
 // Orders for one chat: record, correct, reverse. Every change is audited by the database.
 import { useEffect, useState } from "react";
-import { supabase, Workspace, Order, Outcome, L, amt, when, orderNet, canEdit } from "./lib";
+import { supabase, Workspace, Order, Outcome, L, amt, when, orderNet, canEdit, moneyInput, moneyText } from "./lib";
 import { AssignSelect } from "./team";
 import { useProducts, ProductPicker, itemsCost, itemsLabel, type Item } from "./Products";
 
@@ -60,7 +60,7 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
   const [product, setProduct] = useState("");
   const { products } = useProducts(ws.id);
   const [items, setItems] = useState<Item[]>([]);
-  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); if (items.length) setProduct(itemsLabel(items)); }, [items]);
+  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(moneyText(c)); if (items.length) setProduct(itemsLabel(items)); }, [items]);
   const [status, setStatus] = useState<Order["status"]>("paid");
   const [fulfil, setFulfil] = useState<Order["fulfillment_status"]>("not_applicable");
   const [notes, setNotes] = useState("");
@@ -97,10 +97,10 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
       {inferredFrom(r) && <span className="small muted">{T("A payment was inferred from the chat. Recording it here is what makes it a confirmed sale.", "Malipo yalikisiwa kutoka chat. Kuyarekodi hapa ndiko kunayafanya kuwa mauzo yaliyothibitishwa.")}</span>}
       {products && products.some((p) => p.active) && <ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} />}
       <div className="map">
-        <label>{T("Amount", "Kiasi")} ({ws.currency})<input inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-        <label>{T("Discount", "Punguzo")}<input inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" /></label>
+        <label>{T("Amount", "Kiasi")} ({ws.currency})<input inputMode="decimal" required value={amount} onChange={moneyInput(setAmount)} /></label>
+        <label>{T("Discount", "Punguzo")}<input inputMode="decimal" value={discount} onChange={moneyInput(setDiscount)} placeholder="0" /></label>
         <label>{T("Paid on", "Alilipa lini")}<input type="datetime-local" required value={date} onChange={(e) => setDate(e.target.value)} />{pm && <span className="small muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}</span>}</label>
-        <label>{T("Cost of this order", "Gharama ya oda hii")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} /></label>
+        <label>{T("Cost of this order", "Gharama ya oda hii")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={moneyInput(setCost)} placeholder={T("product + delivery", "bidhaa + usafiri")} /></label>
         <label>{T("Status", "Hali")}<select value={status} onChange={(e) => setStatus(e.target.value as any)}>{(["paid", "pending", "refunded", "cancelled"] as const).map((s) => <option key={s} value={s}>{L[lang].orderStatus[s]}</option>)}</select></label>
         <label>{T("Delivery", "Usafirishaji")}<select value={fulfil} onChange={(e) => setFulfil(e.target.value as any)}>{(["not_applicable", "not_shipped", "shipped", "delivered", "returned"] as const).map((s) => <option key={s} value={s}>{L[lang].fulfillment[s]}</option>)}</select></label>
         <label>{T("Product (optional)", "Bidhaa (si lazima)")}<input value={product} onChange={(e) => setProduct(e.target.value)} /></label>
@@ -175,9 +175,9 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
           {editor && (
             <div className="row" style={{ gap: 6 }}>
               {o.status !== "paid" && <button className="small" disabled={busy === o.id} onClick={() => update(o, { status: "paid", paid_at: new Date().toISOString() })}>{T("Mark paid", "Weka imelipwa")}</button>}
-              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("What did this order cost you? (product + delivery)", "Oda hii ilikugharimu kiasi gani? (bidhaa + usafiri)"), o.cost != null ? String(o.cost) : ""); if (v == null) return; const n = v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")); if (n == null || n >= 0) update(o, { cost: n }); }}>{o.cost != null ? T("Change cost", "Badili gharama") : T("Add cost", "Ongeza gharama")}</button>}
+              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("What did this order cost you? (product + delivery)", "Oda hii ilikugharimu kiasi gani? (bidhaa + usafiri)"), o.cost != null ? moneyText(o.cost) : ""); if (v == null) return; const n = v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")); if (n == null || n >= 0) update(o, { cost: n }); }}>{o.cost != null ? T("Change cost", "Badili gharama") : T("Add cost", "Ongeza gharama")}</button>}
               {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Paid on (YYYY-MM-DD HH:MM, East Africa time)", "Alilipa lini (YYYY-MM-DD HH:MM)"), o.paid_at ? toLocalInput(o.paid_at).replace("T", " ") : ""); if (!v) return; const m = v.trim().match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/); if (!m) return; const iso = fromLocalInput(`${m[1]}T${(m[2] ?? "12").padStart(2, "0")}:${m[3] ?? "00"}`); if (Date.parse(iso) <= Date.now() + 864e5) update(o, { paid_at: iso, occurred_at: iso }); }}>{T("Change date", "Badili tarehe")}</button>}
-              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Refund amount", "Kiasi cha marejesho"), String(orderNet(o))); const n = v == null ? NaN : Number(v.replace(/[^\d.]/g, "")); if (n >= 0 && n <= orderNet(o)) update(o, { status: "refunded", refund_amount: Number(o.refund_amount) + n }); }}>{T("Refund", "Rudisha pesa")}</button>}
+              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Refund amount", "Kiasi cha marejesho"), moneyText(orderNet(o))); const n = v == null ? NaN : Number(v.replace(/[^\d.]/g, "")); if (n >= 0 && n <= orderNet(o)) update(o, { status: "refunded", refund_amount: Number(o.refund_amount) + n }); }}>{T("Refund", "Rudisha pesa")}</button>}
               {o.status !== "cancelled" && <button className="small" disabled={busy === o.id} onClick={() => confirm(T("Cancel this order? It stays in the history as cancelled.", "Ghairi oda hii? Itabaki kwenye historia kama iliyoghairiwa.")) && update(o, { status: "cancelled" })}>{T("Cancel order", "Ghairi oda")}</button>}
               <select value={o.fulfillment_status} disabled={busy === o.id} onChange={(e) => update(o, { fulfillment_status: e.target.value as any })} style={{ padding: "3px 8px" }}>{(["not_applicable", "not_shipped", "shipped", "delivered", "returned"] as const).map((s) => <option key={s} value={s}>{L[lang].fulfillment[s]}</option>)}</select>
               {o.status === "paid" && "delivery_issue" in o && (o.delivery_issue && !o.delivery_resolved_at

@@ -1,3 +1,4 @@
+import { moneyInput, moneyText } from "./lib";
 // itaOS staff admin — Performance, AI usage, Data quality pages and the drawer's performance + staff-task
 // sections. Reads the 0031_admin_insights RPCs; rules live in adminInsights.ts (unit-tested).
 // Aggregated only: no message bodies, contact names or Kito questions ever reach this page.
@@ -197,7 +198,7 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
   const [price, setPrice] = useState<PriceForm | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (u?.budget) setBudget({ monthly: u.budget.monthly_usd?.toString() ?? '', daily: u.budget.daily_usd?.toString() ?? '', spike: (u.budget.spike_multiplier ?? 3).toString() }); }, [u?.budget]);
+  useEffect(() => { if (u?.budget) setBudget({ monthly: moneyText(u.budget.monthly_usd), daily: moneyText(u.budget.daily_usd), spike: (u.budget.spike_multiplier ?? 3).toString() }); }, [u?.budget]);
 
   const alerts = u ? usageAlerts(u) : [];
   async function rpc(fn: string, args: Record<string, unknown>, ok: string) {
@@ -206,7 +207,7 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
     setBusy(false);
     if (error) setMsg({ ok: false, text: error.message }); else { setMsg({ ok: true, text: ok }); setT((x) => x + 1); setPrice(null); }
   }
-  const num = (s: string) => (s.trim() === '' ? null : Number(s));
+  const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(/,/g, '')));
 
   return (
     <div>
@@ -271,8 +272,8 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
             <section className="ia-panel">
               <div className="ia-panel-h"><h2>Budget and alerts</h2></div>
               <form className="ia-form" onSubmit={(e) => { e.preventDefault(); void rpc('admin_set_api_budget', { p_monthly_usd: num(budget.monthly), p_daily_usd: num(budget.daily), p_spike_multiplier: num(budget.spike) ?? 3 }, 'Budget saved'); }}>
-                <label className="ia-field"><span>Monthly budget (USD)</span><input inputMode="decimal" value={budget.monthly} onChange={(e) => setBudget({ ...budget, monthly: e.target.value })} placeholder="none" /></label>
-                <label className="ia-field"><span>Alert when a day passes (USD)</span><input inputMode="decimal" value={budget.daily} onChange={(e) => setBudget({ ...budget, daily: e.target.value })} placeholder="none" /></label>
+                <label className="ia-field"><span>Monthly budget (USD)</span><input inputMode="decimal" value={budget.monthly} onChange={moneyInput((v) => setBudget({ ...budget, monthly: v }))} placeholder="none" /></label>
+                <label className="ia-field"><span>Alert when a day passes (USD)</span><input inputMode="decimal" value={budget.daily} onChange={moneyInput((v) => setBudget({ ...budget, daily: v }))} placeholder="none" /></label>
                 <label className="ia-field"><span>Flag a spike at × a normal day</span><input inputMode="decimal" value={budget.spike} onChange={(e) => setBudget({ ...budget, spike: e.target.value })} /></label>
                 <div className="ia-actions wide"><button className="ia-btn primary" disabled={busy}>Save budget</button></div>
               </form>

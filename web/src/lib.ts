@@ -139,3 +139,33 @@ export function converter(ws: Pick<Workspace, "currency" | "display_currency" | 
     return null;
   };
 }
+
+/** Money typed into a box, with thousands commas: "175000" → "175,000", "2600.5" stays "2,600.5". Keeps up to 2 decimals. */
+export function withCommas(s: string): string {
+  const t = s.replace(/[^\d.]/g, "");
+  if (t === "") return "";
+  const [int, ...rest] = t.split(".");
+  const i = int.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return rest.length ? `${i || "0"}.${rest.join("").slice(0, 2)}` : i;
+}
+/** Free text that may hold prices ("155,000 – 200,000 delivery included"): every number of 4+ digits gets commas. */
+export const commaRuns = (s: string) =>
+  s.replace(/\d+(?:,\d+)*/g, (m) => { const d = m.replace(/,/g, ""); return d.length >= 4 ? d.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : m; });
+/** A number shown in a money box, e.g. a saved price 175000 → "175,000". */
+export const moneyText = (n: number | string | null | undefined) => (n == null || n === "" ? "" : withCommas(String(n)));
+/** onChange for a money box: formats as you type and keeps the cursor where you were typing. */
+export function moneyInput(set: (v: string) => void, format: (s: string) => string = withCommas) {
+  return (e: { target: HTMLInputElement }) => {
+    const el = e.target, raw = el.value, pos = el.selectionStart ?? raw.length;
+    const keep = format === withCommas ? /[\d.]/ : /[^,]/;
+    const before = [...raw.slice(0, pos)].filter((c) => keep.test(c)).length;
+    const out = format(raw);
+    set(out);
+    requestAnimationFrame(() => {
+      if (document.activeElement !== el) return;
+      let i = 0, n = 0;
+      while (i < out.length && n < before) { if (keep.test(out[i])) n++; i++; }
+      try { el.setSelectionRange(i, i); } catch { /* some input types don't support it */ }
+    });
+  };
+}

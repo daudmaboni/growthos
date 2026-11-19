@@ -1,7 +1,7 @@
 import type { ReactNode, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
-import { Workspace, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency } from "./lib";
+import { Workspace, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency, moneyInput } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
 import { FilterBar, useFilters } from "./Filters";
@@ -284,7 +284,7 @@ function SetNumber({ ws, onWs, field, label, unit, placeholder, hint, T }: { ws:
     <form className="kpi-set" onSubmit={save}>
       <span className="small kpi-set-label">{label}</span>
       <div className="kpi-set-row">
-        <input inputMode="decimal" placeholder={placeholder} value={v} onChange={(e) => setV(e.target.value)} aria-label={label} />
+        <input inputMode="decimal" placeholder={placeholder} value={v} onChange={moneyInput(setV)} aria-label={label} />
         <span className="small muted">{unit}</span>
         <button className="small primary" disabled={busy || !v.trim()}>{busy ? "…" : T("Save", "Hifadhi")}</button>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { supabase, callFn, Workspace, canManage, canEdit, when } from "./lib";
+import { supabase, callFn, Workspace, canManage, canEdit, when, moneyInput, moneyText, commaRuns } from "./lib";
 import { enterCards, enterRows, flash, shake, usePageEnter, select } from "./motion";
 
 type Tab = "business" | "profile" | "appearance" | "rules" | "account";
@@ -182,14 +182,14 @@ function Replying({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void
 }
 
 function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
-  const [rate, setRate] = useState(ws.fx_rate ? String(ws.fx_rate) : "");
+  const [rate, setRate] = useState(ws.fx_rate ? moneyText(ws.fx_rate) : "");
   const [auto, setAuto] = useState(ws.fx_auto !== false);
   const [fetching, setFetching] = useState(false);
   const [fxErr, setFxErr] = useState("");
   const [hours, setHours] = useState(String(ws.follow_up_hours ?? 24));
   const [win, setWin] = useState(String(ws.conversion_window_days ?? 30));
   const [tz, setTz] = useState(ws.timezone ?? "Africa/Dar_es_Salaam");
-  const [unitCost, setUnitCost] = useState(ws.unit_cost != null ? String(ws.unit_cost) : "");
+  const [unitCost, setUnitCost] = useState(moneyText(ws.unit_cost));
   const { msg, busy, save } = useSave(ws, onWs);
   const manager = canManage(ws);
   // fx_rate is always "1 ad-currency unit (USD) = N shillings", whatever the sales currency is set to.
@@ -197,7 +197,7 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
   const fxTo = ws.currency === fxFrom ? "TZS" : ws.currency;
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const v = rate.trim() === "" ? null : Number(rate.replace(/,/g, ""));
+    const v = rate.trim() === "" ? null : Number(rate.replace(/[^\d.]/g, ""));
     const h = Number(hours), w = Number(win);
     const uc = unitCost.trim() === "" ? null : Number(unitCost.replace(/[^\d.]/g, ""));
     if (uc !== null && !(uc >= 0 && isFinite(uc))) { shake(e.currentTarget); return; }
@@ -216,7 +216,7 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
       if (first?.error) setFxErr(T("Could not get today's rate. It will try again within the hour.", "Imeshindwa kupata kiwango cha leo. Itajaribu tena ndani ya saa moja."));
       else if (first?.skipped === "no ad data") setFxErr(T("No ad account data yet, so there is nothing to convert.", "Bado hakuna data ya matangazo, hivyo hakuna cha kubadilisha."));
       const { data } = await supabase.from("workspaces").select("fx_rate,fx_auto,fx_updated_at,fx_source,fx_base").eq("id", ws.id).single();
-      if (data) { onWs({ ...ws, ...data, fx_auto: true }); if (data.fx_rate) setRate(String(data.fx_rate)); }
+      if (data) { onWs({ ...ws, ...data, fx_auto: true }); if (data.fx_rate) setRate(moneyText(data.fx_rate)); }
     } catch (e) { setFxErr((e as Error).message); }
     setFetching(false);
   }
@@ -237,12 +237,12 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
             {manager && ws.fx_auto !== false && <button type="button" className="small" disabled={fetching} onClick={refreshRate}>{fetching ? "…" : T("Update now", "Sasisha sasa")}</button>}
           </div>
         ) : (
-          <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{fxTo}</span></div>
+          <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={moneyInput(setRate)} /><span>{fxTo}</span></div>
         )}
         {fxErr && <span className="small err">{fxErr}</span>}
       </Field>
       <Field id="s-uc" label={T(`Default cost per order (${ws.currency})`, `Gharama ya kawaida kwa oda (${ws.currency})`)} hint={T("Product + delivery for a typical order. Used only for orders where you didn't pick products or type a cost, and the profit card then says \"estimated\". Leave empty if every order costs something different (e.g. phones).", "Bidhaa + usafiri kwa oda ya kawaida. Inatumika tu kwa oda ambazo hukuchagua bidhaa wala kuandika gharama, na kadi ya faida itasema \"makadirio\". Acha wazi kama kila oda ina gharama tofauti (mf. simu).")}>
-        <input id="s-uc" inputMode="decimal" style={{ width: 160 }} placeholder={T("e.g. 10000", "mf. 10000")} value={unitCost} disabled={!manager} onChange={(e) => setUnitCost(e.target.value)} />
+        <input id="s-uc" inputMode="decimal" style={{ width: 160 }} placeholder={T("e.g. 10000", "mf. 10000")} value={unitCost} disabled={!manager} onChange={moneyInput(setUnitCost)} />
       </Field>
       <Field id="s-fu" label={T("Remind me to follow up after (hours)", "Nikumbushe kufuatilia baada ya (saa)")} hint={T("A customer who showed interest but got no message from you for this long shows up in Actions.", "Mteja aliyeonyesha nia bila ujumbe wako kwa muda huu anaonekana kwenye Vitendo.")}>
         <input id="s-fu" inputMode="numeric" style={{ width: 160 }} value={hours} disabled={!manager} onChange={(e) => setHours(e.target.value)} />
@@ -298,7 +298,7 @@ function Profile({ ws, T }: { ws: Workspace; T: Tr }) {
         {p.products.map((x, i) => (
           <div className="row" key={i} style={{ marginTop: 6 }}>
             <input placeholder={T("Product", "Bidhaa")} value={x.name} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)) })} />
-            <input placeholder={T("Price, e.g. 155,000", "Bei, mfano 155,000")} style={{ width: 160 }} value={x.price} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)) })} />
+            <input placeholder={T("Price, e.g. 155,000", "Bei, mfano 155,000")} style={{ width: 160 }} value={x.price} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, price: commaRuns(e.target.value) } : y)) })} />
             <input placeholder={T("Note (size, pack, what it is for)", "Maelezo")} value={x.note} disabled={!editor} onChange={(e) => set({ products: p.products.map((y, j) => (j === i ? { ...y, note: e.target.value } : y)) })} />
             {editor && <button type="button" className="small" onClick={() => set({ products: p.products.filter((_, j) => j !== i) })}>×</button>}
           </div>

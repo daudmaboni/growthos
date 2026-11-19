@@ -3,7 +3,7 @@
 // The technical detail (which rule or Kito reading decided the label) is still there, tucked away.
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
-import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt, localDay } from "./lib";
+import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt, localDay, moneyInput, moneyText } from "./lib";
 import DateRange from "./DateRange";
 import { RangeSel, resolveRange, addDays, loadRange, saveRange, presetLabel } from "./ranges";
 import { AssignChat } from "./team";
@@ -856,7 +856,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone, onLater }: { r: Outcome; ws: W
   // What the customer bought (My products): the cost fills in from the products picked, still editable.
   const { products } = useProducts(ws.id);
   const [items, setItems] = useState<Item[]>([]);
-  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); }, [items]);
+  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(moneyText(c)); }, [items]);
   const [prePicked, setPrePicked] = useState(false);
   const [fromPhotos, setFromPhotos] = useState(false);
   useEffect(() => {   // photos in this chat that itaOS recognised as your products are picked for you (change them freely)
@@ -947,13 +947,13 @@ function ConfirmPayment({ r, ws, T, msgs, onDone, onLater }: { r: Outcome; ws: W
         <li>{T("Copy its transaction code (e.g. QK41ABC9XY) below.", "Nakili namba ya muamala (mf. QK41ABC9XY) hapa chini.")}</li>
       </ol>
       <div className="cc-pay-fields">
-        <label className="small">{T("Amount received", "Kiasi kilichoingia")} ({ws.currency})<input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setDupOk(false); setDup(null); }} placeholder="155,000" /></label>
+        <label className="small">{T("Amount received", "Kiasi kilichoingia")} ({ws.currency})<input inputMode="decimal" value={amount} onChange={(e) => { moneyInput(setAmount)(e); setDupOk(false); setDup(null); }} placeholder="155,000" /></label>
         <label className="small">{T("Transaction code", "Namba ya muamala")}<input value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} placeholder="QK41ABC9XY" /></label>
         <label className="small">{T("Paid on", "Alilipa lini")}<input type="datetime-local" value={paidOn} onChange={(e) => { setPaidOn(e.target.value); setDupOk(false); setDup(null); }} />
           {pm && <span className="muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}{pm.snippet ? `: “${pm.snippet.slice(0, 60)}${pm.snippet.length > 60 ? "…" : ""}”` : ""}</span>}</label>
         {products && products.some((p) => p.active) && <div style={{ gridColumn: "1 / -1" }}><ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} />
           <span className="small muted">{items.length ? T("Picking products marks this order as sent.", "Ukichagua bidhaa, oda inahesabiwa imetumwa.") : T("Still have to send it (e.g. upcountry)? Leave products empty — pick them later when you send.", "Bado hujatuma (mf. mkoani)? Acha bidhaa wazi — utazichagua ukizituma.")}</span></div>}
-        <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={ws.unit_cost != null ? T(`empty = default ${amt(Number(ws.unit_cost), ws.currency)}`, `wazi = kawaida ${amt(Number(ws.unit_cost), ws.currency)}`) : T("product + delivery", "bidhaa + usafiri")} />
+        <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={moneyInput(setCost)} placeholder={ws.unit_cost != null ? T(`empty = default ${amt(Number(ws.unit_cost), ws.currency)}`, `wazi = kawaida ${amt(Number(ws.unit_cost), ws.currency)}`) : T("product + delivery", "bidhaa + usafiri")} />
           {fromPhotos && items.length > 0 && <span className="muted">{T("Products picked from the customer's photos — check they're right.", "Bidhaa zimechaguliwa kutoka picha za mteja — hakikisha ni sahihi.")}</span>}
           <span className="muted">{items.length ? T("Filled in from the products picked. You can change it.", "Imejazwa kutoka bidhaa ulizochagua. Unaweza kuibadilisha.") : T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>
       </div>

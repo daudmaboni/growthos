@@ -4,7 +4,7 @@
 // the owner can still type a different number. Nothing is assumed for a new business.
 import { useEffect, useMemo, useState } from "react";
 import { enterCards, usePageEnter, select } from "./motion";
-import { supabase, Workspace, amt, money, when, orderNet, canEdit } from "./lib";
+import { supabase, Workspace, amt, money, when, orderNet, canEdit, moneyInput, moneyText } from "./lib";
 
 export type Product = {
   id: string; workspace_id: string; name: string; aliases: string[]; price: number | null; cost: number | null;
@@ -105,8 +105,8 @@ function usePhotoUrls(paths: string[]) {
 function ProductForm({ ws, p, onDone, onCancel, T }: { ws: Workspace; p: Product | null; onDone: () => void; onCancel: () => void; T: (en: string, sw: string) => string }) {
   const [name, setName] = useState(p?.name ?? "");
   const [aliases, setAliases] = useState((p?.aliases ?? []).join(", "));
-  const [price, setPrice] = useState(p?.price != null ? String(p.price) : "");
-  const [cost, setCost] = useState(p?.cost != null ? String(p.cost) : "");
+  const [price, setPrice] = useState(moneyText(p?.price));
+  const [cost, setCost] = useState(moneyText(p?.cost));
   const [notes, setNotes] = useState(p?.notes ?? "");
   const [photos, setPhotos] = useState<string[]>(p?.photos ?? []);
   const [busy, setBusy] = useState(false);
@@ -157,8 +157,8 @@ function ProductForm({ ws, p, onDone, onCancel, T }: { ws: Workspace; p: Product
       <b>{p ? T(`Edit ${p.name}`, `Hariri ${p.name}`) : T("Add a product", "Ongeza bidhaa")}</b>
       <div className="map">
         <label>{T("Name", "Jina")}<input required value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="KayaPower" /></label>
-        <label>{T("Selling price", "Bei ya kuuza")} ({ws.currency})<input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={T("what customers pay", "anacholipa mteja")} /></label>
-        <label>{T("What one costs you", "Gharama ya moja kwako")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} />
+        <label>{T("Selling price", "Bei ya kuuza")} ({ws.currency})<input inputMode="decimal" value={price} onChange={moneyInput(setPrice)} placeholder={T("what customers pay", "anacholipa mteja")} /></label>
+        <label>{T("What one costs you", "Gharama ya moja kwako")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={moneyInput(setCost)} placeholder={T("product + delivery", "bidhaa + usafiri")} />
           {margin != null && <span className={"small " + (margin >= 0 ? "muted" : "err")}>{T("Profit per unit", "Faida kwa kimoja")}: {money(margin, ws.currency)}</span>}</label>
         <label style={{ gridColumn: "1 / -1" }}>{T("Other names customers use (comma separated)", "Majina mengine wanayotumia wateja (tenganisha kwa koma)")}<input value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder={T("kaya power, dawa ya nguvu", "kaya power, dawa ya nguvu")} /></label>
         <label style={{ gridColumn: "1 / -1" }}>{T("Note (optional)", "Maelezo (si lazima)")}<input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={T("size, pack, how it's used…", "ukubwa, pakiti, matumizi…")} /></label>
@@ -259,7 +259,7 @@ function MissingCosts({ ws, products, editor, T }: { ws: Workspace; products: Pr
     })();
     return () => { live = false; };
   }, [ws.id, tick]);
-  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); }, [items]);
+  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(moneyText(c)); }, [items]);
   function start(o: NoCost) { setOpen(o.id); setItems([]); setCost(""); setErr(""); }
   async function save(o: NoCost) {
     const c = num(cost);
@@ -302,7 +302,7 @@ function MissingCosts({ ws, products, editor, T }: { ws: Workspace; products: Pr
                   <ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} />
                   <div className="row" style={{ alignItems: "end" }}>
                     <label className="small" style={{ display: "grid", gap: 3 }}>{T("Cost of this order", "Gharama ya oda hii")} ({ws.currency})
-                      <input inputMode="decimal" style={{ width: 160 }} value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} /></label>
+                      <input inputMode="decimal" style={{ width: 160 }} value={cost} onChange={moneyInput(setCost)} placeholder={T("product + delivery", "bidhaa + usafiri")} /></label>
                     <button className="primary small" disabled={busy} onClick={() => save(o)}>{busy ? "…" : T("Save", "Hifadhi")}</button>
                     <button className="small" onClick={() => setOpen(null)}>{T("Cancel", "Ghairi")}</button>
                   </div>
