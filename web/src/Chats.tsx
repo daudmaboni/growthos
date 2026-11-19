@@ -327,7 +327,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       <div className="chats-head">
         <div>
           <h2 style={{ margin: 0 }}>{T("Customers", "Wateja")} <span className="muted chats-total">{fmt(total)}</span>{live && <span className="live-dot" title={T("Live: updates by itself when a message arrives", "Hai: inajisasisha ujumbe ukiingia")}>{T("Live", "Hai")}</span>}</h2>
-          <span className="small muted">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
+          <span className="small muted chats-sub">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
         <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
           {rechecking ? <span className="kito-spin sm" aria-hidden /> : <KitoLogo size={18} />}{rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
@@ -353,11 +353,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
           <input type="search" className="chats-search" value={qText} onChange={(e) => setQText(e.target.value)} placeholder={T("Search name or phone…", "Tafuta jina au namba…")} aria-label={T("Search chats", "Tafuta chat")} />
           <DateRange value={range ?? { key: "today" }} onChange={(r) => setRange(r)} today={todayChats} tz={tzChats} lang={lang} />
           {range ? <button className="small linkish" onClick={() => setRange(null)}>{T("All dates", "Tarehe zote")}</button>
-            : <span className="small muted">{T("Showing all dates", "Inaonyesha tarehe zote")}</span>}
+            : <span className="small muted chats-alldates">{T("Showing all dates", "Inaonyesha tarehe zote")}</span>}
         </div>
       )}
       {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
-      {filter !== "ids" && <p className="small muted" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
+      {filter !== "ids" && <p className="small muted chats-hint" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
       {filter === "ids" && ids && <p className="small" style={{ margin: 0 }}>{T(`Showing ${ids.length} customers Kito picked`, `Inaonyesha wateja ${ids.length} aliowachagua Kito`)} · <a href="#chats" onClick={() => pick("all")}>{T("show everyone", "onyesha wote")}</a></p>}
       {src === "import" && imported > 0 && canManage(ws) && (
         <div className="row small" style={{ gap: 8 }}>
@@ -451,11 +451,11 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen, onChange }: { r
         <div className="cc-main">
           <div className="cc-line1">
             <b className="cc-name">{name}</b>
-            {!confirmed && st.key !== "lost" && temp && <span className={"cc-heat " + temp}>{temp === "hot" ? T("Very interested", "Ana hamu sana") : temp === "warm" ? T("Interested", "Ana hamu") : T("Not very interested", "Hana hamu sana")}</span>}
             <span className="cc-time small muted">{agoT(r.last_message_at, T)}</span>
           </div>
           <div className="small muted cc-from">{fromOf(r, T, adName)}</div>
-          <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
+          <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}<span className="cc-st-text">{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</span>
+            {!confirmed && st.key !== "lost" && temp && <span className={"cc-heat " + temp}>{temp === "hot" ? T("Very interested", "Ana hamu sana") : temp === "warm" ? T("Interested", "Ana hamu") : T("Not very interested", "Hana hamu sana")}</span>}</div>
           {kitoStale(r) ? <div className="cc-sum cc-reading">✦ {T("Kito is reading the new messages…", "Kito anasoma ujumbe mpya…")}</div>
             : r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
           {!kitoStale(r) && r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}

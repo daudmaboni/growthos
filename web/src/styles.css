@@ -929,3 +929,62 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
   .chats .inbox.frame .ib-empty { background: var(--ib-wall); }
   .chats .inbox.frame .wa-head { padding: 14px 20px; }
 }
+
+/* ===== Chats on a phone (19 Nov): a WhatsApp-style list — flat rows, one line of Kito's note, tap to open ===== */
+.cc-status .cc-st-text { min-width: 0; }
+.cc-status .cc-heat { margin-left: auto; font-weight: 600; flex: none; }
+@media (max-width: 899px) {
+  /* The page itself stops being a card inside a card */
+  .card.chats { background: transparent; border: 0; box-shadow: none; padding: 4px 0 0; gap: 10px; }
+  .card.chats:hover { border-color: transparent; }
+  .chats-head { align-items: center; padding: 0 4px; }
+  .chats-head h2 { font-size: 22px; }
+  .chats-head > button { padding: 7px 12px; font-size: 13px; }
+  .chats .chats-sub, .chats .chats-hint, .chats .chats-alldates { display: none; }
+
+  /* Tabs: one swipeable line instead of three wrapped rows */
+  .chats-bar { gap: 8px; }
+  .chats .chips-tabs { flex: 1 1 100%; min-width: 0; max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .card.chats > * { min-width: 0; max-width: 100%; }
+  .chats-bar > * { min-width: 0; }
+  .chats .chips-tabs::-webkit-scrollbar { display: none; }
+  .chats .chips-tabs button { flex: none; padding: 6px 12px; font-size: 13.5px; }
+  .chats-src { padding: 6px 10px; font-size: 13px; }
+  .chats-find { gap: 6px; flex-wrap: nowrap; }
+  .chats .chats-search { flex: 1 1 auto; padding: 9px 12px; }
+
+  /* The list: one white panel, rows split by hairlines */
+  .inbox.frame > .cc-list { gap: 0; background: var(--ib-card, var(--card)); border: 1px solid var(--ib-edge, var(--line)); border-radius: 16px; overflow: hidden; }
+  .inbox.frame .cc { border: 0; border-left: 0; border-radius: 0; box-shadow: none; background: transparent; position: relative; }
+  .inbox.frame .cc + .cc, .inbox.frame .cc-list > div + div .cc { border-top: 1px solid var(--ib-edge, var(--line)); }
+  .inbox.frame .cc:hover { box-shadow: none; }
+  .inbox.frame .cc-top { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 11px 12px; align-items: center; }
+  .inbox.frame .cc-top:active { background: var(--raised); }
+  .inbox.frame .cc-avatar { width: 44px; height: 44px; font-size: 17px; }
+  .inbox.frame .cc-main { gap: 1px; }
+  .inbox.frame .cc-line1 { flex-wrap: nowrap; gap: 8px; }
+  .inbox.frame .cc-name { font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox.frame .cc-time { font-size: 12px; flex: none; }
+  .inbox.frame .cc-status { font-size: 13px; margin-top: 1px; gap: 6px; flex-wrap: nowrap; }
+  .inbox.frame .cc-status .cc-st-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox.frame .cc-status .cc-dot { width: 8px; height: 8px; margin: 0 1px; }
+  .inbox.frame .cc-status .cc-ico { width: 15px; height: 15px; font-size: 9px; flex: none; }
+  .inbox.frame .cc-heat { font-size: 10.5px; padding: 1px 7px; }
+  .inbox.frame .cc-sum { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; color: var(--muted); opacity: 1; }
+  .inbox.frame .cc-act, .inbox.frame .cc-next, .inbox.frame .cc-from, .inbox.frame .cc-task { display: none; }
+  .inbox.frame .cc-party { margin: 6px 0 0; padding: 8px; }
+  /* Waiting on you: name in bold ink and a purple dot on the avatar, like an unread chat */
+  .inbox.frame .cc.bad .cc-name { font-weight: 800; }
+  .inbox.frame .cc.bad .cc-avatar { position: relative; }
+  .inbox.frame .cc.bad .cc-avatar::after { content: ""; position: absolute; right: -1px; top: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--bad); border: 2px solid var(--ib-card, var(--card)); }
+  .inbox.frame .cc.sel { background: var(--ib-soft, var(--raised)); box-shadow: none; border-color: transparent; }
+  .inbox.frame .cc.sel::after { display: none; }
+
+  /* Day headings sit inside the panel as small grey strips */
+  .inbox.frame .cc-group { margin: 0; padding: 8px 14px 6px; font-size: 11px; background: var(--ib-wall, var(--paper)); border-top: 1px solid var(--ib-edge, var(--line)); }
+  .inbox.frame .cc-group::after { display: none; }
+  .inbox.frame .cc-list > div:first-child > .cc-group { border-top: 0; margin: 0; }
+  .inbox.frame .cc-group + .cc { border-top: 1px solid var(--ib-edge, var(--line)); }
+  .inbox.frame button.cc-more { margin: 10px auto; }
+  .cc-skel { min-height: 66px; }
+}
