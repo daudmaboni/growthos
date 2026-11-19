@@ -1,0 +1,54 @@
+/* Graphite: the third look, modelled on dualhook.com's dark mode — neutral near-black (#0f0f10),
+   cards a step lighter, hairline borders, soft grey text and one green accent. It sits on top of
+   the regular dark rules (data-theme="dark"), switched on by data-dark="graphite" on <html>.
+   Loaded last so it wins over styles.css, dashboard.css and mobile.css. */
+
+:root[data-dark="graphite"]:not([data-theme="light"]) {
+  --paper: #0f0f10; --card: #161618; --raised: #ffffff0a; --panel: #1b1b1e;
+  --ink: #ededef; --ink-2: #c9c9cf; --muted: #9a9aa3; --line: #26262b; --line-2: #34343a;
+  --accent: #4ade80; --accent-from: #4ade80; --accent-to: #2fbf62; --accent-soft: #4ade8022; --accent-text: #4ade80; --accent-glow: #2fbf6255; --on-accent: #06210f;
+  --good: #4ade80; --good-soft: #4ade8022; --warn: #fbbf24; --warn-soft: #fbbf2422; --bad: #f97066; --bad-soft: #f9706622; --info: #7dd3fc; --info-soft: #7dd3fc22;
+  --c1: #4ade80; --c2: #ededef; --c3: #9a9aa3; --c4: #7dd3fc; --c5: #f97066; --c6: #fbbf24;
+  --shadow-sm: 0 0 0 1px #ffffff0d; --shadow: 0 0 0 1px #ffffff0d; --shadow-lg: 0 0 0 1px #ffffff12, 0 18px 48px #00000080;
+  --glass: rgba(22, 22, 24, .72); --glass-edge: rgba(255, 255, 255, .08); --glass-hi: rgba(255, 255, 255, .12); --glass-lens: rgba(255, 255, 255, .06);
+  --wa-head: #161618; --wa-wall: #0f0f10; --wa-in: #1f1f23; --wa-out: #163322; --wa-ink: #ededef; --wa-meta: #9a9aa3; --wa-day: #1f1f23; --wa-line: #26262b; --wa-dot: #ffffff06; --wa-side: #161618;
+  --brand: #4ade80; --on-brand: #06210f;
+}
+:root[data-dark="graphite"]:not([data-theme="light"]) body { background: #0f0f10; }
+
+/* Tabs and buttons: flat graphite chips instead of glass */
+:root[data-dark="graphite"]:not([data-theme="light"]) nav.tabs { background: #161618; border-color: #26262b; box-shadow: none; }
+:root[data-dark="graphite"]:not([data-theme="light"]) .glass-tabs .glass { background: #26262b; border-color: #34343a; box-shadow: none; }
+:root[data-dark="graphite"]:not([data-theme="light"]) .glass-tabs .glass::before { background: none; }
+:root[data-dark="graphite"]:not([data-theme="light"]) nav.tabs.glass-tabs { box-shadow: none; }
+:root[data-dark="graphite"]:not([data-theme="light"]) .card { background: #161618; border-color: #26262b; box-shadow: none; }
+:root[data-dark="graphite"]:not([data-theme="light"]) button.primary, :root[data-dark="graphite"]:not([data-theme="light"]) .btn.primary { background: #2fbf62; color: #06210f; border-color: transparent; }
+:root[data-dark="graphite"]:not([data-theme="light"]) button.primary:hover:not(:disabled) { background: #4ade80; }
+
+/* Dashboard (normally navy + yellow) */
+:root[data-dark="graphite"]:not([data-theme="light"]) .dash-ia {
+  --lav: #6c6c75; --track: #ffffff12; --row: #ffffff08; --yellow: #4ade80; --navy: #161618; --navy2: #1f1f23;
+  --paper: #0f0f10; --card: #161618; --raised: #ffffff0a; --panel: #161618;
+  --ink: #ededef; --ink-2: #c9c9cf; --muted: #9a9aa3; --line: #26262b; --line-2: #34343a;
+  --accent: #4ade80; --accent-from: #4ade80; --accent-to: #2fbf62; --accent-soft: #4ade8022; --accent-text: #4ade80; --accent-glow: #2fbf6255; --on-accent: #06210f;
+  --good: #4ade80; --good-soft: #4ade8022; --warn: #fbbf24; --warn-soft: #fbbf2422; --bad: #f97066; --bad-soft: #f9706622; --info: #7dd3fc;
+  --c1: #4ade80; --c2: #ededef; --c3: #6c6c75; --c4: #7dd3fc; --c5: #f97066; --c6: #fbbf24;
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; --display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:root[data-dark="graphite"]:not([data-theme="light"]) body:has(.dash-ia) { background: #0f0f10; }
+@media (max-width: 760px) {
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child {
+    background: radial-gradient(90% 120% at 100% 0%, #2fbf6233 0%, transparent 55%), #1b1b1e; box-shadow: inset 0 0 0 1px #34343a; }
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child::after { background: #4ade80; box-shadow: 0 0 0 6px #4ade8026; }
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child .k,
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child .s { color: #9a9aa3; }
+}
+
+/* Chats (normally purple) */
+:root[data-dark="graphite"]:not([data-theme="light"]) .chats {
+  --ib: #2fbf62; --ib-deep: #25a654; --ib-text: #4ade80; --ib-soft: #4ade801f; --ib-soft-2: #4ade8033; --ib-line: #4ade8055; --ib-out-meta: #c9c9cf;
+  --ib-ink: #ededef; --ib-muted: #9a9aa3; --ib-wall: #0f0f10; --ib-card: #161618; --ib-edge: #26262b;
+  --accent: #2fbf62; --accent-from: #4ade80; --accent-to: #2fbf62; --accent-soft: #4ade801f; --accent-text: #4ade80; --accent-glow: #2fbf6255; --on-accent: #06210f;
+  --brand: #2fbf62; --on-brand: #06210f;
+  --cv-wall: #0f0f10; --cv-bub: #1f1f23; --cv-bub-out: #163322; --cv-ink: #ededef; --cv-meta: #6c6c75; --cv-line: #26262b; --cv-chip: #1f1f23; --cv-send: #2fbf62;
+}

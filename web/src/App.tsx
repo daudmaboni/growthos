@@ -1,7 +1,7 @@
 import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
 import { AppTip } from "./PhoneApp";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { enterShell, enterTiles, shake, switchTheme, usePageEnter, select } from "./motion";
+import { enterShell, enterTiles, shake, switchTheme, applyThemeMode, usePageEnter, select, type ThemeMode } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
 import { AuthScreen, SetNewPassword, LangToggle, initialLang, tr } from "./Auth";
@@ -31,17 +31,19 @@ export default function App() {
   const [ws, setWs] = useState<Workspace | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    try { return localStorage.getItem("itaos-theme") === "dark" ? "dark" : "light"; } catch { return "light"; } // light is the default
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try { const t = localStorage.getItem("itaos-theme"); return t === "dark" || t === "graphite" ? t : "light"; } catch { return "light"; } // light is the default
   });
-  useEffect(() => { document.documentElement.dataset.theme = theme; }, []);
+  useEffect(() => { applyThemeMode(theme); }, []);
   const themeBtn = useRef<HTMLButtonElement>(null);
-  const setThemeFrom = (n: "dark" | "light", from?: HTMLElement | null) => {
+  const setThemeFrom = (n: ThemeMode, from?: HTMLElement | null) => {
     if (n === theme) return;
     switchTheme(n, from ?? themeBtn.current); // circular wipe from the button, then the attribute + storage are set
     setTheme(n);
   };
-  const toggleTheme = () => setThemeFrom(theme === "dark" ? "light" : "dark");
+  // One button cycles the three looks: light → graphite (Dualhook-style dark) → navy dark → light.
+  const NEXT: Record<ThemeMode, ThemeMode> = { light: "graphite", graphite: "dark", dark: "light" };
+  const toggleTheme = () => setThemeFrom(NEXT[theme]);
   const setLanguage = async (l: "sw" | "en") => {
     if (!ws || ws.language === l) return;
     setWs({ ...ws, language: l }); // instant; everyone in the workspace sees the new default
@@ -113,7 +115,9 @@ export default function App() {
           <div className="seg" role="group" aria-label="Language">
             {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={ws.language === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
           </div>
-          <button ref={themeBtn} className="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title="Light / dark">{theme === "dark" ? "☀" : "☾"}</button>
+          <button ref={themeBtn} className="icon" onClick={toggleTheme}
+            aria-label={theme === "light" ? "Switch to graphite dark" : theme === "graphite" ? "Switch to navy dark" : "Switch to light mode"}
+            title={theme === "light" ? "Light · tap for graphite dark" : theme === "graphite" ? "Graphite dark · tap for navy dark" : "Navy dark · tap for light"}>{theme === "light" ? "☾" : theme === "graphite" ? "◐" : "☀"}</button>
           {isPlatformAdmin && <a href="/app/admin" className="icon" aria-label="Pondi admin" title="Pondi admin"><AdminIcon /></a>}
           <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>

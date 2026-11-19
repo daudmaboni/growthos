@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./dashboard.css";
 import "./mobile.css";
+import "./graphite.css";
 import { startPwa } from "./pwa";
 
 startPwa();

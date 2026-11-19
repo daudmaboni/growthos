@@ -131,11 +131,23 @@ export function enterShell(root: HTMLElement | null) {
 
 /* ---------- theme switch: circular wipe from the toggle button ---------- */
 
-export function switchTheme(next: "light" | "dark", fromEl?: HTMLElement | null) {
+/** Three looks: "graphite" (neutral near-black, Dualhook-style), "dark" (navy) and "light".
+ *  Both darks keep data-theme="dark" so every dark rule applies; graphite adds data-dark="graphite" on top. */
+export type ThemeMode = "graphite" | "dark" | "light";
+export function applyThemeMode(mode: ThemeMode) {
   const html = document.documentElement;
-  const apply = () => { html.dataset.theme = next; try { localStorage.setItem("itaos-theme", next); } catch { /* storage unavailable */ } };
+  html.dataset.theme = mode === "light" ? "light" : "dark";
+  if (mode === "graphite") html.dataset.dark = "graphite"; else delete html.dataset.dark;
+}
+export const currentThemeMode = (): ThemeMode => {
+  const html = document.documentElement;
+  return html.dataset.theme === "light" ? "light" : html.dataset.dark === "graphite" ? "graphite" : "dark";
+};
+export function switchTheme(next: ThemeMode, fromEl?: HTMLElement | null) {
+  const html = document.documentElement;
+  const apply = () => { applyThemeMode(next); try { localStorage.setItem("itaos-theme", next); } catch { /* storage unavailable */ } };
   const svt = (document as any).startViewTransition as undefined | ((cb: () => void) => { ready: Promise<void> });
-  if (html.dataset.theme === next) return;
+  if (currentThemeMode() === next) return;
   if (!svt || reduced.matches) { apply(); return; }
   const r = fromEl?.getBoundingClientRect();
   const x = r ? r.left + r.width / 2 : innerWidth - 40;

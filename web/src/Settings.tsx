@@ -9,7 +9,7 @@ const TABS: [Tab, string, string][] = [["business", "Business", "Biashara"], ["p
 const CURRENCIES: [string, string, string][] = [["TZS", "Tanzanian shillings", "Shilingi za Tanzania"], ["KES", "Kenyan shillings", "Shilingi za Kenya"], ["UGX", "Ugandan shillings", "Shilingi za Uganda"], ["RWF", "Rwandan francs", "Faranga za Rwanda"]];  // customers pay in local money; USD is for ad spend only, never for sales
 const TIMEZONES: [string, string][] = [["Africa/Dar_es_Salaam", "Tanzania (Dar es Salaam)"], ["Africa/Nairobi", "Kenya (Nairobi)"], ["Africa/Kampala", "Uganda (Kampala)"], ["Africa/Kigali", "Rwanda (Kigali)"], ["Africa/Johannesburg", "South Africa"], ["Europe/London", "UK (London)"], ["UTC", "UTC"]];
 
-export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "dark" | "light"; onTheme: (t: "dark" | "light", from?: HTMLElement | null) => void }) {
+export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "graphite" | "dark" | "light"; onTheme: (t: "graphite" | "dark" | "light", from?: HTMLElement | null) => void }) {
   const [tab, setTab] = useState<Tab>(() => { const t = location.hash.split("/")[1]; return t === "rates" ? "rules" : TABS.some(([k]) => k === t) ? (t as Tab) : "business"; });
   const [email, setEmail] = useState("");
   const lang = ws.language;
@@ -136,14 +136,15 @@ function PaymentsCurrency({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace)
   );
 }
 
-function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "dark" | "light"; onTheme: (t: "dark" | "light", from?: HTMLElement | null) => void; T: Tr }) {
+function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: Workspace) => void; theme: "graphite" | "dark" | "light"; onTheme: (t: "graphite" | "dark" | "light", from?: HTMLElement | null) => void; T: Tr }) {
   const { msg, busy, save } = useSave(ws, onWs);
   return (
     <>
       <section className="card">
         <div><h2>{T("Theme", "Mandhari")}</h2><span className="small muted">{T("Saved on this device only.", "Inahifadhiwa kwenye kifaa hiki tu.")}</span></div>
         <div className="seg" role="group" aria-label="Theme">
-          <button type="button" className={theme === "dark" ? "on" : ""} aria-pressed={theme === "dark"} onClick={(e) => onTheme("dark", e.currentTarget)}>{T("Dark", "Giza")}</button>
+          <button type="button" className={theme === "graphite" ? "on" : ""} aria-pressed={theme === "graphite"} onClick={(e) => onTheme("graphite", e.currentTarget)}>{T("Graphite", "Grafiti")}</button>
+          <button type="button" className={theme === "dark" ? "on" : ""} aria-pressed={theme === "dark"} onClick={(e) => onTheme("dark", e.currentTarget)}>{T("Navy", "Bluu")}</button>
           <button type="button" className={theme === "light" ? "on" : ""} aria-pressed={theme === "light"} onClick={(e) => onTheme("light", e.currentTarget)}>{T("Light", "Mwanga")}</button>
         </div>
       </section>
