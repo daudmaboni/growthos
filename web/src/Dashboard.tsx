@@ -74,7 +74,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   if ((loading && !g.cached) || !mx || !prev) return (
     <div className="skeletons" aria-busy="true" aria-label="Loading">
       
-        {showPaid && mx && <PaidOrders ws={ws} orders={g.orders} period={mx.period} adNames={adNames} onClose={() => setShowPaid(false)} />}<div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
+      <div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
       <div className="two"><div className="skeleton" style={{ minHeight: 300 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>
     </div>
   );
@@ -129,6 +129,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(mx.medianFirstReply.value)} s={`${mx.over1h.value} ${T("waited over 1 h", "zilisubiri > saa 1")}${mx.noReply.value ? ` · ${mx.noReply.value} ${T("no reply", "hazikujibiwa")}` : ""}`} cls={mx.medianFirstReply.value != null && mx.medianFirstReply.value > 900 ? "flag" : ""} src="observed" />
           <Kpi k={T("Warm, waiting for follow-up", "Wenye nia, wanasubiri ufuatiliaji")} v={fmt(mx.warmNoFollowUp.value)} n={mx.warmNoFollowUp.value} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${mx.warmNoFollowUp.n} ${T("warm", "wenye nia")} · ${T("rule", "kanuni")}: ${ws.follow_up_hours} h`} cls={mx.warmNoFollowUp.value ? "flag" : "ok"} src="inferred" />
         </div>
+        {showPaid && <PaidOrders ws={ws} orders={g.orders} period={mx.period} adNames={adNames} onClose={() => setShowPaid(false)} />}
 
         <div className="two">
           <section className="card">
