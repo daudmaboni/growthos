@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Logo from "./Logo";
 import { hidePreloader } from "./preloader";
 import "./home.css";
@@ -25,7 +25,15 @@ export default function Home() {
     return "sw";
   });
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const pick = (l: Lang) => { setLang(l); try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ } };
+  const [swapping, setSwapping] = useState(false);
+  // Switching language: the text fades and blurs out, the words change, then it fades back in.
+  const pick = (l: Lang) => {
+    if (l === lang || swapping) return;
+    try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { setLang(l); return; }
+    setSwapping(true);
+    window.setTimeout(() => { setLang(l); requestAnimationFrame(() => setSwapping(false)); }, 220);
+  };
 
   useEffect(() => {
     hidePreloader();
@@ -35,17 +43,37 @@ export default function Home() {
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   useEffect(() => { document.body.style.overflow = menu ? "hidden" : ""; }, [menu]);
 
+  // Video card: tilted back when it enters the screen, flat by the time its top reaches 25% of the screen.
+  const tiltRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tiltRef.current;
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const vh = innerHeight, top = el.parentElement!.getBoundingClientRect().top;
+      let p = Math.min(1, Math.max(0, (vh - top) / (vh * 0.75)));
+      p = 1 - Math.pow(1 - p, 2);
+      el.style.transform = `rotateX(${(26 * (1 - p)).toFixed(2)}deg) scale(${(0.92 + 0.08 * p).toFixed(3)})`;
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(run); };
+    run();
+    addEventListener("scroll", on, { passive: true }); addEventListener("resize", on);
+    return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, []);
+
   const go = () => setMenu(false);
   const pilot = pilotLink(lang);
   const Lang = ({ dark }: { dark?: boolean }) => (
-    <div className={"hp-lang" + (dark ? " dark" : "")} role="group" aria-label="Language">
+    <div className={"hp-lang" + (dark ? " dark" : "") + (lang === "en" ? " is-en" : "")} role="group" aria-label="Language">
+      <span className="hp-lang-thumb" aria-hidden="true" />
       <button className={lang === "sw" ? "on" : ""} onClick={() => pick("sw")} aria-pressed={lang === "sw"}>SW</button>
       <button className={lang === "en" ? "on" : ""} onClick={() => pick("en")} aria-pressed={lang === "en"}>EN</button>
     </div>
   );
 
   return (
-    <div className="hp">
+    <div className={"hp" + (swapping ? " swapping" : "")}>
       <header className="hp-bar">
         <div className="hp-w hp-bar-in">
           <a href="/" className="hp-logo" aria-label="itaOS home"><Logo size={30} /><span>itaOS</span></a>
@@ -108,33 +136,45 @@ export default function Home() {
               <div className="hp-float f3">{T("Ad → Sale", "Tangazo → Mauzo")}<b>{T("3 days", "Siku 3")}</b></div>
             </div>
           </div>
-        {/* VIDEO (inside the green hero) */}
-          <div className="hp-w hp-video">
-            <div className="hp-video-card">
-              <video autoPlay muted loop playsInline preload="metadata" poster="/video/itaos-kinetic-poster.jpg"
-                aria-label={T("itaOS in 18 seconds: customers see your ad, message you on WhatsApp and pay with Lipa namba. itaOS shows which ad made the sale.",
-                  "itaOS kwa sekunde 18: wateja wanaona tangazo lako, wanakutumia ujumbe WhatsApp na kulipa kwa Lipa namba. itaOS inaonyesha tangazo gani lilileta mauzo.")}>
-                <source src="/video/itaos-kinetic.webm" type="video/webm" />
-                <source src="/video/itaos-kinetic.mp4" type="video/mp4" />
-              </video>
-            </div>
-          </div>
-
         </section>
 
-        {/* REAL RESULT — Kayani Herbs (pilot business), 19 Nov 2026, figures from itaOS; shown with Kayani's permission */}
+        {/* VIDEO — on the white page, tilted back like ponditech.com and straightening as it scrolls in */}
+        <section className="hp-video">
+          <div className="hp-w">
+            <div className="hp-stage">
+              <div className="hp-video-card" ref={tiltRef}>
+                <video autoPlay muted loop playsInline preload="metadata" poster="/video/itaos-kinetic-poster.jpg"
+                  aria-label={T("itaOS in 18 seconds: customers see your ad, message you on WhatsApp and pay with Lipa namba. itaOS shows which ad made the sale.",
+                    "itaOS kwa sekunde 18: wateja wanaona tangazo lako, wanakutumia ujumbe WhatsApp na kulipa kwa Lipa namba. itaOS inaonyesha tangazo gani lilileta mauzo.")}>
+                  <source src="/video/itaos-kinetic.webm" type="video/webm" />
+                  <source src="/video/itaos-kinetic.mp4" type="video/mp4" />
+                </video>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* REAL RESULT — Kayani Herbs (pilot business), 19 Nov 2026, figures read from the itaOS database; shown with Kayani's permission */}
         <section className="hp-proof">
           <div className="hp-w">
-            <p className="hp-proof-k">{T("A real day on itaOS", "Siku halisi kwenye itaOS")}</p>
-            <h2>{T("Kayani Herbs, 19 November 2026", "Kayani Herbs, 19 Novemba 2026")}</h2>
-            <div className="hp-proof-grid">
-              <div><b>TSh 69,000</b><span>{T("spent on Facebook ads", "zilitumika kwenye matangazo ya Facebook")}</span></div>
-              <div><b>60</b><span>{T("new WhatsApp chats from those ads", "chat mpya za WhatsApp kutoka kwenye matangazo hayo")}</span></div>
-              <div><b>TSh 375,000</b><span>{T("paid by customers who came from the ads (2 orders)", "zililipwa na wateja waliotoka kwenye matangazo (oda 2)")}</span></div>
-              <div className="hi"><b>≈ 5×</b><span>{T("back for every shilling spent on ads that day", "zilirudi kwa kila shilingi iliyotumika kwenye matangazo siku hiyo")}</span></div>
+            <div className="hp-proof-card">
+              <div className="hp-proof-l">
+                <span className="hp-proof-k"><i aria-hidden="true" />{T("Real result", "Matokeo halisi")} · Kayani Herbs</span>
+                <h2>{lang === "sw"
+                  ? <>Siku moja. <em>TSh 69,000</em> za matangazo zilileta <em>TSh 375,000</em> za mauzo.</>
+                  : <>One day. <em>TSh 69,000</em> in ads brought <em>TSh 375,000</em> in sales.</>}</h2>
+                <p>{T("Thursday 19 November 2026, read straight from Kayani Herbs' itaOS dashboard and shared with their permission.",
+                  "Alhamisi 19 Novemba 2026, kutoka moja kwa moja kwenye dashibodi ya itaOS ya Kayani Herbs, kwa ruhusa yao.")}</p>
+                <div className="hp-proof-badge"><b><Count to={5.4} decimals={1} />×</b><span>{T("back for every shilling spent on ads that day", "zilirudi kwa kila shilingi iliyotumika kwenye matangazo siku hiyo")}</span></div>
+              </div>
+              <ol className="hp-flow" aria-label={T("From ad to payment", "Kutoka tangazo hadi malipo")}>
+                <li><span className="hp-flow-dot" /><div><small>{T("Spent on Facebook ads", "Matumizi ya matangazo ya Facebook")}</small><b>TSh <Count to={69000} /></b></div></li>
+                <li><span className="hp-flow-dot" /><div><small>{T("New WhatsApp chats from those ads", "Chat mpya za WhatsApp kutoka matangazo hayo")}</small><b><Count to={60} /></b></div></li>
+                <li><span className="hp-flow-dot" /><div><small>{T("Customers from the ads who paid", "Wateja wa matangazo waliolipa")}</small><b><Count to={2} /></b></div></li>
+                <li className="win"><span className="hp-flow-dot" /><div><small>{T("Paid by those customers", "Walicholipa wateja hao")}</small><b>TSh <Count to={375000} /></b></div></li>
+              </ol>
             </div>
-            <p className="hp-proof-n">{T("One day's figures from Kayani Herbs' itaOS dashboard, shared with their permission. Results differ from day to day and business to business.",
-              "Takwimu za siku moja kutoka dashibodi ya itaOS ya Kayani Herbs, zimeshirikiwa kwa ruhusa yao. Matokeo yanatofautiana kila siku na kila biashara.")}</p>
+            <p className="hp-proof-n">{T("One day's figures. Results differ from day to day and from business to business.", "Takwimu za siku moja. Matokeo yanatofautiana kila siku na kila biashara.")}</p>
           </div>
         </section>
 
@@ -346,4 +386,31 @@ function Faq({ q, a }: { q: string; a: string }) {
       <p>{a}</p>
     </details>
   );
+}
+
+/** A number that counts up once it scrolls into view. */
+function Count({ to, decimals = 0 }: { to: number; decimals?: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const fmt = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) { el.textContent = fmt(to); return; }
+    el.textContent = fmt(0);
+    let raf = 0;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      const t0 = performance.now(), dur = 1300;
+      const step = (t: number) => {
+        const k = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - k, 3));
+        el.textContent = fmt(decimals ? v : Math.round(v));
+        if (k < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, { threshold: 0.4 });
+    io.observe(el);
+    return () => { io.disconnect(); cancelAnimationFrame(raf); };
+  }, [to, decimals]);
+  return <span ref={ref} className="num">{fmt(to)}</span>;
 }
