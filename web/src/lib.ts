@@ -42,6 +42,7 @@ export type Order = {
   status: "pending" | "paid" | "refunded" | "cancelled"; fulfillment_status: "not_applicable" | "not_shipped" | "shipped" | "delivered" | "returned";
   product: string | null; notes: string | null; occurred_at: string; paid_at: string | null; provenance: "manual" | "csv_import" | "provider" | "inferred";
   inferred_from: string | null; external_ref: string | null; created_by: string | null; updated_by: string | null; created_at: string; updated_at: string;
+  conv_source?: string | null; // source of the linked chat (any start date), joined in by the dashboard
 };
 export const orderNet = (o: Pick<Order, "amount" | "discount" | "refund_amount">) => Number(o.amount) - Number(o.discount) - Number(o.refund_amount);
 

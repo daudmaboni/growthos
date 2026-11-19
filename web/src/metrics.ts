@@ -29,7 +29,7 @@ export type FunnelMetrics = {
   spend: Metric; impressions: Metric; clicks: Metric; platformConversations: Metric;
   chats: Metric; adChats: Metric; organicChats: Metric; unknownChats: Metric;
   replied: Metric; priced: Metric; paymentSignals: Metric; unconfirmedSignals: Metric;
-  attributedSales: Metric; attributedAdSales: Metric; attributedRevenue: Metric; attributedAdRevenue: Metric;
+  attributedSales: Metric; attributedAdSales: Metric; attributedRevenue: Metric; attributedAdRevenue: Metric; adCustomerRevenue: Metric; adCustomerOrders: Metric; returnOnAdSpendAllAdCustomers: Metric;
   ordersPaid: Metric; revenue: Metric; revenueManual: Metric; revenueImported: Metric; ordersUnlinked: Metric;
   replyRate: Metric; priceRate: Metric; signalRate: Metric; saleRate: Metric; adSaleRate: Metric;
   costPerPlatformConversation: Metric; costPerAdChat: Metric; costPerQualifiedInquiry: Metric; costPerAttributedSale: Metric;
@@ -117,6 +117,9 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
   const revenueManual = net(paid.filter((o) => o.provenance === "manual"));
   const revenueImported = net(paid.filter((o) => o.provenance === "csv_import" || o.provenance === "provider"));
   const unlinked = paid.filter((o) => !o.conversation_id).length;
+  // Paid this period by customers whose chat came from an ad, whenever that chat started (e.g. clicked in October, paid in November).
+  const adCustomerPaid = paid.filter((o) => o.conv_source === "ad");
+  const adCustomerRevenue = net(adCustomerPaid);
 
   const frt = convs.map((c) => c.first_response_sec).filter((x): x is number => x != null);
   const warm = convs.filter((c) => (c.kito_temp ? c.kito_temp !== "cold" : c.warm) && c.outcome !== "sold");
@@ -147,6 +150,8 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
     costPerQualifiedInquiry: spend > 0 ? ratio(spend, adChats.filter((c) => c.price_shared).length, "matched") : m(null, "matched", { note: "no spend" }),
     costPerAttributedSale: spend > 0 ? ratio(spend, attributedAd.length, "matched") : m(null, "matched", { note: "no spend" }),
     returnOnAdSpend: spend > 0 && fx != null ? m(attributedAdRevenue / (spend * fx), "matched", { n: attributedAdRevenue, d: spend * fx }) : m(null, "matched", { note: spend > 0 ? "needs exchange rate" : "no spend" }),
+    adCustomerRevenue: m(adCustomerRevenue, "matched"), adCustomerOrders: m(adCustomerPaid.length, "matched"),
+    returnOnAdSpendAllAdCustomers: spend > 0 && fx != null ? m(adCustomerRevenue / (spend * fx), "matched", { n: adCustomerRevenue, d: spend * fx }) : m(null, "matched", { note: spend > 0 ? "needs exchange rate" : "no spend" }),
     contribution,
     medianFirstReply: m(median(frt), "observed", { n: frt.length }), over1h: m(frt.filter((x) => x > 3600).length, "observed"),
     noReply: m(convs.filter((c) => c.stage === "no_reply").length, "observed"),

@@ -495,11 +495,13 @@ nav.tabs.glass-tabs a.on { background: none; color: var(--ink); }
 
 /* Fill a missing setting right on the KPI card that needs it */
 .kpi-fix { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-2); }
-.kpi-set { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; }
-.kpi-set label { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.kpi-set label > span:first-child { white-space: nowrap; font-weight: 600; }
-.kpi-set input { width: 100%; min-width: 0; padding: 5px 8px; font-size: 13px; }
-.kpi-hint { grid-column: 1 / -1; line-height: 1.35; }
+.kpi-set { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kpi-set-label { font-weight: 600; }
+.kpi-set-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kpi-set-row input { flex: 1 1 auto; width: auto; min-width: 0; padding: 5px 8px; font-size: 13px; }
+.kpi-set-row button { flex: none; }
+.kpi-hint { line-height: 1.35; }
+.kpi-s2 { margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line-2); }
 
 /* ===== Chats inbox: list on the left, WhatsApp-style chat on the right (full screen on a phone) ===== */
 .inbox { display: grid; gap: 12px; align-items: start; }

@@ -71,7 +71,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
           supabase.from("ad_insights_daily").select("day,spend,currency,impressions,clicks,messaging_conversations").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(20000),
-          supabase.from("orders").select("*").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000),
+          supabase.from("orders").select("*, conv:conversations!orders_conversation_workspace_fk(source)").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000),
           supabase.from("expenses").select("day,amount,currency,category").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(5000),
           supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id),
           supabase.from("wa_numbers").select("phone_number_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id),
@@ -79,10 +79,14 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
           supabase.from("import_batches").select("kind,created_at,created_count").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(5),
         ]);
         if (!live) return;
+        // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
+        let o2: any = o;
+        if (o.error) o2 = await supabase.from("orders").select("*").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000);
+        if (!live) return;
         loadedKey.current = key;
-        const firstErr = [a, ap, d, o, e, cn, nm, h, ib].find((r) => r.error)?.error;
+        const firstErr = [a, ap, d, o2, e, cn, nm, h, ib].find((r) => r.error)?.error;
         const daily = ((d.data as any[]) ?? []).map((r) => ({ day: r.day, spend: Number(r.spend), currency: r.currency, impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks ?? 0), messaging_conversations: Number(r.messaging_conversations ?? 0) }));
-        const orders = (o.data as Order[]) ?? [];
+        const orders = (((o2.data as any[]) ?? []).map(({ conv, ...r }) => ({ ...r, conv_source: conv?.source ?? null }))) as Order[];
         const expenses = ((e.data as any[]) ?? []).map((x) => ({ day: x.day, amount: Number(x.amount), currency: x.currency, category: x.category }));
         const base = { ws, conversations: c, daily, orders, expenses };
         const mx = computeFunnel({ ...base, period, ads: (a.data as AdPerf[]) ?? [] });
