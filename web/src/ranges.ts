@@ -6,7 +6,7 @@ import type { Period } from "./metrics";
 export type PresetKey =
   | "today" | "yesterday" | "today_yesterday"
   | "last_7" | "last_14" | "last_28" | "last_30" | "last_90"
-  | "this_week" | "last_week" | "this_month" | "last_month";
+  | "this_week" | "last_week" | "this_month" | "last_month" | "all";
 export type RangeSel = { key: PresetKey } | { key: "custom"; from: string; to: string };
 
 export const PRESETS: { key: PresetKey; en: string; sw: string }[] = [
@@ -22,6 +22,7 @@ export const PRESETS: { key: PresetKey; en: string; sw: string }[] = [
   { key: "this_month", en: "This month", sw: "Mwezi huu" },
   { key: "last_month", en: "Last month", sw: "Mwezi uliopita" },
   { key: "last_90", en: "Last 90 days", sw: "Siku 90 zilizopita" },
+  { key: "all", en: "All time", sw: "Tangu mwanzo" },
 ];
 
 const D = 864e5;
@@ -35,15 +36,21 @@ function span(from: string, to: string, label: string): Period {
   return { from, to, days: daysBetween(from, to), label };
 }
 
-/** The local-day period a selection covers, given today's local date (YYYY-MM-DD). */
-export function resolveRange(sel: RangeSel, today: string): Period {
+/** The local-day period a selection covers, given today's local date (YYYY-MM-DD).
+ *  `start` is the workspace's first day of data (first chat or first ad day), used by "All time". */
+export function resolveRange(sel: RangeSel, today: string, start?: string | null): Period {
   const yest = addDays(today, -1);
   const dow = toDate(today).getUTCDay(); // 0 = Sunday
   const weekStart = addDays(today, -dow);
   const [y, m] = today.split("-").map(Number);
   const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
   switch (sel.key) {
-    case "custom": return span(sel.from > today ? today : sel.from, sel.to > today ? today : sel.to, "current");
+    case "custom": {
+      // A custom range always has both ends; if one is ever missing, fall back to yesterday instead of breaking the page.
+      const f = /^\d{4}-\d{2}-\d{2}$/.test(sel.from ?? "") ? sel.from : yest, t = /^\d{4}-\d{2}-\d{2}$/.test(sel.to ?? "") ? sel.to : f;
+      return span(f > today ? today : f, t > today ? today : t, "current");
+    }
+    case "all": return span(start && start < today ? start : addDays(today, -364), today, "current");
     case "today": return span(today, today, "current");
     case "yesterday": return span(yest, yest, "current");
     case "today_yesterday": return span(yest, today, "current");

@@ -100,7 +100,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
         </div>
         <div className="row">
           {g.cached && <span className="small muted" aria-live="polite"><span className="kito-spin sm" aria-hidden /> {T("Updating…", "Inasasisha…")}</span>}
-          <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
+          <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} start={g.dataStart} />
         </div>
       </div>
       <FilterBar value={filters} onChange={setFilters} options={g.options ?? { campaigns: [], ads: [], products: [] }} lang={lang} />

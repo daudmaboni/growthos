@@ -21,21 +21,24 @@ function lockScroll() {
 
 const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 
-export default function DateRange({ value, onChange, today, tz, lang }: { value: RangeSel; onChange: (s: RangeSel) => void; today: string; tz: string; lang: Lang }) {
+/** `start` (the first day of data) turns on the "All time" choice; pages without it don't offer it. */
+export default function DateRange({ value, onChange, today, tz, lang, start }: { value: RangeSel; onChange: (s: RangeSel) => void; today: string; tz: string; lang: Lang; start?: string | null }) {
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<RangeSel>(value);
   const [anchor, setAnchor] = useState<string | null>(null); // first click of a custom range
   const [hover, setHover] = useState<string | null>(null);
-  const period = resolveRange(value, today);
-  const dp = resolveRange(draft, today);
+  const allowAll = start !== undefined;
+  const R = (s: RangeSel) => resolveRange(s, today, start);
+  const period = R(value);
+  const dp = R(draft);
   const [right, setRight] = useState(monthOf(dp.to)); // month shown on the right
   const box = useRef<HTMLDivElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
-  const recent = useMemo(() => (open ? recentRanges() : []), [open]);
+  const recent = useMemo(() => (open ? recentRanges().filter((k) => allowAll || k !== "all") : []), [open, allowAll]);
 
-  const show = () => { setDraft(value); setAnchor(null); setRight(monthOf(resolveRange(value, today).to)); setOpen(true); };
+  const show = () => { setDraft(value); setAnchor(null); setRight(monthOf(R(value).to)); setOpen(true); };
   const close = () => {
     setAnchor(null);
     setClosing(true); // let the dialog fade out before it unmounts
@@ -64,7 +67,11 @@ export default function DateRange({ value, onChange, today, tz, lang }: { value:
 
   const radio = (key: RangeSel["key"]) => (
     <label className={"dr-opt" + (draft.key === key && !anchor ? " on" : "")} key={key}>
-      <input type="radio" name="dr-preset" checked={draft.key === key && !anchor} onChange={() => { const s = { key } as RangeSel; setDraft(s); setAnchor(null); setRight(monthOf(resolveRange(s, today).to)); }} />
+      <input type="radio" name="dr-preset" checked={draft.key === key && !anchor} onChange={() => {
+        // Custom starts from the dates already chosen, so the calendar always has a real range to show.
+        const s: RangeSel = key === "custom" ? { key: "custom", from: dp.from, to: dp.to } : ({ key } as RangeSel);
+        setDraft(s); setAnchor(null); setRight(monthOf(R(s).to));
+      }} />
       <span>{presetLabel(key, lang)}</span>
     </label>
   );
@@ -104,7 +111,7 @@ export default function DateRange({ value, onChange, today, tz, lang }: { value:
         <div className={"dr-pop dr-modal" + (closing ? " closing" : "")} ref={pop} role="dialog" aria-modal="true" aria-label={T("Choose dates", "Chagua tarehe")} data-noswipe>
           <div className="dr-list">
             {recent.length > 0 && <><div className="dr-h">{T("Recently used", "Ulizotumia karibuni")}</div>{recent.map(radio)}<hr /></>}
-            {PRESETS.map((p) => radio(p.key))}
+            {PRESETS.filter((p) => allowAll || p.key !== "all").map((p) => radio(p.key))}
             {radio("custom")}
           </div>
           <div className="dr-cal">
@@ -115,7 +122,9 @@ export default function DateRange({ value, onChange, today, tz, lang }: { value:
             <div className="dr-months" onMouseLeave={() => setHover(null)}>{month(shiftMonth(right, -1))}{month(right)}</div>
             <div className="dr-picked">
               <span className="chip">{anchor ? T("Now pick the end date", "Sasa chagua tarehe ya mwisho") : rangeText(dp, lang)}</span>
-              {!anchor && <span className="small muted">{dp.days} {dp.days === 1 ? T("day", "siku") : T("days", "siku")} · {T("compared with the", "ikilinganishwa na")} {dp.days} {T("before", "kabla")}</span>}
+              {!anchor && (draft.key === "all"
+                ? <span className="small muted">{dp.days} {T("days", "siku")} · {T("since your first chat or ad", "tangu chat au tangazo lako la kwanza")}</span>
+                : <span className="small muted">{dp.days} {dp.days === 1 ? T("day", "siku") : T("days", "siku")} · {T("compared with the", "ikilinganishwa na")} {dp.days} {T("before", "kabla")}</span>)}
             </div>
           </div>
           {/* outside the calendar so it stays pinned to the bottom when the dialog scrolls on small screens */}

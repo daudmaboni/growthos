@@ -55,7 +55,7 @@ export default function Report({ ws }: { ws: Workspace }) {
           <h2>{T("Weekly diagnosis", "Uchunguzi wa wiki")}</h2>
           <div className="sub"><span>{mx.period.from} → {mx.period.to}</span><span>{T("vs", "dhidi ya")} {prev.period.from} → {prev.period.to}</span><span>{ws.timezone} · {ws.currency}</span></div>
         </div>
-        <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
+        <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} start={g.dataStart} />
       </div>
       <FilterBar value={filters} onChange={setFilters} options={g.options} lang={lang} />
       {g.err && <p className="err">{g.err}</p>}

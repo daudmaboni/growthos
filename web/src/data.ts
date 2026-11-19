@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase, Workspace, Outcome, AdPerf, Order, localDay, callFn } from "./lib";
 import { diagnose, Finding } from "./diagnosis";
 import { computeFunnel, comparisonOf, FunnelMetrics, DailyInsight, Expense } from "./metrics";
-import { RangeSel, resolveRange, daysBetween } from "./ranges";
+import { RangeSel, resolveRange, daysBetween, addDays } from "./ranges";
 
 // Ad spend is read from a local copy of Meta's daily numbers. When a chosen range (with its
 // comparison period) reaches further back than that copy, pull the missing days from Meta once,
@@ -25,6 +25,23 @@ async function backfillAds(ws: string, from: string, today: string, earliest: st
     return true;
   } catch { return false; }
   finally { backfilling.delete(ws); }
+}
+
+/** First day with data: the first WhatsApp chat or the first day of ad data, whichever is earlier. Kept for 10 minutes. */
+const startCache = new Map<string, { at: number; day: string | null }>();
+async function dataStartOf(ws: string, tz: string): Promise<string | null> {
+  const hit = startCache.get(ws);
+  if (hit && Date.now() - hit.at < 600_000) return hit.day;
+  const [c, a] = await Promise.all([
+    supabase.from("conversations").select("started_at").eq("workspace_id", ws).not("started_at", "is", null).order("started_at", { ascending: true }).limit(1),
+    supabase.from("ad_insights_daily").select("day").eq("workspace_id", ws).order("day", { ascending: true }).limit(1),
+  ]);
+  const chat = ((c.data as any[]) ?? [])[0]?.started_at as string | undefined;
+  const ad = ((a.data as any[]) ?? [])[0]?.day as string | undefined;
+  const days = [chat ? localDay(chat, tz) : null, ad ?? null].filter(Boolean) as string[];
+  const day = days.length ? days.sort()[0] : null;
+  startCache.set(ws, { at: Date.now(), day });
+  return day;
 }
 
 export type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
@@ -70,6 +87,7 @@ export type GrowthData = {
   findings: Finding[];                       // top of the weekly diagnosis for this period
   objections: [string, number][];            // objections in unsold chats started this period
   allTime: { orders: number; revenue: number; chats: number } | null;   // every recorded sale, any date
+  dataStart: string | null;                  // first day with a chat or ad data (start of "All time")
   cached: boolean;                           // numbers shown are from the last visit; fresh ones are loading
   options: FilterOptions;                    // choices for the filter bar (from all data, not the filtered view)
 };
@@ -157,7 +175,7 @@ export function objectionTally(convs: Outcome[], period: { from: string; to: str
   return Object.entries(tally).sort((a, b) => b[1] - a[1]);
 }
 
-const EMPTY = (tz: string): GrowthData => ({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), tz), findings: [], objections: [], allTime: null, cached: false, options: { campaigns: [], ads: [], products: [] } });
+const EMPTY = (tz: string): GrowthData => ({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), tz), findings: [], objections: [], allTime: null, dataStart: null, cached: false, options: { campaigns: [], ads: [], products: [] } });
 
 export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: boolean; filters?: Filters } = {}): GrowthData {
   const fkey = activeFilters(opts.filters) ? JSON.stringify(opts.filters) : "";
@@ -206,9 +224,6 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
     again.current = false;
     const tz = ws.timezone || "Africa/Dar_es_Salaam";
     const today = localDay(new Date(), tz);
-    const period = resolveRange(range, today);
-    const prevP = comparisonOf(period);
-    const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
     const ck = cacheKey(ws.id, rk);
     if (!silent) {
       // Show the last numbers for this period straight away (if we have them) while fresh ones load.
@@ -218,6 +233,11 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
     }
     (async () => {
       try {
+        const dataStart = await dataStartOf(ws.id, tz);
+        if (!live()) return;
+        const period = resolveRange(range, today, dataStart);
+        const prevP = comparisonOf(period);
+        const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
         const [a, ap, c, d, o, e, cn, nm, h, ib, all, first, adList] = await Promise.all([
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
@@ -271,7 +291,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           loading: false, err: firstErr ? "Some data could not be loaded: " + firstErr.message : "",
           mx, prev, convs: fd.conversations, ads: fd.ads, adsPrev: fd.adsPrev, orders, daily, expenses,
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
-          findings: diagnose(mx, fd.conversations, orders, tz).slice(0, 4), objections: objectionTally(fd.conversations, period, tz), allTime, cached: false, options,
+          findings: diagnose(mx, fd.conversations, orders, tz).slice(0, 4), objections: objectionTally(fd.conversations, period, tz), allTime, dataStart, cached: false, options,
         };
         setState(next);
         if (opts.cache) writeCache(ck, next);
@@ -279,7 +299,8 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
         const hasAds = ((cn.data as Conn[]) ?? []).some((x) => x.provider === "meta_ads" && x.status !== "disconnected");
         if (hasAds && !first.error) {
           const earliest = ((first.data as any[]) ?? [])[0]?.day ?? null;
-          backfillAds(ws.id, prevP.from, today, earliest).then((got) => { if (got && live()) setTick((x) => x + 1); });
+          // "All time" asks Meta for as far back as the sync allows; other ranges only what they show.
+          backfillAds(ws.id, range.key === "all" ? addDays(today, -398) : prevP.from, today, earliest).then((got) => { if (got && live()) setTick((x) => x + 1); });
         }
       } catch (err) {
         if (live() && !silent) setState((s) => ({ ...s, loading: false, cached: false, err: (err as Error).message }));
