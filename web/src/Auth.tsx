@@ -190,7 +190,7 @@ function Showcase({ lang }: { lang: Lang }) {
       </div>
       <div className="ax-stage">
         <div className="ax-float ax-chat">
-          <div className="ax-chat-head"><span className="ax-av" style={{ background: "#f5c84c", color: "#131a2a" }}>AM</span>
+          <div className="ax-chat-head"><span className="ax-av" style={{ background: "#ffd84d", color: "#0a3d29" }}>AM</span>
             <div><b>Asha M.</b><span className="ax-wa">● WhatsApp · 09:41</span></div></div>
           <p className="ax-bubble">{t("chatMsg")}</p>
           <div className="ax-chat-foot"><span className="ax-src">{t("fromAd")}</span><span className="ax-kito"><span className="ax-kito-dot" />{t("kito")}</span></div>
@@ -231,7 +231,7 @@ export function AuthShell({ lang, children, showcase = true }: { lang: Lang; chi
 }
 
 function Brand({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
-  return <div className="auth-top"><div className="row ax-brand"><Logo size={34} cycle={false} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>;
+  return <div className="auth-top"><div className="row ax-brand"><Logo size={34} variant="white" /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>;
 }
 
 function Field({ id, label, icon, children, extra }: { id: string; label: string; icon: React.ReactNode; children: React.ReactNode; extra?: React.ReactNode }) {
@@ -243,16 +243,16 @@ function Field({ id, label, icon, children, extra }: { id: string; label: string
   );
 }
 
-/** The hexagon badge from the "first step" screen, in itaOS yellow with the ita. dot. */
+/** The hexagon badge on the "first step" screen, in the homepage mint and green. */
 function StepBadge() {
   return (
     <svg className="ax-badge" viewBox="0 0 120 132" aria-hidden="true">
       <defs>
-        <linearGradient id="axHex" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffe08a" /><stop offset=".55" stopColor="#f5c84c" /><stop offset="1" stopColor="#e9a92a" /></linearGradient>
+        <linearGradient id="axHex" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#9af7cb" /><stop offset=".5" stopColor="#5ef0ae" /><stop offset="1" stopColor="#0f7a4f" /></linearGradient>
       </defs>
       <path d="M60 4c3 0 6 .8 8.6 2.3l37 21.4c5.3 3 8.4 8.6 8.4 14.7v47.2c0 6-3.1 11.6-8.4 14.7l-37 21.4a17.2 17.2 0 0 1-17.2 0l-37-21.4C9.1 101.2 6 95.6 6 89.6V42.4c0-6 3.1-11.6 8.4-14.7l37-21.4C54 4.8 57 4 60 4Z" fill="url(#axHex)" />
       <g fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1.6">{[0, 60, 120].map((r) => <ellipse key={r} cx="60" cy="66" rx="30" ry="14" transform={`rotate(${r} 60 66)`} />)}</g>
-      <path d="m44 67 11 11 22-24" fill="none" stroke="#131a2a" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m44 67 11 11 22-24" fill="none" stroke="#0a3d29" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
