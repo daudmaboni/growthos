@@ -612,3 +612,22 @@ button.wa-kito:hover:not(:disabled) { background: var(--wa-dot); }
 @keyframes kito-pulse { 50% { opacity: .55; } }
 .wa-sum.stale, .cc-next.stale { opacity: .5; }
 .wa-special { font-style: italic; color: var(--wa-meta); }
+
+/* Top bar "More": Diagnosis, Actions, Content, Connections in a drop-down */
+nav.tabs .more-wrap { position: relative; display: flex; }
+nav.tabs.glass-tabs { z-index: 30; }
+nav.tabs .more-btn { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--muted); background: none; border: 0; padding: 7px 14px 7px 16px; border-radius: 999px; cursor: pointer; transition: color .25s var(--ease); }
+nav.tabs .more-btn:hover, nav.tabs .more-btn.on, nav.tabs .more-btn[aria-expanded="true"] { color: var(--ink); }
+nav.tabs .more-btn svg { opacity: .7; transition: transform .25s var(--ease); }
+nav.tabs .more-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.more-menu { position: absolute; top: calc(100% + 12px); right: -4px; width: 310px; display: grid; gap: 2px; padding: 8px; border-radius: 22px;
+  background: color-mix(in srgb, var(--card) 90%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
+  border: 1px solid var(--line-2); box-shadow: 0 24px 50px -14px rgba(0, 0, 0, .45), inset 0 1px 0 #ffffff40; transform-origin: top right; animation: more-in .22s var(--ease); }
+nav.tabs.glass-tabs .more-menu a.more-item { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 16px; color: var(--ink); font-weight: 400; font-size: 14px; white-space: normal; text-align: left; }
+nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu a.more-item.on { background: var(--raised); }
+.more-item > span:nth-child(2) { display: grid; gap: 1px; }
+.more-ico { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--raised); color: var(--ink-2); border: 1px solid var(--line); }
+.more-item.on .more-ico { color: var(--accent); }
+.more-item .navbadge { position: static; margin-left: auto; align-self: center; box-shadow: none; }
+@keyframes more-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .more-menu { animation: none; } }

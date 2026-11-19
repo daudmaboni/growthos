@@ -101,13 +101,10 @@ export default function App() {
       <header className="topbar">
         <div className="brand"><a className="home" href="#dashboard" aria-label="itaOS, go to dashboard" onClick={() => window.scrollTo({ top: 0 })}><Logo size={34} /><span className="brand-text"><h1>itaOS</h1><span className="ws" title={ws.name}>{ws.name}</span></span></a></div>
         <GlassTabs view={view}>
-          <a href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
-          <a href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
-          <a href="#report" className={view === "report" ? "on" : ""}>{ws.language === "sw" ? "Uchunguzi" : "Diagnosis"}</a>
-          <a href="#actions" className={view === "actions" ? "on" : ""}>{ws.language === "sw" ? "Vitendo" : "Actions"}<NavBadge badge={actionsBadge(badges, ws.language === "sw")} /></a>
-          <a href="#chats" className={view === "chats" ? "on" : ""}>Chats<NavBadge badge={chatsBadge(badges, ws.language === "sw")} /></a>
-          <a href="#content" className={view === "content" ? "on" : ""}>{ws.language === "sw" ? "Maudhui" : "Content"}</a>
-          <a href="#connect" className={view === "connect" ? "on" : ""}>Connections</a>
+          <a data-tab href="#dashboard" className={view === "dashboard" ? "on" : ""}>Dashboard</a>
+          <a data-tab href="#chats" className={view === "chats" ? "on" : ""}>Chats<NavBadge badge={chatsBadge(badges, ws.language === "sw")} /></a>
+          <a data-tab href="#kito" className={view === "kito" ? "on" : ""}>{ws.language === "sw" ? "Muulize Kito" : "Ask Kito"}</a>
+          <TopMore view={view} sw={ws.language === "sw"} badges={badges} />
         </GlassTabs>
         <div className="actions">
           <div className="seg" role="group" aria-label="Language">
@@ -248,7 +245,7 @@ function GlassTabs({ view, children }: { view: string; children: import("react")
     g.style.transform = `translateX(${a.offsetLeft - 4}px)`;
     g.classList.add("on");
   };
-  const current = () => nav.current?.querySelector<HTMLElement>("a.on") ?? null;
+  const current = () => nav.current?.querySelector<HTMLElement>("[data-tab].on") ?? null;
   useEffect(() => {
     if (!hovering.current) place(current());
     const onResize = () => place(current());
@@ -258,12 +255,62 @@ function GlassTabs({ view, children }: { view: string; children: import("react")
   }, [view]);
   return (
     <nav className="tabs glass-tabs" aria-label="Sections" ref={nav}
-      onMouseOver={(e) => { const a = (e.target as HTMLElement).closest("a"); if (a) { hovering.current = true; place(a as HTMLElement); } }}
-      onMouseMove={(e) => { const a = (e.target as HTMLElement).closest("a"); if (a && glass.current) { const r = a.getBoundingClientRect(); glass.current.style.setProperty("--gx", (((e.clientX - r.left) / r.width) * 100).toFixed(0) + "%"); } }}
+      onMouseOver={(e) => { const a = (e.target as HTMLElement).closest("[data-tab]"); if (a) { hovering.current = true; place(a as HTMLElement); } }}
+      onMouseMove={(e) => { const a = (e.target as HTMLElement).closest("[data-tab]"); if (a && glass.current) { const r = a.getBoundingClientRect(); glass.current.style.setProperty("--gx", (((e.clientX - r.left) / r.width) * 100).toFixed(0) + "%"); } }}
       onMouseLeave={() => { hovering.current = false; glass.current?.style.setProperty("--gx", "50%"); place(current()); }}>
       <span className="glass" ref={glass} aria-hidden />
       {children}
     </nav>
+  );
+}
+
+/** Sections that live under "More" (top bar on computers, sheet on phones). */
+function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
+  const L = (en: string, s: string) => (sw ? s : en);
+  return [
+    ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
+    ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
+    ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
+    ["connect", L("Connections", "Miunganisho"), L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
+    ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
+  ];
+}
+
+/** Computer top bar: "More" button with a drop-down for Diagnosis, Actions, Content and Connections.
+ *  While one of those pages is open the button shows its name. */
+function TopMore({ view, sw, badges }: { view: View; sw: boolean; badges: Badges }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  useEffect(() => { setOpen(false); }, [view]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
+  }, [open]);
+  const items = moreItems(sw).filter(([v]) => v !== "settings"); // Settings keeps its gear button
+  const cur = items.find(([v]) => v === view);
+  return (
+    <span className="more-wrap" ref={wrap}>
+      <button type="button" data-tab className={"more-btn" + (cur ? " on" : "")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {cur ? cur[1] : sw ? "Zaidi" : "More"}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        {!open && <NavBadge badge={actionsBadge(badges, sw)} />}
+      </button>
+      {open && (
+        <div className="more-menu" role="menu">
+          {items.map(([v, label, note, icon]) => (
+            <a key={v} role="menuitem" href={"#" + v} className={"more-item" + (view === v ? " on" : "")} onClick={() => { setOpen(false); window.scrollTo({ top: 0 }); }}>
+              <span className="more-ico">{icon}</span>
+              <span><b>{label}</b><span className="small muted">{note}</span></span>
+              {v === "actions" && <NavBadge badge={actionsBadge(badges, sw)} />}
+            </a>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -283,13 +330,7 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
     ["kito", "Kito", <Ico d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />],
     ["chats", "Chats", <Ico d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" />],
   ];
-  const more: [View, string, string, JSX.Element][] = [
-    ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
-    ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
-    ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
-    ["connect", L("Connections", "Miunganisho"), L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
-    ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
-  ];
+  const more = moreItems(sw);
   const moreOn = more.some(([v]) => v === view);
   const idx = open || moreOn ? SLOTS - 1 : Math.max(0, ORDER.indexOf(view));
   const navRef = useRef<HTMLElement>(null);
