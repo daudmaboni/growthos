@@ -32,7 +32,7 @@ export function useProducts(wsId: string, tick = 0) {
   return { products: list, err };
 }
 
-/** Tap a product to add it; tap again (or +) for more. Shows the total cost of what's picked. */
+/** Tap a product to tick it, tap again to untick; + and − change how many. Shows the total cost of what's picked. */
 export function ProductPicker({ ws, products, items, onChange, T }: {
   ws: Workspace; products: Product[]; items: Item[]; onChange: (items: Item[]) => void; T: (en: string, sw: string) => string;
 }) {
@@ -40,18 +40,18 @@ export function ProductPicker({ ws, products, items, onChange, T }: {
   if (!active.length) return null;
   const add = (p: Product) => {
     const i = items.findIndex((x) => x.product_id === p.id);
-    if (i >= 0) onChange(items.map((x, k) => (k === i ? { ...x, qty: x.qty + 1 } : x)));
+    if (i >= 0) onChange(items.filter((_, k) => k !== i));   // tap again = untick; use + for more
     else onChange([...items, { product_id: p.id, name: p.name, qty: 1, unit_cost: p.cost != null ? Number(p.cost) : null, unit_price: p.price != null ? Number(p.price) : null }]);
   };
   const setQty = (k: number, q: number) => onChange(q <= 0 ? items.filter((_, j) => j !== k) : items.map((x, j) => (j === k ? { ...x, qty: q } : x)));
   const total = itemsCost(items);
   return (
     <div className="pp">
-      <span className="small muted">{T("What did they buy? Tap to add", "Amenunua nini? Gusa kuongeza")}</span>
+      <span className="small muted">{T("What did they buy? Tap to pick, tap again to remove. Use + for more than one.", "Amenunua nini? Gusa kuchagua, gusa tena kuondoa. Tumia + kwa zaidi ya moja.")}</span>
       <div className="pp-chips">
         {active.map((p) => {
           const n = items.find((x) => x.product_id === p.id)?.qty ?? 0;
-          return <button type="button" key={p.id} className={"pp-chip" + (n ? " on" : "")} onClick={() => add(p)}>{p.name}{n ? <b> ×{n}</b> : null}</button>;
+          return <button type="button" key={p.id} className={"pp-chip" + (n ? " on" : "")} aria-pressed={n > 0} onClick={() => add(p)}>{n ? "✓ " : ""}{p.name}{n > 1 ? <b> ×{n}</b> : null}</button>;
         })}
       </div>
       {items.length > 0 && (
