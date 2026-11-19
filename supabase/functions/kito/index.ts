@@ -2,6 +2,7 @@
 // outcome, stage label, amount, objections, customer tags, a one-line summary and the next step.
 // Runs every 15 minutes (cron), right after a customer message (wa-webhook), or on demand from the app.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { claude, type UsageMeta } from "../_shared/claude.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -106,14 +107,10 @@ const TOOL = {
 // ("unexpected end of hex escape"), which failed whole Kito runs. Drop any lone halves.
 const wellFormed = (s: string) => s.replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
 
-async function call(payload: Record<string, unknown>) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1500, ...payload }, (_k, v) => (typeof v === "string" ? wellFormed(v) : v)),
-  });
-  const body = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, body };
+// Every call is logged in api_usage (tokens and outcome only) through the shared helper.
+function call(payload: Record<string, unknown>, meta: UsageMeta) {
+  return claude(KEY, { model: MODEL, max_tokens: 1500, ...payload }, meta,
+    (p) => JSON.stringify(p, (_k, v) => (typeof v === "string" ? wellFormed(v) : v)));
 }
 
 function parse(body: any) {
@@ -126,11 +123,11 @@ function parse(body: any) {
   throw new Error(`AI gave no labels (stop: ${body.stop_reason ?? "?"}, blocks: ${blocks.map((c) => c.type).join(",") || "none"}, text: ${text.slice(0, 80)})`);
 }
 
-async function ask(p: string) {
+async function ask(p: string, ws: string) {
   // 1) forced tool call = guaranteed structure
-  let r = await call({ messages: [{ role: "user", content: p }], tools: [TOOL], tool_choice: { type: "tool", name: "label_chat" } });
+  let r = await call({ messages: [{ role: "user", content: p }], tools: [TOOL], tool_choice: { type: "tool", name: "label_chat" } }, { feature: "chat_analysis", workspaceId: ws });
   // 2) if this model/config rejects forced tools, fall back to plain JSON
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] });
+  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "chat_analysis", workspaceId: ws, attempt: 2 });
   if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
   return parse(r.body);
 }
@@ -196,8 +193,8 @@ async function draftReply(db: ReturnType<typeof admin>, ws: string, conversation
   ]);
   if (!msgs?.length) throw new Error("this chat has no messages to draft from");
   const p = draftPrompt(transcript(msgs), profileText(profile as Profile), contact?.name ?? null, conv.kito_next);
-  let r = await call({ messages: [{ role: "user", content: p }], tools: [DRAFT_TOOL], tool_choice: { type: "tool", name: "draft_reply" } });
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] });
+  let r = await call({ messages: [{ role: "user", content: p }], tools: [DRAFT_TOOL], tool_choice: { type: "tool", name: "draft_reply" } }, { feature: "reply_draft", workspaceId: ws });
+  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "reply_draft", workspaceId: ws, attempt: 2 });
   if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
   const out = parse(r.body);
   const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
@@ -238,8 +235,8 @@ ${postLines}
 Most common customer objections in WhatsApp chats: ${topObjections}
 
 Rules: write captions in ${lang === "sw" ? "natural Tanzanian Kiswahili" : "plain English"}; no health or effectiveness claims; no invented prices, discounts or testimonials; no claims about customers. Each idea must say in "based_on" which observed pattern or objection it addresses (or "profile only" if none). Keep each draft under 80 words.`;
-  let r = await call({ messages: [{ role: "user", content: p }], tools: [IDEAS_TOOL], tool_choice: { type: "tool", name: "content_ideas" } });
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] });
+  let r = await call({ messages: [{ role: "user", content: p }], tools: [IDEAS_TOOL], tool_choice: { type: "tool", name: "content_ideas" } }, { feature: "content_ideas", workspaceId: ws });
+  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "content_ideas", workspaceId: ws, attempt: 2 });
   if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
   const out = parse(r.body);
   const ideas = (Array.isArray(out.ideas) ? out.ideas : []).slice(0, 6).map((i: any) => ({
@@ -315,7 +312,7 @@ Deno.serve(async (req) => {
       const { data: msgs } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", c.id).order("sent_at");
       if (!msgs?.length) continue;
       const info = wsInfo.get(c.workspace_id)!;
-      const r = await ask(prompt(transcript(msgs), c.last_message_at, info.language, info.currency));
+      const r = await ask(prompt(transcript(msgs), c.last_message_at, info.language, info.currency), c.workspace_id);
       const amount = typeof r.amount === "number" && r.amount >= 500 && r.amount < 1e8 ? r.amount : null;
       // Guard: a chat with a message in the last 2 days isn't "lost" unless the customer turned it down (cold).
       if (r.outcome === "lost" && Date.now() - Date.parse(c.last_message_at) < 48 * 3600e3 && r.temperature !== "cold") r.outcome = "open";

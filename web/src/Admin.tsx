@@ -1,9 +1,12 @@
 // itaOS — Pondi platform admin (/admin)
 // Reads only the admin_* RPCs (migrations 0012_platform_admin, 0013_admin_activity, 0023_admin_refresh).
+// 0031_admin_insights adds Performance, AI usage, Data quality, onboarding days and staff follow-ups (AdminInsights.tsx).
 // Fields added in 0023 are optional here, so the page still works against an older database.
 // Every RPC re-checks platform_admins server-side; hiding this page is UX, not security.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { PerformancePage, UsagePage, QualityPage, DrawerPerformance, DrawerTasks, INSIGHTS_CSS } from './AdminInsights';
+import { daysOnStep, stepAction, recoveryFor, usageAlerts, type OnboardingRow, type ApiUsage } from './adminInsights';
 
 /* ================= types ================= */
 type Overview = {
@@ -63,8 +66,8 @@ type Detail = {
 type Staff = { email: string; added_at: string; last_sign_in_at: string | null; is_me: boolean };
 type Tone = 'ok' | 'warn' | 'bad' | 'idle';
 type Health = { tone: Tone; text: string };
-type View = 'today' | 'workspaces' | 'errors' | 'audit' | 'staff';
-const VIEWS: View[] = ['today', 'workspaces', 'errors', 'audit', 'staff'];
+type View = 'today' | 'workspaces' | 'performance' | 'usage' | 'quality' | 'errors' | 'audit' | 'staff';
+const VIEWS: View[] = ['today', 'workspaces', 'performance', 'usage', 'quality', 'errors', 'audit', 'staff'];
 
 /* ================= helpers ================= */
 const nf = new Intl.NumberFormat('en-US');
@@ -186,6 +189,9 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
   const ws = useRpc<WsRow[]>(supabase, 'admin_workspaces', undefined, [tick, isAdmin]);
   const act = useRpc<Activity>(supabase, 'admin_activity', { p_days: 30 }, [tick, isAdmin]);
   const errs = useRpc<ErrRow[]>(supabase, 'admin_errors', { p_limit: 200 }, [tick, isAdmin]);
+  // 0031: optional. Older databases just don't show days-on-step, follow-ups or cost alerts.
+  const onb = useRpc<OnboardingRow[]>(supabase, 'admin_onboarding', undefined, [tick, isAdmin]);
+  const usage = useRpc<ApiUsage>(supabase, 'admin_api_usage', { p_days: 30 }, [tick, isAdmin]);
 
   if (isAdmin === null) return <Frame><p className="ia-blank">Checking your access…</p></Frame>;
   if (!isAdmin) return (
@@ -197,6 +203,8 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
   const rows = ws.data ?? [];
   const errors = errs.data ?? [];
   const recentErrors = errors.filter((e) => hoursSince(e.at) < 24 * 7).length;
+  const onbBy: Record<string, OnboardingRow> = Object.fromEntries((onb.data ?? []).map((o) => [o.workspace_id, o]));
+  const costAlerts = usage.data ? usageAlerts(usage.data) : [];
   const loading = ov.loading || ws.loading;
   const loadError = ov.error || ws.error || act.error;
 
@@ -207,6 +215,9 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
         <nav className="ia-nav" aria-label="Admin sections">
           <NavBtn on={view === 'today'} onClick={() => setView('today')} icon={ICON.today}>Today</NavBtn>
           <NavBtn on={view === 'workspaces'} onClick={() => setView('workspaces')} icon={ICON.ws} count={rows.length}>Businesses</NavBtn>
+          <NavBtn on={view === 'performance'} onClick={() => setView('performance')} icon={ICON.perf}>Performance</NavBtn>
+          <NavBtn on={view === 'usage'} onClick={() => setView('usage')} icon={ICON.usage} count={costAlerts.filter((a) => a.tone !== 'info').length} hot>AI usage</NavBtn>
+          <NavBtn on={view === 'quality'} onClick={() => setView('quality')} icon={ICON.quality}>Data quality</NavBtn>
           <NavBtn on={view === 'errors'} onClick={() => setView('errors')} icon={ICON.err} count={recentErrors} hot={recentErrors > 0}>Errors</NavBtn>
           <NavBtn on={view === 'audit'} onClick={() => setView('audit')} icon={ICON.audit}>Audit log</NavBtn>
           <NavBtn on={view === 'staff'} onClick={() => setView('staff')} icon={ICON.staff}>Staff</NavBtn>
@@ -222,21 +233,25 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
 
       <main className="ia-main">
         {loadError && <div className="ia-alert">Some data didn't load: {loadError}. Try Refresh.</div>}
-        {view === 'today' && <Today ov={ov.data} rows={rows} act={act.data} errors={errors} onOpen={setOpenWs} goErrors={() => setView('errors')} />}
+        {view === 'today' && <Today ov={ov.data} rows={rows} act={act.data} errors={errors} onOpen={setOpenWs} goErrors={() => setView('errors')}
+                                    onb={onbBy} costAlerts={costAlerts} goUsage={() => setView('usage')} />}
         {view === 'workspaces' && <Businesses rows={rows} act={act.data} loading={ws.loading} onOpen={setOpenWs} />}
+        {view === 'performance' && <PerformancePage supabase={supabase} tick={tick} onOpen={setOpenWs} />}
+        {view === 'usage' && <UsagePage supabase={supabase} tick={tick} />}
+        {view === 'quality' && <QualityPage supabase={supabase} tick={tick} onOpen={setOpenWs} />}
         {view === 'errors' && <Errors rows={errors} loading={errs.loading} onOpen={setOpenWs} />}
         {view === 'audit' && <Audit supabase={supabase} tick={tick} />}
         {view === 'staff' && <StaffPage supabase={supabase} />}
       </main>
 
-      {openWs && <Drawer supabase={supabase} id={openWs} row={rows.find((r) => r.id === openWs)} onClose={() => setOpenWs(null)} onChanged={refresh}
+      {openWs && <Drawer supabase={supabase} id={openWs} row={rows.find((r) => r.id === openWs)} onb={onbBy[openWs]} onClose={() => setOpenWs(null)} onChanged={refresh}
                          onDeleted={() => { setOpenWs(null); refresh(); }} />}
     </Frame>
   );
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
-  return <div className="ia"><style>{CSS}</style>{children}</div>;
+  return <div className="ia"><style>{CSS + INSIGHTS_CSS}</style>{children}</div>;
 }
 
 function NavBtn({ on, onClick, icon, count, hot, children }:
@@ -251,8 +266,10 @@ function NavBtn({ on, onClick, icon, count, hot, children }:
 /* ================= today ================= */
 type Item = { tone: 'bad' | 'warn' | 'info'; ws: string | null; title: string; body: string; at: string | null };
 
-function buildItems(rows: WsRow[], errors: ErrRow[]): Item[] {
+function buildItems(rows: WsRow[], errors: ErrRow[], onb: Record<string, OnboardingRow> = {}, costAlerts: { tone: string; text: string }[] = []): Item[] {
   const out: Item[] = [];
+  for (const a of costAlerts.filter((x) => x.tone !== 'info'))
+    out.push({ tone: a.tone === 'bad' ? 'bad' : 'warn', ws: null, title: 'AI cost', body: a.text, at: new Date().toISOString() });
   for (const w of rows) {
     const h = healthOf(w);
     if (h.tone === 'bad' || h.tone === 'warn') out.push({ tone: h.tone, ws: w.id, title: w.name, body: h.text, at: w.last_message_at ?? w.created_at });
@@ -261,6 +278,12 @@ function buildItems(rows: WsRow[], errors: ErrRow[]): Item[] {
       out.push({ tone: 'info', ws: w.id, title: `${w.name} just signed up`, body: `${w.owner_email ?? 'Owner'} joined ${ago(w.created_at)} and hasn't connected anything. A quick WhatsApp hello helps.`, at: w.created_at });
     else if (w.status !== 'suspended' && hoursSince(w.owner_last_sign_in) > 24 * 7)
       out.push({ tone: 'warn', ws: w.id, title: `${w.name} has gone quiet`, body: `Owner last signed in ${ago(w.owner_last_sign_in)}.`, at: w.owner_last_sign_in });
+    const o = onb[w.id];
+    if (o && o.overdue_tasks > 0)
+      out.push({ tone: 'warn', ws: w.id, title: `Follow-up overdue for ${w.name}`, body: `${o.next_task ?? 'A staff follow-up'}${o.overdue_tasks > 1 ? ` (+${o.overdue_tasks - 1} more)` : ''}`, at: o.next_due });
+    const st = stuckAt(w), days = daysOnStep(o, st);
+    if (w.status !== 'suspended' && st < STEPS.length && days != null && days >= 14 && !(hoursSince(w.created_at) < 72))
+      out.push({ tone: 'info', ws: w.id, title: `${w.name}: ${days} days on "${STEPS[st]!.label}"`, body: stepAction(st, days)!.text, at: null });
     if (w.wa_status === 'active' && w.wa_via === 'dualhook' && w.send_key === false && w.status !== 'suspended')
       out.push({ tone: 'info', ws: w.id, title: `${w.name} can't reply from itaOS yet`, body: 'No Dualhook API key saved on their Connections page, so the Chats inbox is read-only for them.', at: w.wa_last_sync ?? w.created_at });
   }
@@ -278,9 +301,10 @@ const SOURCE: Record<string, string> = {
   media: "A customer's photo couldn't be read",
 };
 
-function Today({ ov, rows, act, errors, onOpen, goErrors }:
-  { ov: Overview | null; rows: WsRow[]; act: Activity | null; errors: ErrRow[]; onOpen: (id: string) => void; goErrors: () => void }) {
-  const items = useMemo(() => buildItems(rows, errors), [rows, errors]);
+function Today({ ov, rows, act, errors, onOpen, goErrors, onb, costAlerts, goUsage }:
+  { ov: Overview | null; rows: WsRow[]; act: Activity | null; errors: ErrRow[]; onOpen: (id: string) => void; goErrors: () => void;
+    onb: Record<string, OnboardingRow>; costAlerts: { tone: string; text: string }[]; goUsage: () => void }) {
+  const items = useMemo(() => buildItems(rows, errors, onb, costAlerts), [rows, errors, onb, costAlerts]);
   const needs = items.filter((i) => i.tone !== 'info').length;
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
 
@@ -309,7 +333,7 @@ function Today({ ov, rows, act, errors, onOpen, goErrors }:
               sub={`failed or stuck · ${fmt(ov?.pending_events)} waiting`} tone={(ov?.failed_events ?? 0) + (ov?.stuck_events ?? 0) > 0 ? 'bad' : undefined} />
       </dl>
 
-      <Board rows={rows} onOpen={onOpen} />
+      <Board rows={rows} onOpen={onOpen} onb={onb} />
 
       <div className="ia-split">
         <section className="ia-panel">
@@ -324,7 +348,7 @@ function Today({ ov, rows, act, errors, onOpen, goErrors }:
             : <ul className="ia-feed">
                 {items.slice(0, 6).map((it, i) => (
                   <li key={i}>
-                    <button className={`ia-feeditem t-${it.tone}`} onClick={() => it.ws && onOpen(it.ws)} disabled={!it.ws}>
+                    <button className={`ia-feeditem t-${it.tone}`} onClick={() => (it.ws ? onOpen(it.ws) : it.title === 'AI cost' && goUsage())} disabled={!it.ws && it.title !== 'AI cost'}>
                       <span className="ia-feeddot" aria-hidden />
                       <span className="ia-feedtxt"><strong>{it.title}</strong><span>{it.body}</span></span>
                       <time title={stamp(it.at)}>{ago(it.at)}</time>
@@ -343,7 +367,7 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
 }
 
 /* the memorable bit: where each business is stuck */
-function Board({ rows, onOpen }: { rows: WsRow[]; onOpen: (id: string) => void }) {
+function Board({ rows, onOpen, onb = {} }: { rows: WsRow[]; onOpen: (id: string) => void; onb?: Record<string, OnboardingRow> }) {
   const cols = [...STEPS.map((s) => s.label), 'Fully set up'];
   const by = cols.map((_, i) => rows.filter((w) => stuckAt(w) === i && w.status !== 'suspended'));
   let n = 0;
@@ -366,10 +390,11 @@ function Board({ rows, onOpen }: { rows: WsRow[]; onOpen: (id: string) => void }
             <div className="ia-chips">
               {by[i]!.map((w) => {
                 const h = healthOf(w);
+                const days = daysOnStep(onb[w.id], i), act = stepAction(i, days);
                 return (
-                  <button key={w.id} className="ia-chip" style={{ animationDelay: `${120 + n++ * 70}ms` }} onClick={() => onOpen(w.id)}>
+                  <button key={w.id} title={act ? `${days != null ? `${days} days on this step. ` : ''}Next: ${act.text}` : undefined} className="ia-chip" style={{ animationDelay: `${120 + n++ * 70}ms` }} onClick={() => onOpen(w.id)}>
                     <span className="ia-tile sm" style={{ background: tileColor(w.id) }}>{initials(w.name)}</span>
-                    <span className="ia-chiptxt"><strong>{w.name}</strong><small>joined {ago(w.created_at)}</small></span>
+                    <span className="ia-chiptxt"><strong>{w.name}</strong><small>joined {ago(w.created_at)}{days != null && <> · <span className={`ix-stuck t-${act?.tone ?? 'info'}`}>{days === 0 ? 'today' : `${days}d here`}</span></>}</small></span>
                     <span className="ia-ticks" aria-label={`${STEPS.filter((s) => s.done(w)).length} of 4 steps done`}>
                       {STEPS.map((s) => <i key={s.key} className={s.done(w) ? 'on' : ''} title={s.label} />)}
                     </span>
@@ -542,6 +567,9 @@ function Errors({ rows, loading, onOpen }: { rows: ErrRow[]; loading: boolean; o
             </div>
             <pre>{e.detail}</pre>
             <code className="ia-src">{e.source}</code>
+            {(() => { const r = recoveryFor(e.source, e.detail); return r ? (
+              <div className="ix-recovery"><p><b>Likely cause:</b> {r.cause}</p><ol>{r.steps.map((x, j) => <li key={j}>{x}</li>)}</ol>
+                {e.workspace_id && /^(webhook|stuck)/.test(e.source) && <p className="ia-faint small">Retry is in the business's panel (open it above).</p>}</div>) : null; })()}
           </li>
         ))}
       </ol>
@@ -552,6 +580,8 @@ function Errors({ rows, loading, onOpen }: { rows: ErrRow[]; loading: boolean; o
 const ACTION: Record<string, string> = {
   set_state: 'Changed account settings', requeue_events: 'Retried failed WhatsApp events', set_send: 'Changed replying from itaOS',
   delete_workspace: 'Deleted a business', add_staff: 'Added a staff member', remove_staff: 'Removed a staff member',
+  set_api_price: 'Changed an AI model price', set_api_budget: 'Changed the AI budget', add_task: 'Added a staff follow-up',
+  task_done: 'Completed a staff follow-up', task_reopened: 'Reopened a staff follow-up',
 };
 function describe(action: string, d: any): string {
   if (action === 'set_state' && d?.after) {
@@ -566,6 +596,9 @@ function describe(action: string, d: any): string {
   if (action === 'set_send') return d?.after ? 'switched on' : 'switched off';
   if (action === 'delete_workspace') return `${d?.name ?? 'business'}: ${fmt(d?.chats ?? 0)} chats, ${fmt(d?.messages ?? 0)} messages, ${fmt(d?.orders ?? 0)} orders removed`;
   if (action === 'add_staff' || action === 'remove_staff') return d?.email ?? '';
+  if (action === 'set_api_price') return `${d?.model}: $${d?.after?.input} in / $${d?.after?.output} out per million tokens`;
+  if (action === 'set_api_budget') return `monthly ${d?.after?.monthly_usd != null ? '$' + d.after.monthly_usd : 'none'}, daily alert ${d?.after?.daily_usd != null ? '$' + d.after.daily_usd : 'none'}`;
+  if (action === 'add_task' || action === 'task_done' || action === 'task_reopened') return d?.title ?? '';
   return JSON.stringify(d);
 }
 
@@ -600,8 +633,8 @@ const ORDER_FROM: Record<string, string> = {
   name_mark: 'Name marked in WhatsApp', import: 'Imported file', manual: 'Recorded by hand',
 };
 
-function Drawer({ supabase, id, row, onClose, onChanged, onDeleted }:
-  { supabase: SupabaseClient; id: string; row?: WsRow; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
+function Drawer({ supabase, id, row, onb, onClose, onChanged, onDeleted }:
+  { supabase: SupabaseClient; id: string; row?: WsRow; onb?: OnboardingRow; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
   const [tick, setTick] = useState(0);
   const { data: d, error, loading } = useRpc<Detail>(supabase, 'admin_workspace_detail', { p_ws: id }, [id, tick]);
   const [status, setStatus] = useState<WsStatus>('active');
@@ -688,6 +721,13 @@ function Drawer({ supabase, id, row, onClose, onChanged, onDeleted }:
                 </ol>
               </section>
             )}
+
+            {row && (() => { const st = stuckAt(row), days = daysOnStep(onb, st), a = stepAction(st, days); return a ? (
+              <p className={`ia-faint small`} style={{ marginTop: -6 }}><b>{days != null ? `${days} days` : 'Time'} on "{STEPS[st]!.label}".</b> Suggested: {a.text}</p>) : null; })()}
+
+            <DrawerPerformance supabase={supabase} id={id} />
+            <DrawerTasks supabase={supabase} id={id} onChanged={onChanged}
+                         suggestion={row && stuckAt(row) < STEPS.length ? stepAction(stuckAt(row), null)!.text : null} />
 
             <section className="ia-dsec">
               <h3>Account</h3>
@@ -929,6 +969,9 @@ const ICON = {
   refresh: sv('M20 11a8 8 0 0 0-14.9-3.5M4 4v4h4M4 13a8 8 0 0 0 14.9 3.5M20 20v-4h-4'),
   search: sv('m20 20-4-4m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z'),
   close: sv('M6 6l12 12M18 6 6 18'),
+  perf: sv('M4 20V10M10 20V4M16 20v-7M22 20H2'),
+  usage: sv('M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.4 5 3.3-2.2 3.2-5 3.2-5-1.3-5-3.2'),
+  quality: sv('M9 12l2 2 4-4M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6Z'),
   staff: sv('M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM21 19v-1a4 4 0 0 0-3-3.9M15 4.1a3 3 0 0 1 0 5.8'),
 };
 

@@ -10,6 +10,7 @@
 // Numbers the app shows in tables, stats, chat lists and ad lists are taken straight from the
 // query results and the database, not retyped by the AI.
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
+import { claude } from "../_shared/claude.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -156,14 +157,10 @@ const TOOLS = [
 
 type QueryRun = { purpose: string; sql: string; rows: Record<string, unknown>[]; row_count: number; capped: boolean; error?: string };
 
-async function anthropic(payload: Record<string, unknown>) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 4000, ...payload }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`AI ${res.status}: ${body?.error?.message ?? "request failed"}`);
+// Each step is logged in api_usage (tokens and outcome only) through the shared helper.
+async function anthropic(payload: Record<string, unknown>, workspaceId: string) {
+  const { ok, status, body } = await claude(KEY, { model: MODEL, max_tokens: 4000, ...payload }, { feature: "ask_kito", workspaceId });
+  if (!ok) throw new Error(`AI ${status}: ${body?.error?.message ?? "request failed"}`);
   return body;
 }
 
@@ -313,7 +310,7 @@ Deno.serve(async (req) => {
         tools: TOOLS,
         tool_choice: lastStep ? { type: "tool", name: "final_answer" } : { type: "auto" },
         messages,
-      });
+      }, wsId);
       inTok += res.usage?.input_tokens ?? 0; outTok += res.usage?.output_tokens ?? 0;
       const content: any[] = res.content ?? [];
       messages.push({ role: "assistant", content });
