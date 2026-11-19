@@ -16,14 +16,14 @@ type Source = "any" | "live" | "import";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
 type Receipt = { is_receipt: boolean; amount: number | null; currency: string | null; txn_code: string | null; provider: string | null; paid_to: string | null; sender: string | null; paid_at: string | null; confidence: string; notes: string | null };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string; type: string; media: { path?: string; mime?: string; receipt?: Receipt | null; error?: string; product_match?: ProductMatch | null } | null };
-type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; override_by: string | null; phone_number_id: string };
+type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; kito_confidence?: string | null; outcome_override: string | null; override_by: string | null; phone_number_id: string };
 type Tr = (en: string, sw: string) => string;
 
 /** Same rules as the database filters below, used to count each tab. */
 const inFilter = (r: Lite, f: Filter) =>
   f === "all" ? true
   : f === "follow" ? r.outcome !== "sold" && (r.kito_temp === "hot" || r.kito_temp === "warm" || (r.kito_temp == null && r.warm))
-  : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
+  : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || (r.kito_outcome === "sold" && r.kito_confidence !== "low") || r.outcome_override === "sold")
   : f === "sold" ? Number(r.paid_orders) > 0
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? (r as any).phone_number_id === "import" : r.phone_number_id !== "import");
@@ -179,7 +179,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else if (filter === "not") { /* everyone marked "not a customer" */ }
     else if (filter === "sold") q = q.gt("paid_orders", 0);   // Bought = a sale you recorded, nothing else
     else if (filter === "follow") q = q.neq("outcome", "sold").or("kito_temp.in.(hot,warm),and(kito_temp.is.null,warm.eq.true)");
-    else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,kito_outcome.eq.sold,outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
+    else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,and(kito_outcome.eq.sold,or(kito_confidence.is.null,kito_confidence.neq.low)),outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
     else if (filter !== "all") q = q.eq("outcome", filter);
     supabase.from("kito_runs").select("id,trigger,ran_at,checked,failed,remaining,note").eq("workspace_id", ws.id).order("ran_at", { ascending: false }).limit(20)
       .then(({ data }) => setRuns((data as Run[]) ?? []));
@@ -187,7 +187,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     supabase.rpc("chat_counts", { p_ws: ws.id, p_src: src }).then(({ data, error }) => {
       if (!error && data) { setCounts(data as Record<string, number>); return; }
       setCounts(null);
-      supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(1000)
+      supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,kito_confidence,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(1000)
         .then(({ data }) => setLite((data as Lite[]) ?? []));
     });
     const searched = async () => {
@@ -640,7 +640,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
             {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
             <AssignChat ws={ws} conversationId={r.id} />
           </div>
-          {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); setSalesKey((k) => k + 1); onChange(); }} />}
+          {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); setSide(false); setSalesKey((k) => k + 1); onChange(); }} onLater={() => { setConfirming(false); setSide(false); }} />}
           {editor && !confirmed && st.key !== "check" && !recording && (
             <div className="cc-ask">
               <b>{T("Did they buy?", "Amenunua?")}</b>
@@ -798,7 +798,7 @@ function lastPriceSent(msgs: Msg[] | null): number | null {
 }
 
 /** "Says they paid": the owner checks their own M-Pesa / bank, then confirms in one tap. */
-function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace; T: Tr; msgs: Msg[] | null; onDone: () => void }) {
+function ConfirmPayment({ r, ws, T, msgs, onDone, onLater }: { r: Outcome; ws: Workspace; T: Tr; msgs: Msg[] | null; onDone: () => void; onLater: () => void }) {
   const rc = [...(msgs ?? [])].reverse().find((m) => m.direction === "in" && m.media?.receipt?.is_receipt);
   const receipt = rc?.media?.receipt ?? null;
   const guess = receipt?.amount ?? r.kito_amount ?? r.payment_amount ?? lastPriceSent(msgs);
@@ -893,9 +893,11 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
     if (error) setErr(error.code === "23505" ? T(`Transaction ${txn} is already recorded for another sale. The same payment can't count twice.`, `Muamala ${txn} tayari umerekodiwa kwa mauzo mengine. Malipo hayo hayawezi kuhesabiwa mara mbili.`) : error.message);
     else { setPaidDone(true); setTimeout(onDone, 1100); }
   }
-  async function no() {
+  // "No, they never paid": take the chat off Check payment for good (back to All). The word-rules and Kito
+  // won't put it back; "Undo my answer" in the chat brings it back if you change your mind.
+  async function never() {
     setBusy(true); setErr("");
-    const { error } = await supabase.from("conversations").update({ outcome_override: "open", override_note: "payment not received" }).eq("id", r.id);
+    const { error } = await supabase.from("conversations").update({ outcome_override: "open", override_note: "never paid" }).eq("id", r.id);
     setBusy(false); if (error) setErr(error.message); else onDone();
   }
 
@@ -936,9 +938,11 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
       {dup && <span className="warnt small">⚠ {dup}</span>}
       <div className="cc-ask-btns">
         <button className={"small pay-yes" + (paidDone ? " done" : "")} disabled={busy || paidDone} onClick={yes}>{paidDone ? "✓ " : ""}{paidDone ? T("Money received — saved", "Pesa imeingia — imehifadhiwa") : T("Yes, money received", "Ndiyo, pesa imeingia")}</button>
-        <button className="small" disabled={busy} onClick={no}>✗ {T("No, nothing came in", "Hapana, haijaingia")}</button>
+        <button className="small" disabled={busy || paidDone} onClick={onLater}>{T("Nothing in yet — check later", "Bado haijaingia — nitaangalia baadaye")}</button>
       </div>
-      <span className="small muted">{T("\"Yes\" records the sale, so it shows in your revenue right away.", "\"Ndiyo\" inarekodi mauzo, na yanaonekana kwenye mapato papo hapo.")}</span>
+      <button className="small pay-never" disabled={busy || paidDone} onClick={never}>✗ {T("No, they never paid", "Hapana, hajalipa kabisa")}</button>
+      <span className="small muted">{T("\"Yes\" records the sale and moves them to Bought. \"Never paid\" takes them off Check payment and back to All. \"Check later\" keeps them here.",
+        "\"Ndiyo\" inarekodi mauzo na kumhamishia Amenunua. \"Hajalipa kabisa\" inamtoa Hakiki malipo na kumrudisha Zote. \"Baadaye\" inamwacha hapa.")}</span>
       {err && <span className="err small">{err}</span>}
     </div>
   );

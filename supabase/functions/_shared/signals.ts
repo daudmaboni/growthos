@@ -4,14 +4,19 @@ export type Msg = { direction: "in" | "out"; sent_at: string; body: string | nul
 const SIG = {
   askPrice: /(\bbei\b|ngapi|gharama|price|how much|\bcost\b|shilingi ngapi|sh ngapi)/i,
   priceAmount: /((tsh|tzs|sh\.?|shs|shilingi)\s*\.?\s*[\d][\d,. ]{2,}|[\d][\d,.]{2,}\s*(\/=|tsh|tzs|shilingi)|\b\d{1,3}[,.]\d{3}\b|\belfu\s+\w+)/i,
-  paidCustomer: /(\[picha ya malipo\]|nimetuma|nimelipa|nimelipia|nimeshalipia|nimeshalipa|nimeweka (pesa|hela)|nimesend|nimeshatuma|nimeshalipa|nimekutumia|\bpaid\b|i have paid|i'?ve (sent|paid)|sent the money|muamala|\bconfirmed\b|imethibitishwa|transaction)/i,
+  // Customer words. Only strong ones: "nimetuma" / "nimekutumia" alone can mean a photo or a location,
+  // so those count only after you sent payment details (see analyze).
+  paidCustomer: /(\[picha ya malipo\]|nimelipa|nimelipia|nimeshalipia|nimeshalipa|nimeweka (pesa|hela)|nimetuma (pesa|hela|malipo|kiasi)|nimeshatuma (pesa|hela|malipo)|i have paid|i'?ve paid|sent the money)/i,
+  paidCustomerAfterPay: /(nimetuma|nimeshatuma|nimesend|nimekutumia|tayari nimetuma|check (sms|message)|angalia (sms|ujumbe|meseji))/i,
+  // An M-Pesa / Tigo / Airtel SMS the customer pasted: "XYZ123ABCD Imethibitishwa. Umelipa Tsh155,000…"
+  mpesaSms: /(\b[A-Z0-9]{10}\b\s+(confirmed|imethibitishwa)|umelipa\s+tsh|umetuma\s+tsh|tsh\s*[\d,.]+\s+(sent to|paid to|imetumwa))/i,
   paidBusiness: /(tumepokea (malipo|pesa|tsh|tzs|sh)|malipo yamepokelewa|tumepokea\b.*\d|payment received|received your payment|asante kwa malipo|mzigo unatoka|order (is )?confirmed)/i,
-  mpesaCode: /\b[A-Z0-9]{10}\b\s+(confirmed|imethibitishwa)/i,
   payInstr: /(lipa namba|till|paybill|akaunti|m-?pesa|tigo ?pesa|airtel ?money|halopesa|nalipa vipi|how do i pay)/i,
   // Fulfilment language (how sales really look in chat: goods sent, picked up, usage explained)
   shipped: /((kwenda|kuja|uende|njoo) kuchukua (mzigo|dawa)|mzigo (wako )?(umefika|umetumwa|umeshatumwa|uko njiani|umeondoka|umeshafika|tayari)|tumetuma (mzigo|dawa)|tumeshatuma|your (order|parcel) (has been )?(sent|shipped|dispatched)|out for delivery)/i,
   usage: /(matumizi ya \S+|maelekezo ya matumizi|jinsi ya kutumia|namna ya kutumia|dawa ulizopokea|picha ya dawa ulizo|how to use (it|your))/i,
-  received: /(nimepokea|nimeupata|nimeipata|nimezipata|nimepata (mzigo|dawa|sms)|nimechukua|nimeshachukua|nianze (doz|dozi|kutumia)|naomba maelekezo (ya|nianze)|dawa nimeacha|sijazifungua|i (have )?(received|got) (it|the|my))/i,
+  // "I received the goods" — must name what was received. Not "nianze kutumia?", "naomba maelekezo", "nimechukua namba yako".
+  received: /(nime(pokea|upata|ipata|zipata|pata|chukua|shachukua|shapokea)\s+(\w+\s+){0,2}(mzigo|dawa|parcel|package|oda|order|kifurushi|bidhaa)|(mzigo|dawa|kifurushi)\s+(\w+\s+){0,2}(nimeupokea|nimeipokea|nimezipokea|nimepokea|nimeupata|nimeipata|nimezipata|imefika|umefika|zimefika)|dawa nimeacha|sijazifungua|i (have )?(received|got) (the|my) (order|parcel|package|medicine))/i,
   media: /(<media omitted>|<attached:|\[image\]|\[document\]|\[video\]|picha imeondolewa|image omitted|document omitted)/i,
   phone: /(\+?255|0)[67]\d{2}[\s-]?\d{3}[\s-]?\d{3}/,
   obj: {
@@ -55,12 +60,15 @@ export function analyze(msgs: Msg[], now = Date.now()) {
     if (m.direction === "in") {
       if (SIG.askPrice.test(b)) out.price_asked = true;
       for (const k in SIG.obj) if (SIG.obj[k].test(b) && !out.objections.includes(k)) out.objections.push(k);
-      if (SIG.received.test(b)) received = true;
+      // Questions ("nimepokea dawa lini?") and long forwarded messages (news, scams, chain texts) never count.
+      const plain = b.length <= 400 && !/\?\s*$/.test(b.trim()) && !/^\s*(\*|forwarded)/i.test(b);
+      if (plain && SIG.received.test(b)) received = true;
       if (payInstrT != null && t(m) - payInstrT < 72 * H) {
         if (SIG.media.test(b) || m.type === "image" || m.type === "document") proof = true;   // likely payment screenshot
         if (SIG.phone.test(b)) details = true;                                                 // delivery details sent
       }
-      if (SIG.paidCustomer.test(b) || SIG.mpesaCode.test(b)) {
+      const afterPay = payInstrT != null && t(m) - payInstrT < 7 * 24 * H;
+      if (SIG.mpesaSms.test(b) || (plain && (SIG.paidCustomer.test(b) || (afterPay && SIG.paidCustomerAfterPay.test(b))))) {
         out.payment_signal = true; out.payment_amount = extractAmount(b) || out.payment_amount || lastPrice || null;
       }
       if (priceT != null && t(m) > priceT) out.replied_after_price = true;
