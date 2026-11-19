@@ -1,5 +1,5 @@
-// Fades out the bouncing-dots preloader from index.html once the app knows what to show.
-const MIN_SHOW_MS = 900; // long enough for the dots to be seen, short enough not to slow anyone down
+// Fades out the logo preloader from index.html (one of 16 random animations) once the app knows what to show.
+const MIN_SHOW_MS = 900; // long enough for the logo animation to be seen, short enough not to slow anyone down
 let done = false;
 
 export function hidePreloader() {
