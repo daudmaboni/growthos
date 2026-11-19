@@ -16,7 +16,7 @@
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
 import { captureMedia, dualhookKey } from "../_shared/media.ts";
 import { confirmTicks, type TickMsg } from "../_shared/ticks.ts";
-import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, type Envelope } from "../_shared/webhook.ts";
+import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, threadPeer, senderId, recipientId, contactKey, historyDirection, type Envelope } from "../_shared/webhook.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
@@ -82,9 +82,11 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
   const ctx: Ctx = { db, ws: num.workspace_id, pnid, touched: [] };
 
   if (field === "messages") {
-    const names = new Map<string, string>((value.contacts ?? []).map((c: any) => [c.wa_id, c.profile?.name]));
+    const names = new Map<string | null, string>((value.contacts ?? []).map((c: any) => [contactKey(c), c.profile?.name]));
     for (const m of value.messages ?? []) {
-      const conv = await conversationFor(ctx, m.from, names.get(m.from));
+      const from = senderId(m);
+      if (!from) { console.error("message without sender; skipped", m?.type); continue; }
+      const conv = await conversationFor(ctx, from, names.get(from));
       if (m.referral && !conv.ad_id) {
         const r = m.referral;
         const { error } = await db.from("conversations").update({
@@ -101,7 +103,9 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
     }
   } else if (field === "smb_message_echoes") {
     for (const m of value.message_echoes ?? []) {
-      const conv = await conversationFor(ctx, m.to);
+      const to = recipientId(m);
+      if (!to) { console.error("echo without recipient; skipped", m?.type); continue; }
+      const conv = await conversationFor(ctx, to);
       await saveMessage(ctx, conv.id, m, "out", "app_echo");
     }
   } else if (field === "history") {
@@ -113,10 +117,13 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
         continue;
       }
       for (const th of h.threads ?? []) {
-        const conv = await conversationFor(ctx, th.id);
+        // One unidentifiable thread must not stop the ~150 other chats in the same batch.
+        const peer = threadPeer(th);
+        if (!peer) { console.error("history thread without customer id; skipped"); continue; }
+        const conv = await conversationFor(ctx, peer);
         // Backfill arrives in thousands of messages: one bulk write per thread, not one per message.
         const rows = (th.messages ?? []).filter((m: any) => m?.id && m.type !== "reaction" && m.type !== "unsupported").map((m: any) => ({
-          id: m.id, workspace_id: ctx.ws, conversation_id: conv.id, direction: m.from === th.id ? "in" : "out", origin: "history",
+          id: m.id, workspace_id: ctx.ws, conversation_id: conv.id, direction: historyDirection(m, th), origin: "history",
           sent_at: new Date(Number(m.timestamp) * 1000).toISOString(), type: m.type, body: textOf(m), raw: m,
         }));
         for (let i = 0; i < rows.length; i += 500) {

@@ -276,7 +276,8 @@ function ChatCard({ c, ws }: { c: ChatItem; ws: Workspace }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
-  const wa = c.wa_id ? c.wa_id.replace(/\D/g, "") : null;
+  // Hidden-number customers have an id like "KE.1858…" instead of a phone: no wa.me link for them.
+  const wa = c.wa_id && /^\+?\d{9,15}$/.test(c.wa_id) ? c.wa_id.replace(/\D/g, "") : null;
   const draftText = draft ? (lang === "sw" ? draft.draft_sw : draft.draft_en) : "";
 
   async function makeDraft() {

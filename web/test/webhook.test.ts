@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { eventKey, itemIds, safeError, isRetryable } from "../../supabase/functions/_shared/webhook";
+import { eventKey, itemIds, safeError, isRetryable, threadPeer, senderId, recipientId, contactKey, historyDirection } from "../../supabase/functions/_shared/webhook";
 
 const change = (ids: string[], extra: any = {}) => ({ field: "messages", value: { metadata: { phone_number_id: "pn" }, messages: ids.map((id) => ({ id, from: "255700000001", type: "text", text: { body: "hi" } })), ...extra } });
 
@@ -52,5 +52,36 @@ describe("provider envelopes (360dialog bridge)", () => {
   it("ignores bodies it does not understand", () => {
     expect(normalizeEnvelope({ hello: 1 }).entry).toEqual([]);
     expect(normalizeEnvelope(null).entry).toEqual([]);
+  });
+});
+
+describe("customers with a hidden phone number (user id only)", () => {
+  // Shapes seen from Meta: thread has only context.user_id; customer messages carry from_user_id.
+  const th = {
+    context: { user_id: "KE.1858311005179769" },
+    messages: [
+      { id: "a", type: "text", from_user_id: "KE.1858311005179769", history_context: { status: "pending" } },
+      { id: "b", type: "text", from: "255635855825", history_context: { status: "read", from_me: true } },
+    ],
+  };
+  it("keys the thread by the user id when no phone is shared", () => {
+    expect(threadPeer(th)).toBe("KE.1858311005179769");
+    expect(threadPeer({ id: "255700000001", context: { user_id: "TZ.1" } })).toBe("255700000001");
+    expect(threadPeer({})).toBeNull();
+  });
+  it("tells customer and business messages apart", () => {
+    expect(historyDirection(th.messages[0], th)).toBe("in");
+    expect(historyDirection(th.messages[1], th)).toBe("out");
+    const phoneThread = { id: "255700000001" };
+    expect(historyDirection({ from: "255700000001" }, phoneThread)).toBe("in");
+    expect(historyDirection({ from: "255635855825" }, phoneThread)).toBe("out");
+  });
+  it("reads sender, recipient and contact keys from either field", () => {
+    expect(senderId({ from: "255700000001" })).toBe("255700000001");
+    expect(senderId({ from_user_id: "KE.9" })).toBe("KE.9");
+    expect(senderId({})).toBeNull();
+    expect(recipientId({ to_user_id: "KE.9" })).toBe("KE.9");
+    expect(contactKey({ user_id: "KE.9" })).toBe("KE.9");
+    expect(contactKey({ wa_id: "255700000001", user_id: "TZ.1" })).toBe("255700000001");
   });
 });

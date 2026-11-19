@@ -17,6 +17,42 @@ export function itemIds(change: any): string[] {
   return [...new Set(ids)].sort();
 }
 
+// Customer identity. Some WhatsApp users hide their phone number (usernames): Meta then sends only a
+// business-scoped user id such as "KE.1858311005179769" in `user_id` / `from_user_id` / `to_user_id`
+// and leaves out `wa_id` / `from` / `to`. Fall back to that id so the chat is still saved.
+
+/** The customer a history thread belongs to: phone number when shared, else the user id. */
+export function threadPeer(th: any): string | null {
+  const v = th?.id ?? th?.context?.wa_id ?? th?.context?.user_id;
+  return v ? String(v) : null;
+}
+
+/** Who sent a message: phone number when shared, else the user id. */
+export function senderId(m: any): string | null {
+  const v = m?.from ?? m?.from_user_id;
+  return v ? String(v) : null;
+}
+
+/** Who a business message (echo) went to: phone number when shared, else the user id. */
+export function recipientId(m: any): string | null {
+  const v = m?.to ?? m?.to_user_id;
+  return v ? String(v) : null;
+}
+
+/** Customer key for a `contacts[]` entry of a messages webhook. */
+export function contactKey(c: any): string | null {
+  const v = c?.wa_id ?? c?.user_id;
+  return v ? String(v) : null;
+}
+
+/** Direction of a backfilled message: "in" when the customer of the thread sent it. */
+export function historyDirection(m: any, th: any): "in" | "out" {
+  if (m?.history_context?.from_me === true) return "out";
+  const s = senderId(m);
+  const customer = [th?.id, th?.context?.wa_id, th?.context?.user_id].filter(Boolean).map(String);
+  return s && customer.includes(s) ? "in" : "out";
+}
+
 /**
  * Identity of one webhook change. Two deliveries of the same change (provider retries) get the
  * same key; two different changes that happen to share a first message do not, because the key
