@@ -75,8 +75,14 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
     const c = cost.trim() ? Number(cost.replace(/[^\d.]/g, "")) : null;
     if (c != null && !(c >= 0)) return setErr(T("Cost must be a number.", "Gharama iwe namba."));
     setBusy(true); setErr("");
-    const { data: user } = await supabase.auth.getUser();
     const occurred = fromLocalInput(date);
+    if (status === "paid") {   // same payment twice (same chat, same amount, within an hour) is refused
+      const t = Date.parse(occurred);
+      const { data: twin } = await supabase.from("orders").select("id").eq("workspace_id", ws.id).eq("conversation_id", r.id).eq("status", "paid").eq("amount", a)
+        .gte("paid_at", new Date(t - 3600e3).toISOString()).lte("paid_at", new Date(t + 3600e3).toISOString()).limit(1);
+      if (twin?.length) { setBusy(false); return setErr(T("This payment is already saved for this customer.", "Malipo haya tayari yamehifadhiwa kwa mteja huyu.")); }
+    }
+    const { data: user } = await supabase.auth.getUser();
     const { error } = await supabase.from("orders").insert({
       workspace_id: ws.id, conversation_id: r.id, amount: a, discount: d, currency: ws.currency, status, fulfillment_status: fulfil,
       product: product.trim() || null, notes: notes.trim() || null, occurred_at: occurred, paid_at: status === "paid" ? occurred : null,

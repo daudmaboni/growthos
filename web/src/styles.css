@@ -325,6 +325,8 @@ a.btn { display: inline-block; text-decoration: none; }
 .chips-tabs .cnt { font-size: 12px; font-weight: 700; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted); text-align: center; }
 .chips-tabs button.on .cnt { background: #ffffff2e; color: inherit; }
 .chats-src { padding: 7px 12px; font-size: 14px; border-radius: 999px; }
+.chats-find { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chats-search { flex: 1 1 220px; min-width: 0; padding: 8px 14px; font-size: 14px; border-radius: 999px; }
 .cc-list { display: grid; gap: 10px; }
 .cc { border: 1px solid var(--line); border-left: 4px solid var(--line-2); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
 .cc.bad { border-left-color: var(--bad); } .cc.warn { border-left-color: var(--warn); } .cc.good { border-left-color: var(--good); } .cc.info { border-left-color: var(--info); }

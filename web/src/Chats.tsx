@@ -3,7 +3,9 @@
 // The technical detail (which rule or Kito reading decided the label) is still there, tucked away.
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
-import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt } from "./lib";
+import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt, localDay } from "./lib";
+import DateRange from "./DateRange";
+import { RangeSel, resolveRange, addDays, loadRange, saveRange, presetLabel } from "./ranges";
 import { AssignChat } from "./team";
 import { useProducts, ProductPicker, itemsCost, itemsLabel, productPhotosReady, itemsFromMatches, type Item, type ProductMatch } from "./Products";
 import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
@@ -98,6 +100,15 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [openId, setOpenId] = useState<string | null>(hashOpen());
+  // Search by name or phone, and an optional date range (own to this page; empty = all dates).
+  const [qText, setQText] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => { const t = window.setTimeout(() => { setSearch(qText.trim()); setLimit(PAGE); }, 350); return () => window.clearTimeout(t); }, [qText]);
+  const [range, setRangeState] = useState<RangeSel | null>(() => { try { return localStorage.getItem("itaos:chats:alldates") === "1" ? null : loadRange("chats", null as any); } catch { return null; } });
+  const setRange = (r: RangeSel | null) => { setRangeState(r); setLimit(PAGE); try { if (r) { saveRange("chats", r); localStorage.removeItem("itaos:chats:alldates"); } else localStorage.setItem("itaos:chats:alldates", "1"); } catch { /* storage blocked */ } };
+  const tzChats = ws.timezone || "Africa/Dar_es_Salaam";
+  const todayChats = localDay(new Date(), tzChats);
+  const period = range ? resolveRange(range, todayChats) : null;
   const [openConfirm, setOpenConfirm] = useState(false);
   const [adNames, setAdNames] = useState<Record<string, string>>({});
   const [phones, setPhones] = useState<Record<string, string>>({});
@@ -160,6 +171,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
     if (filter !== "ids" && src === "import") q = q.eq("phone_number_id", "import");
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
     if (filter === "ids" && ids) q = q.in("id", ids);
+    // Date range: chats with a message on those days (local days, East Africa time).
+    if (filter !== "ids" && period) q = q.gte("last_message_at", fromLocalInput(period.from + "T00:00")).lt("last_message_at", fromLocalInput(addDays(period.to, 1) + "T00:00"));
     if (filter === "not") q = q.eq("not_customer", true);
     else if (filter !== "ids") q = q.eq("not_customer", false);
     if (filter === "ids" && ids) { /* handled below */ }
@@ -177,8 +190,19 @@ export default function Chats({ ws }: { ws: Workspace }) {
       supabase.from("conversation_outcomes").select("id,outcome,kito_temp,warm,paid_orders,payment_signal,kito_outcome,outcome_override,override_by,phone_number_id").eq("workspace_id", ws.id).limit(1000)
         .then(({ data }) => setLite((data as Lite[]) ?? []));
     });
+    const searched = async () => {
+      if (filter === "ids" || !search) return q;
+      const digits = search.replace(/\D/g, "");
+      const like = `%${search.replace(/[%_,()]/g, "")}%`;
+      if (digits.length >= 3) {
+        const { data: cs } = await supabase.from("contacts").select("id").eq("workspace_id", ws.id).ilike("wa_id", `%${digits}%`).limit(200);
+        const cids = (cs ?? []).map((x: any) => x.id);
+        return cids.length ? q.or(`contact_name.ilike.${like},contact_id.in.(${cids.join(",")})`) : q.ilike("contact_name", like);
+      }
+      return q.ilike("contact_name", like);
+    };
     Promise.all([
-      q,
+      searched(),
       supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id),
       supabase.from("follow_up_tasks").select("*").eq("workspace_id", ws.id).in("status", ["open", "snoozed"]),
     ]).then(async ([c, a, t]) => {
@@ -197,7 +221,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       setTasks(Object.fromEntries(((t.data ?? []) as Task[]).map((task) => [task.conversation_id, task])));
       setLoading(false);
     });
-  }, [ws.id, filter, ids, tick, src, limit]);
+  }, [ws.id, filter, ids, tick, src, limit, search, period?.from, period?.to]);
 
   async function runKito(quiet = false) {
     setRechecking(true); setNote(quiet ? T("Kito is reading new chats…", "Kito anasoma chat mpya…") : T("Kito is reading the chats…", "Kito anasoma chat…"));
@@ -324,6 +348,15 @@ export default function Chats({ ws }: { ws: Workspace }) {
           <option value="import">{T(`From: uploaded files (${imported})`, `Kutoka: faili zilizopakiwa (${imported})`)}</option>
         </select>
       </div>
+      {filter !== "ids" && (
+        <div className="chats-find">
+          <input type="search" className="chats-search" value={qText} onChange={(e) => setQText(e.target.value)} placeholder={T("Search name or phone…", "Tafuta jina au namba…")} aria-label={T("Search chats", "Tafuta chat")} />
+          <DateRange value={range ?? { key: "today" }} onChange={(r) => setRange(r)} today={todayChats} tz={tzChats} lang={lang} />
+          {range ? <button className="small linkish" onClick={() => setRange(null)}>{T("All dates", "Tarehe zote")}</button>
+            : <span className="small muted">{T("Showing all dates", "Inaonyesha tarehe zote")}</span>}
+        </div>
+      )}
+      {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
       {filter !== "ids" && <p className="small muted" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
       {filter === "ids" && ids && <p className="small" style={{ margin: 0 }}>{T(`Showing ${ids.length} customers Kito picked`, `Inaonyesha wateja ${ids.length} aliowachagua Kito`)} · <a href="#chats" onClick={() => pick("all")}>{T("show everyone", "onyesha wote")}</a></p>}
       {src === "import" && imported > 0 && canManage(ws) && (
@@ -828,6 +861,13 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
     const txn = code.trim().toUpperCase().replace(/\s+/g, "");
     setBusy(true); setErr("");
     // Same customer, same amount, within 3 days of this payment: probably already recorded (e.g. from your ✅ message).
+    // The same payment saved twice (same customer, same amount, paid within an hour of each other) is refused outright.
+    {
+      const t = Date.parse(paidAt);
+      const { data: twin } = await supabase.from("orders").select("id").eq("workspace_id", ws.id).eq("conversation_id", r.id).eq("status", "paid").eq("amount", a)
+        .gte("paid_at", new Date(t - 3600e3).toISOString()).lte("paid_at", new Date(t + 3600e3).toISOString()).limit(1);
+      if (twin?.length) { setBusy(false); setPaidDone(true); return setDup(T("This payment is already saved for this customer, so it wasn't saved again.", "Malipo haya tayari yamehifadhiwa kwa mteja huyu, hayajahifadhiwa tena.")); }
+    }
     if (!dupOk) {
       const t = Date.parse(paidAt);
       const { data: near } = await supabase.from("orders").select("id,paid_at,amount").eq("workspace_id", ws.id).eq("conversation_id", r.id).eq("status", "paid")
