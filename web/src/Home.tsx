@@ -124,6 +124,22 @@ export default function Home() {
           </div>
         </section>
 
+        {/* REAL RESULT — Kayani Herbs (pilot business), 19 Nov 2026, figures from itaOS; shown with Kayani's permission */}
+        <section className="hp-proof">
+          <div className="hp-w">
+            <p className="hp-proof-k">{T("A real day on itaOS", "Siku halisi kwenye itaOS")}</p>
+            <h2>{T("Kayani Herbs, 19 November 2026", "Kayani Herbs, 19 Novemba 2026")}</h2>
+            <div className="hp-proof-grid">
+              <div><b>TSh 69,000</b><span>{T("spent on Facebook ads", "zilitumika kwenye matangazo ya Facebook")}</span></div>
+              <div><b>60</b><span>{T("new WhatsApp chats from those ads", "chat mpya za WhatsApp kutoka kwenye matangazo hayo")}</span></div>
+              <div><b>TSh 375,000</b><span>{T("paid by customers who came from the ads (2 orders)", "zililipwa na wateja waliotoka kwenye matangazo (oda 2)")}</span></div>
+              <div className="hi"><b>≈ 5×</b><span>{T("back for every shilling spent on ads that day", "zilirudi kwa kila shilingi iliyotumika kwenye matangazo siku hiyo")}</span></div>
+            </div>
+            <p className="hp-proof-n">{T("One day's figures from Kayani Herbs' itaOS dashboard, shared with their permission. Results differ from day to day and business to business.",
+              "Takwimu za siku moja kutoka dashibodi ya itaOS ya Kayani Herbs, zimeshirikiwa kwa ruhusa yao. Matokeo yanatofautiana kila siku na kila biashara.")}</p>
+          </div>
+        </section>
+
         {/* INTRO */}
         <section className="hp-intro">
           <div className="hp-w">

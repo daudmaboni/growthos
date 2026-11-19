@@ -187,6 +187,18 @@ html.hp-page body { background: #fff; }
 .hp-wa { position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 58px; height: 58px; border-radius: 50%; background: #25d366; color: #fff !important; display: grid; place-items: center; box-shadow: 0 14px 30px -10px #0000005c; transition: transform .2s ease; }
 .hp-wa:hover { transform: scale(1.06); }
 
+/* Real result */
+.hp-proof { padding: 64px 0 8px; text-align: center; }
+.hp-proof-k { font-weight: 700; color: var(--g); font-size: 16px; margin-bottom: 8px !important; }
+.hp-proof h2 { font-size: clamp(26px, 3.2vw, 36px); }
+.hp-proof-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 32px; text-align: left; }
+.hp-proof-grid > div { background: var(--mint-bg); border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 6px; }
+.hp-proof-grid > div.hi { background: var(--g); color: #fff; }
+.hp-proof-grid b { font-size: clamp(26px, 2.6vw, 34px); letter-spacing: -0.02em; line-height: 1.1; }
+.hp-proof-grid span { font-size: 15px; color: var(--ink-2); }
+.hp-proof-grid .hi span { color: #ffffffd0; }
+.hp-proof-n { font-size: 13.5px; color: #6b7a73; max-width: 640px; margin: 18px auto 0 !important; }
+
 @media (prefers-reduced-motion: reduce) { .hp-float { animation: none; } }
 
 @media (max-width: 900px) {
@@ -197,7 +209,7 @@ html.hp-page body { background: #fff; }
   .hp-hero-in { gap: 18px; }
   .hp-hero-txt p { margin: 16px 0 22px; }
   .hp-hero-art { padding: 0; }
-  .hp-trust-grid { grid-template-columns: 1fr 1fr; }
+  .hp-trust-grid, .hp-proof-grid { grid-template-columns: 1fr 1fr; }
   .hp-video { margin-top: -24px; }
   .hp-feat.flip .hp-feat-art { order: 0; }
   .hp-feat { padding: 36px 0; }
