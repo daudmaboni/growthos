@@ -49,6 +49,12 @@ export function waLink(phone: string) {
   return web;
 }
 
+// The open chat lives in the address (#chats/open=<id>) so a reload brings you back inside it.
+const hashOpen = () => {
+  const m = location.hash.match(/#chats\/open=([0-9a-f-]+)/i);
+  return m ? m[1] : null;
+};
+
 const hashIds = () => {
   const m = location.hash.match(/#chats\/ids=([0-9a-f,-]+)/i);
   return m ? m[1].split(",").filter(Boolean).slice(0, 100) : null;
@@ -91,7 +97,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [lite, setLite] = useState<Lite[]>([]);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [limit, setLimit] = useState(PAGE);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(hashOpen());
   const [openConfirm, setOpenConfirm] = useState(false);
   const [adNames, setAdNames] = useState<Record<string, string>>({});
   const [phones, setPhones] = useState<Record<string, string>>({});
@@ -256,6 +262,27 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const found = openId ? rows.find((x) => x.id === openId) ?? null : null;
   useEffect(() => { if (found) setOpenSnap(found); }, [found]);
   const openRow = found ?? (openSnap && openSnap.id === openId ? openSnap : null);
+  // Keep the address in step with the open chat (replaceState: no extra history entries, no hashchange).
+  useEffect(() => {
+    if (!location.hash.startsWith("#chats") || hashIds()) return;
+    const want = openId ? "#chats/open=" + openId : "#chats";
+    if (location.hash !== want) history.replaceState(null, "", want);
+  }, [openId]);
+  // After a reload the open chat may not be in the first page of the list: fetch it on its own.
+  useEffect(() => {
+    if (!openId || loading || found || (openSnap && openSnap.id === openId)) return;
+    let gone = false;
+    supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).eq("id", openId).maybeSingle().then(async ({ data }) => {
+      if (gone) return;
+      if (!data) { setOpenId(null); return; }
+      const row = data as Outcome;
+      const { data: ct } = await supabase.from("contacts").select("id,wa_id").eq("workspace_id", ws.id).eq("id", row.contact_id).maybeSingle();
+      if (gone) return;
+      if (ct) setPhones((p) => ({ ...p, [(ct as any).id]: (ct as any).wa_id }));
+      setOpenSnap(row);
+    });
+    return () => { gone = true; };
+  }, [openId, loading, found, ws.id]);
   // After a change in the open chat, refresh in place: no loading skeleton, the list keeps its scroll position.
   const refreshQuiet = () => { setQuiet(true); refresh(); };
   const tabs: [Filter, string, string][] = [
@@ -450,6 +477,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [recording, setRecording] = useState(false);
   const [confirming, setConfirming] = useState(!!startConfirm);
+  const [salesKey, setSalesKey] = useState(0);   // bumped after a sale is saved here, so the sales list reloads
   const [side, setSide] = useState(!!startConfirm);   // details sheet on smaller screens
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -579,7 +607,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
             {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
             <AssignChat ws={ws} conversationId={r.id} />
           </div>
-          {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); onChange(); }} />}
+          {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); setSalesKey((k) => k + 1); onChange(); }} />}
           {editor && !confirmed && st.key !== "check" && !recording && (
             <div className="cc-ask">
               <b>{T("Did they buy?", "Amenunua?")}</b>
@@ -591,10 +619,10 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
               {r.outcome_override && r.override_by && <button className="linkish small" disabled={busy} onClick={() => setOverride(null)}>{T("Undo my answer", "Futa jibu langu")}</button>}
             </div>
           )}
-          {recording && <OrderForm ws={ws} r={r} onDone={() => { setRecording(false); onChange(); }} onCancel={() => setRecording(false)} />}
+          {recording && <OrderForm ws={ws} r={r} onDone={() => { setRecording(false); setSalesKey((k) => k + 1); onChange(); }} onCancel={() => setRecording(false)} />}
           <div className="wa-card">
             <b className="small">{T("Sales from this customer", "Mauzo kwa mteja huyu")}</b>
-            <OrderList ws={ws} conversationId={r.id} onChange={onChange} />
+            <OrderList key={`${salesKey}-${r.paid_orders ?? 0}`} ws={ws} conversationId={r.id} onChange={onChange} />
           </div>
           {editor && !task && !confirmed && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
           {task && <span className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")} · <a href="#actions">{T("see reminders", "ona vikumbusho")}</a></span>}
