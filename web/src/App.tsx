@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { enterShell, enterTiles, shake, switchTheme, applyThemeMode, usePageEnter, select, type ThemeMode } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
-import { AuthScreen, SetNewPassword, LangToggle, initialLang, tr } from "./Auth";
+import { AuthScreen, SetNewPassword, initialLang, tr, AuthShell, AuthBrand, AuthField, AuthIcon } from "./Auth";
 import Dashboard from "./Dashboard";
 import Chats from "./Chats";
 import Connect from "./Connect";
@@ -240,21 +240,22 @@ function CreateWorkspace({ onDone }: { onDone: (w: Workspace) => void }) {
     onDone({ ...(data as unknown as Workspace), role: "owner" });
   }
   return (
-    <div className="center">
-      <form className="card auth" ref={formRef} onSubmit={submit}>
-        <div className="auth-top"><div className="row"><Logo size={36} /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>
-        <h2 style={{ margin: 0 }}>{tr(lang, "wsTitle")}</h2>
-        <label htmlFor="wsname" className="small muted">{tr(lang, "wsBody")}</label>
-        <input id="wsname" required autoComplete="organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr(lang, "businessPh")} />
+    <AuthShell lang={lang}>
+      <form className="ax-form" ref={formRef} onSubmit={submit}>
+        <AuthBrand lang={lang} setLang={setLang} />
+        <div className="ax-head"><h2>{tr(lang, "wsTitle")}</h2><p>{tr(lang, "wsBody")}</p></div>
+        <AuthField id="wsname" label={tr(lang, "business")} icon={AuthIcon.biz}>
+          <input id="wsname" required autoComplete="organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr(lang, "businessPh")} />
+        </AuthField>
         {lost ? (<>
-          <p className="err">{tr(lang, "wsLost")}</p>
-          <button type="button" className="primary" onClick={() => supabase.auth.signOut({ scope: "local" })}>{tr(lang, "signInAgain")}</button>
+          <p className="err" style={{ margin: 0 }}>{tr(lang, "wsLost")}</p>
+          <button type="button" className="primary ax-cta" onClick={() => supabase.auth.signOut({ scope: "local" })}>{tr(lang, "signInAgain")}</button>
         </>) : (<>
-          <button className="primary" disabled={busy}>{busy ? tr(lang, "wsCreating") : tr(lang, "wsCreate")}</button>
-          {err && <p className="err">{err}</p>}
+          <button className="primary ax-cta" disabled={busy}>{busy ? tr(lang, "wsCreating") : tr(lang, "wsCreate")}</button>
+          {err && <p className="err" style={{ margin: 0 }}>{err}</p>}
         </>)}
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
