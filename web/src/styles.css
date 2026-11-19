@@ -747,3 +747,14 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .coming-soon { display: grid; gap: 8px; justify-items: start; max-width: 560px; }
 .coming-soon h2 { margin: 0; }
 .coming-soon p { margin: 0; }
+
+/* Revenue card opens "Who paid" */
+.kpi-click { cursor: pointer; }
+.kpi-click:hover, .kpi-click.on { border-color: var(--accent); }
+.kpi-click .kt::after { content: " ▸"; color: var(--muted); }
+.kpi-click.on .kt::after { content: " ▾"; }
+.paid-list { gap: 12px; }
+.paid-rows { display: grid; gap: 10px; }
+.paid-row { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
+.paid-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.paid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 14px; }

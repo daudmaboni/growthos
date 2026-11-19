@@ -9,6 +9,7 @@ import DateRange from "./DateRange";
 import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
+import PaidOrders from "./PaidOrders";
 
 export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Workspace) => void }) {
   const [range, setRangeState] = useState<RangeSel>(() => loadRange("dashboard", { key: "last_7" }));
@@ -30,6 +31,8 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   const W = (n: number | null | undefined) => cv(n, ws.currency) ?? (n ?? null);           // sales amount → shown
   const wsCur = cv(1, ws.currency) != null ? cur : ws.currency;
   const findings = g.findings;
+  const [showPaid, setShowPaid] = useState(false);
+  const adNames = useMemo(() => Object.fromEntries((g.options?.ads ?? []).map((a) => [a.id, a.name])), [g.options]);
 
   const costBars = useMemo(() => {
     const withSales = ads.filter((a) => Number(a.sold) > 0);
@@ -70,7 +73,8 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
 
   if ((loading && !g.cached) || !mx || !prev) return (
     <div className="skeletons" aria-busy="true" aria-label="Loading">
-      <div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
+      
+        {showPaid && mx && <PaidOrders ws={ws} orders={g.orders} period={mx.period} adNames={adNames} onClose={() => setShowPaid(false)} />}<div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
       <div className="two"><div className="skeleton" style={{ minHeight: 300 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>
     </div>
   );
@@ -110,7 +114,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(A(mx.costPerPlatformConversation.value), adCur)} n={A(mx.costPerPlatformConversation.value)} f={(x) => money(x, adCur)} s={T("As in Ads Manager", "Kama Ads Manager")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
           <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(A(mx.costPerQualifiedInquiry.value), adCur)} s={mx.costPerQualifiedInquiry.value == null ? (mx.adChats.value ? T(`${fmt(mx.adChats.value)} chats came from ads; none got a price yet`, `Chat ${fmt(mx.adChats.value)} zimetoka matangazo; hakuna iliyopewa bei bado`) : T("No chats from ads in this period.", "Hakuna chat kutoka matangazo kipindi hiki.")) : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
           <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(A(mx.costPerAttributedSale.value), adCur)} n={A(mx.costPerAttributedSale.value)} f={(x) => money(x, adCur)} s={mx.adCustomerOrders.value ? `${mx.adCustomerOrders.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}` : T("No sale from an ad chat yet", "Bado hakuna mauzo kutoka chat ya tangazo")} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
-          <Kpi k={T("Revenue", "Mapato")} v={money(W(mx.revenue.value), wsCur)} n={W(mx.revenue.value)} f={(x) => money(x, wsCur)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")} · ${periodText(mx.period, lang)}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")}
+          <Kpi onClick={() => setShowPaid((x) => !x)} active={showPaid} k={T("Revenue", "Mapato")} v={money(W(mx.revenue.value), wsCur)} n={W(mx.revenue.value)} f={(x) => money(x, wsCur)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")} · ${periodText(mx.period, lang)}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")}
             s2={<>{(mx.ordersPaid.value ?? 0) > 0 && <span style={{ display: "block" }}>{T(`${money(W(mx.adCustomerRevenue.value), wsCur)} from ads · ${money(W((mx.revenue.value ?? 0) - (mx.adCustomerRevenue.value ?? 0)), wsCur)} not from ads`, `${money(W(mx.adCustomerRevenue.value), wsCur)} kutoka matangazo · ${money(W((mx.revenue.value ?? 0) - (mx.adCustomerRevenue.value ?? 0)), wsCur)} si matangazo`)}</span>}{g.allTime && <span style={{ display: "block" }}>{T(`All time: ${money(W(g.allTime.revenue), wsCur)} · ${fmt(g.allTime.orders)} orders`, `Tangu mwanzo: ${money(W(g.allTime.revenue), wsCur)} · oda ${fmt(g.allTime.orders)}`)}</span>}</>}
             s2t={g.allTime ? T(`All time (the Bought tab): ${fmt(g.allTime.orders)} orders from ${fmt(g.allTime.chats)} customers · ${money(W(g.allTime.revenue), wsCur)}. Each sale counts on the day the payment shows in the chat.`, `Tangu mwanzo (Wamenunua): oda ${fmt(g.allTime.orders)} kutoka wateja ${fmt(g.allTime.chats)} · ${money(W(g.allTime.revenue), wsCur)}. Kila mauzo yanahesabiwa siku malipo yanaonekana kwenye chat.`) : undefined} />
           <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpendAllAdCustomers.value == null ? "–" : mx.returnOnAdSpendAllAdCustomers.value.toFixed(1) + "×"} s={mx.returnOnAdSpendAllAdCustomers.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? (ws.fx_auto !== false ? T("Getting today's exchange rate…", "Inapata kiwango cha leo…") : T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio")) : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : T(`${money(W(mx.adCustomerRevenue.value), wsCur)} paid by ${fmt(mx.adCustomerOrders.value)} ad customers this period`, `${money(W(mx.adCustomerRevenue.value), wsCur)} zimelipwa na wateja ${fmt(mx.adCustomerOrders.value)} wa matangazo kipindi hiki`)} src="matched" title={T("Money paid this period by customers who came from an ad ÷ what the ads cost this period. A customer who clicked the ad yesterday and paid today counts today.", "Pesa zilizolipwa kipindi hiki na wateja waliotoka kwenye tangazo ÷ gharama ya matangazo kipindi hiki. Mteja aliyebofya jana na kulipa leo anahesabiwa leo.")}
@@ -239,13 +243,14 @@ function Cov({ label, ok, note }: { label: string; ok: boolean; note: string }) 
 }
 
 /** KPI tile. Pass `n` + `f` to count the value up on load instead of showing `v` at once. */
-function Kpi({ k, v, s, s2, s2t, cls = "", n, f, d, invert, src, title, fix }: { k: string; v: string; s?: string; s2?: ReactNode; s2t?: string; cls?: string; n?: number | null; f?: (x: number) => string; d?: number | null; invert?: boolean; src?: string; title?: string; fix?: ReactNode }) {
+function Kpi({ k, v, s, s2, s2t, cls = "", n, f, d, invert, src, title, fix, onClick, active }: { k: string; v: string; s?: string; s2?: ReactNode; s2t?: string; cls?: string; n?: number | null; f?: (x: number) => string; d?: number | null; invert?: boolean; src?: string; title?: string; fix?: ReactNode; onClick?: () => void; active?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   // The count-up writes the number straight into the page, so when there's no number any more put the text back (else the old figure stays).
   useEffect(() => { if (n != null && isFinite(n) && f) countTo(ref.current, n, f, { duration: 1.2, delay: 0.3 }); else if (ref.current) { countTo(ref.current, 0, () => v, { duration: 0 }); ref.current.textContent = v; } }, [n, f, v]);
   const good = d == null ? null : invert ? d < 0 : d > 0;
   return (
-    <div className={"kpi " + cls} title={title}>
+    <div className={"kpi " + cls + (onClick ? " kpi-click" : "") + (active ? " on" : "")} title={title}
+      {...(onClick ? { role: "button", tabIndex: 0, "aria-expanded": !!active, onClick: (e: any) => { if (!(e.target as HTMLElement).closest("a,button,input,select")) onClick(); }, onKeyDown: (e: any) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {})}>
       <span className="k"><span className="kt">{k}</span>{src && <SourceBadge p={src as any} lang="en" compact />}</span>
       <span className="kv">
         <span className="v" ref={ref}>{v}</span>
