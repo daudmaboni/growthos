@@ -8,8 +8,9 @@
 //  - "Revenue recorded in period" = paid orders whose paid_at falls in the period, whatever the chat.
 //  - Ad spend, impressions, clicks and Meta-reported conversations are platform figures by day.
 //  - Cost per sale divides ad spend by attributed sales from ad chats only, and only when both exist.
-//  - Contribution is shown only when the inputs it needs exist (fx rate when currencies differ,
-//    and either a unit cost per order or imported expenses).
+//  - Profit (contribution) is shown only when the inputs it needs exist: the fx rate when currencies
+//    differ, and a cost for every paid order (typed / from products, or the workspace default cost,
+//    which marks the figure "estimated"). Imported expenses never stand in for missing order costs.
 
 import type { AdPerf, Order, Outcome, Workspace } from "./lib";
 import { localDay, median } from "./lib";
@@ -35,7 +36,7 @@ export type FunnelMetrics = {
   costPerPlatformConversation: Metric; costPerAdChat: Metric; costPerQualifiedInquiry: Metric; costPerAttributedSale: Metric;
   returnOnAdSpend: Metric; contribution: Metric;
   medianFirstReply: Metric; over1h: Metric; noReply: Metric; silentAfterPrice: Metric; warmNoFollowUp: Metric; kitoRead: Metric;
-  coverage: { knownSourceShare: number | null; kitoReadShare: number | null; chatsWithoutMessages: number; fxNeeded: boolean; fxSet: boolean; unitCostSet: boolean; expensesCount: number; ordersMissingCost: number; orderCosts: number };
+  coverage: { knownSourceShare: number | null; kitoReadShare: number | null; chatsWithoutMessages: number; fxNeeded: boolean; fxSet: boolean; unitCostSet: boolean; expensesCount: number; ordersMissingCost: number; ordersEstimatedCost: number; orderCosts: number };
 };
 
 export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
@@ -53,7 +54,7 @@ export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
   costPerQualifiedInquiry: { en: "Ad spend ÷ ad chats where a price was shared.", sw: "Matumizi ÷ chats za matangazo zilizopewa bei." },
   costPerAttributedSale: { en: "Ad spend ÷ attributed sales from ad chats. A matched estimate.", sw: "Matumizi ÷ mauzo yaliyounganishwa na chats za matangazo. Ni makadirio." },
   returnOnAdSpend: { en: "Attributed revenue from ad chats ÷ ad spend (converted with your exchange rate).", sw: "Mapato yaliyounganishwa na matangazo ÷ matumizi (kwa kiwango chako cha kubadilisha)." },
-  contribution: { en: "Revenue − ad spend − the cost you typed on each order − imported expenses. Shown when every order in the period has a cost.", sw: "Mapato − matangazo − gharama uliyoandika kwa kila oda − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama." },
+  contribution: { en: "Profit = revenue − ad spend − what each order cost you (product + delivery) − imported expenses. Shown when every order in the period has a cost; orders without their own cost use your default cost, and then it says \"estimated\". Rent, salaries and other running costs are not taken out unless you import them as expenses.", sw: "Faida = mapato − matangazo − gharama ya kila oda (bidhaa + usafiri) − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama; oda zisizo na gharama yake zinatumia gharama ya kawaida, na hapo inasema \"makadirio\". Kodi, mishahara na gharama nyingine za uendeshaji hazitolewi isipokuwa uziingize kama matumizi." },
 };
 
 const m = (value: number | null, provenance: Provenance, extra: Partial<Metric> = {}): Metric => ({ value, provenance, ...extra });
@@ -136,10 +137,13 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
   const unitCost = i.ws.unit_cost != null ? Number(i.ws.unit_cost) : null;
   const costOf = (o: Order) => (o.cost != null ? Number(o.cost) : unitCost);
   const missingCost = paid.filter((o) => costOf(o) == null).length;
+  const estimatedCost = paid.filter((o) => o.cost == null && unitCost != null).length;   // counted at the default cost
   const orderCosts = paid.reduce((s, o) => s + (costOf(o) ?? 0), 0);
-  const costsKnown = paid.length > 0 && (missingCost === 0 || expenses.length > 0);
+  // Profit is shown only when every paid order has a cost (its own, or the workspace default).
+  // Imported expenses are subtracted on top; they never stand in for missing order costs.
+  const costsKnown = paid.length > 0 && missingCost === 0;
   const contribution = spendInWs != null && costsKnown
-    ? m(revenue - spendInWs - orderCosts - expensesTotal, "derived", { n: paid.length - missingCost, d: paid.length, note: missingCost ? "some orders have no cost" : "order costs" })
+    ? m(revenue - spendInWs - orderCosts - expensesTotal, "derived", { n: paid.length - estimatedCost, d: paid.length, note: estimatedCost ? "estimated" : "order costs" })
     : m(null, "derived", { n: paid.length - missingCost, d: paid.length, note: spendInWs == null ? "needs exchange rate" : paid.length === 0 ? "no paid orders in period" : "needs order costs" });
 
   return {
@@ -168,7 +172,7 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
       knownSourceShare: convs.length ? (convs.length - unknown.length) / convs.length : null,
       kitoReadShare: convs.length ? kitoRead / convs.length : null,
       chatsWithoutMessages: convs.filter((c) => !c.last_message_at).length,
-      fxNeeded, fxSet: !!i.ws.fx_rate, unitCostSet: unitCost != null, expensesCount: expenses.length, ordersMissingCost: missingCost, orderCosts,
+      fxNeeded, fxSet: !!i.ws.fx_rate, unitCostSet: unitCost != null, expensesCount: expenses.length, ordersMissingCost: missingCost, ordersEstimatedCost: estimatedCost, orderCosts,
     },
   };
 }

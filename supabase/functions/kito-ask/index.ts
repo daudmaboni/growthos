@@ -34,6 +34,7 @@ const SCHEMA = `Views (PostgreSQL). Query them by bare name, e.g. "select ... fr
 workspace(name, currency, timezone, language, fx_rate, unit_cost, follow_up_hours, conversion_window_days, today_local date)
   fx_rate = local currency per 1 unit of the ad account currency (ads are often billed in USD).
 business_profile(products jsonb [{name, price, note}], delivery_areas, payment_methods, tone, faqs jsonb, constraints)
+products(name, aliases text[], selling_price, unit_cost, active)   -- the owner's product list (My products); unit_cost = product + delivery for one unit
 
 chats — one row per WhatsApp conversation with a customer:
   chat_id uuid, customer_name (saved contact name; may contain campaign words or ✅),

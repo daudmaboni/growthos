@@ -3,8 +3,9 @@
 // The technical detail (which rule or Kito reading decided the label) is still there, tucked away.
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
-import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
+import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt } from "./lib";
 import { AssignChat } from "./team";
+import { useProducts, ProductPicker, itemsCost, itemsLabel, type Item } from "./Products";
 import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
 
@@ -765,6 +766,10 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   const [paidOn, setPaidOn] = useState("");
   useEffect(() => { if (!paidOn && pm !== undefined) setPaidOn(toLocalInput(rc?.sent_at ?? pm?.at ?? r.last_message_at ?? new Date().toISOString())); }, [pm, rc?.sent_at]);
   const [cost, setCost] = useState("");
+  // What the customer bought (My products): the cost fills in from the products picked, still editable.
+  const { products } = useProducts(ws.id);
+  const [items, setItems] = useState<Item[]>([]);
+  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); }, [items]);
   const [dupOk, setDupOk] = useState(false);
   const [dup, setDup] = useState<string | null>(null);
 
@@ -794,6 +799,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
     const { error } = await supabase.from("orders").insert({
       workspace_id: ws.id, conversation_id: r.id, amount: a, discount: 0, currency: ws.currency, status: "paid", fulfillment_status: "not_shipped",
       occurred_at: paidAt, paid_at: paidAt, provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c,
+      items, product: items.length ? itemsLabel(items) : null,
       external_ref: txn ? "txn:" + txn : null,
       notes: [txn ? `Transaction ${txn}` : null, pm ? `Paid date read from the chat (${pm.kind}): "${pm.snippet.slice(0, 80)}"` : null].filter(Boolean).join("\n") || null,
     });
@@ -835,8 +841,9 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
         <label className="small">{T("Transaction code", "Namba ya muamala")}<input value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} placeholder="QK41ABC9XY" /></label>
         <label className="small">{T("Paid on", "Alilipa lini")}<input type="datetime-local" value={paidOn} onChange={(e) => { setPaidOn(e.target.value); setDupOk(false); setDup(null); }} />
           {pm && <span className="muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}{pm.snippet ? `: “${pm.snippet.slice(0, 60)}${pm.snippet.length > 60 ? "…" : ""}”` : ""}</span>}</label>
-        <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} />
-          <span className="muted">{T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>
+        {products && products.some((p) => p.active) && <div style={{ gridColumn: "1 / -1" }}><ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} /></div>}
+        <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={ws.unit_cost != null ? T(`empty = default ${amt(Number(ws.unit_cost), ws.currency)}`, `wazi = kawaida ${amt(Number(ws.unit_cost), ws.currency)}`) : T("product + delivery", "bidhaa + usafiri")} />
+          <span className="muted">{items.length ? T("Filled in from the products picked. You can change it.", "Imejazwa kutoka bidhaa ulizochagua. Unaweza kuibadilisha.") : T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>
       </div>
       {dup && <span className="warnt small">⚠ {dup}</span>}
       <div className="cc-ask-btns">

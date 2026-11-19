@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase, Workspace, Order, Outcome, L, amt, when, orderNet, canEdit } from "./lib";
 import { AssignSelect } from "./team";
+import { useProducts, ProductPicker, itemsCost, itemsLabel, type Item } from "./Products";
 
 type Ev = { id: number; action: string; actor: string | null; at: string; before: any; after: any };
 
@@ -55,6 +56,9 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
   useEffect(() => { if (!date && pm !== undefined) setDate(toLocalInput(pm?.at ?? r.last_message_at ?? new Date().toISOString())); }, [pm]);
   const [cost, setCost] = useState("");
   const [product, setProduct] = useState("");
+  const { products } = useProducts(ws.id);
+  const [items, setItems] = useState<Item[]>([]);
+  useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); if (items.length) setProduct(itemsLabel(items)); }, [items]);
   const [status, setStatus] = useState<Order["status"]>("paid");
   const [fulfil, setFulfil] = useState<Order["fulfillment_status"]>("not_applicable");
   const [notes, setNotes] = useState("");
@@ -74,7 +78,7 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
     const { error } = await supabase.from("orders").insert({
       workspace_id: ws.id, conversation_id: r.id, amount: a, discount: d, currency: ws.currency, status, fulfillment_status: fulfil,
       product: product.trim() || null, notes: notes.trim() || null, occurred_at: occurred, paid_at: status === "paid" ? occurred : null,
-      provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c,
+      provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c, items,
     });
     setBusy(false);
     if (error) setErr(error.message); else onDone();
@@ -83,6 +87,7 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
     <form className="card" style={{ background: "var(--paper)", gap: 8 }} onSubmit={save}>
       <b>{T("Record an order for this chat", "Rekodi oda ya chat hii")}</b>
       {inferredFrom(r) && <span className="small muted">{T("A payment was inferred from the chat. Recording it here is what makes it a confirmed sale.", "Malipo yalikisiwa kutoka chat. Kuyarekodi hapa ndiko kunayafanya kuwa mauzo yaliyothibitishwa.")}</span>}
+      {products && products.some((p) => p.active) && <ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} />}
       <div className="map">
         <label>{T("Amount", "Kiasi")} ({ws.currency})<input inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
         <label>{T("Discount", "Punguzo")}<input inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" /></label>

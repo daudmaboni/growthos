@@ -86,6 +86,19 @@ describe("cost metrics", () => {
     expect(partial.contribution.note).toBe("needs order costs");
     expect(partial.coverage.ordersMissingCost).toBe(1);
   });
+  it("uses the default cost for orders without their own and marks profit estimated", () => {
+    const mixed = computeFunnel({ ...base, ws: { ...WS, unit_cost: 10000 }, conversations: [], daily, orders: [order({ amount: 100000, cost: 35000 }), order({ id: "o2", amount: 50000 })] });
+    expect(mixed.contribution.value).toBe(150000 - 20 * 2600 - 45000);
+    expect(mixed.contribution.note).toBe("estimated");
+    expect(mixed.coverage.ordersEstimatedCost).toBe(1);
+    const exact = computeFunnel({ ...base, ws: { ...WS, unit_cost: 10000 }, conversations: [], daily, orders: [order({ amount: 100000, cost: 35000 })] });
+    expect(exact.contribution.note).toBe("order costs");
+  });
+  it("does not show profit when orders lack a cost, even if expenses were imported", () => {
+    const mx = computeFunnel({ ...base, ws: WS, conversations: [], daily, orders: [order({ amount: 100000 })], expenses: [{ day: daily[0].day, amount: 5000, currency: "TZS", category: "rent" }] });
+    expect(mx.contribution.value).toBeNull();
+    expect(mx.contribution.note).toBe("needs order costs");
+  });
 });
 
 describe("delta", () => {

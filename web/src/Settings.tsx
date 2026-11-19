@@ -189,6 +189,7 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
   const [hours, setHours] = useState(String(ws.follow_up_hours ?? 24));
   const [win, setWin] = useState(String(ws.conversion_window_days ?? 30));
   const [tz, setTz] = useState(ws.timezone ?? "Africa/Dar_es_Salaam");
+  const [unitCost, setUnitCost] = useState(ws.unit_cost != null ? String(ws.unit_cost) : "");
   const { msg, busy, save } = useSave(ws, onWs);
   const manager = canManage(ws);
   // fx_rate is always "1 ad-currency unit (USD) = N shillings", whatever the sales currency is set to.
@@ -198,10 +199,12 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
     e.preventDefault();
     const v = rate.trim() === "" ? null : Number(rate.replace(/,/g, ""));
     const h = Number(hours), w = Number(win);
+    const uc = unitCost.trim() === "" ? null : Number(unitCost.replace(/[^\d.]/g, ""));
+    if (uc !== null && !(uc >= 0 && isFinite(uc))) { shake(e.currentTarget); return; }
     if ((!auto && v !== null && !(v > 0)) || !(h >= 1 && h <= 720) || !(w >= 1 && w <= 180)) { shake(e.currentTarget); return; }
     try { new Intl.DateTimeFormat("en", { timeZone: tz }); } catch { shake(e.currentTarget); return; }
     const fx = auto ? { fx_auto: true } : { fx_auto: false, fx_rate: v, fx_source: "manual", fx_updated_at: new Date().toISOString() };
-    const ok = await save({ ...fx, follow_up_hours: h, conversion_window_days: w, timezone: tz }, e.currentTarget, T("Saved. Reports now use these rules.", "Imehifadhiwa. Ripoti sasa zinatumia kanuni hizi."));
+    const ok = await save({ ...fx, follow_up_hours: h, conversion_window_days: w, timezone: tz, unit_cost: uc }, e.currentTarget, T("Saved. Reports now use these rules.", "Imehifadhiwa. Ripoti sasa zinatumia kanuni hizi."));
     if (ok && auto && ws.fx_auto === false) refreshRate();
   }
   /** Ask the server for today's rate (only works while the rate is automatic). */
@@ -237,6 +240,9 @@ function Rates({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T
           <div className="row" style={{ marginTop: 6 }}><input id="s-fx" inputMode="decimal" style={{ width: 160 }} placeholder="e.g. 2600" value={rate} disabled={!manager} onChange={(e) => setRate(e.target.value)} /><span>{fxTo}</span></div>
         )}
         {fxErr && <span className="small err">{fxErr}</span>}
+      </Field>
+      <Field id="s-uc" label={T(`Default cost per order (${ws.currency})`, `Gharama ya kawaida kwa oda (${ws.currency})`)} hint={T("Product + delivery for a typical order. Used only for orders where you didn't pick products or type a cost, and the profit card then says \"estimated\". Leave empty if every order costs something different (e.g. phones).", "Bidhaa + usafiri kwa oda ya kawaida. Inatumika tu kwa oda ambazo hukuchagua bidhaa wala kuandika gharama, na kadi ya faida itasema \"makadirio\". Acha wazi kama kila oda ina gharama tofauti (mf. simu).")}>
+        <input id="s-uc" inputMode="decimal" style={{ width: 160 }} placeholder={T("e.g. 10000", "mf. 10000")} value={unitCost} disabled={!manager} onChange={(e) => setUnitCost(e.target.value)} />
       </Field>
       <Field id="s-fu" label={T("Remind me to follow up after (hours)", "Nikumbushe kufuatilia baada ya (saa)")} hint={T("A customer who showed interest but got no message from you for this long shows up in Actions.", "Mteja aliyeonyesha nia bila ujumbe wako kwa muda huu anaonekana kwenye Vitendo.")}>
         <input id="s-fu" inputMode="numeric" style={{ width: 160 }} value={hours} disabled={!manager} onChange={(e) => setHours(e.target.value)} />
