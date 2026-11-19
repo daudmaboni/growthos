@@ -431,8 +431,10 @@ const fromOf = (r: Outcome, T: Tr, adName?: string) => r.source === "ad"
   ? (adName || r.source_label ? T(`From the ad "${adName ?? r.source_label}"`, `Kutoka tangazo "${adName ?? r.source_label}"`)
     : r.ad_signal === "greeting_card" ? T("From an ad (opened with your ad greeting)", "Kutoka tangazo (ilianza na salamu ya tangazo)")
     : r.ad_signal === "ad_text" ? T("From an ad (sent the ad's ready-made message)", "Kutoka tangazo (alituma ujumbe tayari wa tangazo)")
+    : r.ad_signal === "owner" ? T("From an ad (you set this)", "Kutoka tangazo (umeweka wewe)")
     : T("From an ad", "Kutoka tangazo"))
   : r.source_label ? T(`From ${r.source_label}`, `Kutoka ${r.source_label}`)
+  : r.source === "organic" && r.ad_signal === "owner" ? T("Not from an ad (you set this)", "Si kutoka tangazo (umeweka wewe)")
   : r.source === "organic" ? T("Messaged you directly", "Alikutumia ujumbe moja kwa moja") : T("Source unknown", "Chanzo hakijulikani");
 const prettyPhone = (p: string) => (p.length === 12 && p.startsWith("255") ? `+255 ${p.slice(3, 6)} ${p.slice(6, 9)} ${p.slice(9)}` : "+" + p);
 
@@ -479,6 +481,15 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
   // Newest message in view, like WhatsApp.
   useEffect(() => { const el = thread.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs?.length]);
 
+  /** The owner's answer to "came from an ad?" wins over the automatic checks (ad_signal = 'owner'). */
+  async function setFromAd(yes: boolean) {
+    if ((r.source === "ad") === yes && r.ad_signal === "owner") return;
+    setBusy(true); setErr("");
+    let { error } = await supabase.from("conversations").update({ source: yes ? "ad" : "organic", ad_signal: "owner" }).eq("id", r.id);
+    // Until migration 0032 is on the database, 'owner' isn't an allowed ad_signal: save the answer without it.
+    if (error?.code === "23514") ({ error } = await supabase.from("conversations").update({ source: yes ? "ad" : "organic", ...(yes ? {} : { ad_signal: null }) }).eq("id", r.id));
+    setBusy(false); if (error) setErr(error.message); else onChange();
+  }
   async function setOverride(v: "lost" | "open" | null) {
     setBusy(true); setErr("");
     const { error } = await supabase.from("conversations").update({ outcome_override: v, override_note: null }).eq("id", r.id);
@@ -547,6 +558,15 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
           <div className="wa-card">
             <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
             <span className="small muted">{fromOf(r, T, adName)}</span>
+            {editor && (
+              <div className="cc-fromad">
+                <span className="small">{T("Came from an ad?", "Ametoka kwenye tangazo?")}</span>
+                <div className="seg" role="group" aria-label={T("Came from an ad?", "Ametoka kwenye tangazo?")}>
+                  <button type="button" className={r.source === "ad" ? "on" : ""} aria-pressed={r.source === "ad"} disabled={busy} onClick={() => setFromAd(true)}>{T("Yes", "Ndiyo")}</button>
+                  <button type="button" className={r.source !== "ad" ? "on" : ""} aria-pressed={r.source !== "ad"} disabled={busy} onClick={() => setFromAd(false)}>{T("No", "Hapana")}</button>
+                </div>
+              </div>
+            )}
             {kitoStale(r) && <p className="wa-sum cc-reading">✦ {T("New messages since Kito's last read. Kito is reading them now; this updates by itself.", "Kuna ujumbe mpya tangu Kito asome. Kito anausoma sasa; hii itajisasisha yenyewe.")}</p>}
             {r.kito_summary && <p className={"wa-sum" + (kitoStale(r) ? " stale" : "")}>{r.kito_summary}</p>}
             {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}

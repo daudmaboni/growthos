@@ -74,9 +74,9 @@ Deno.serve(async (req) => {
       if (e1) throw new Error(e1.message);
       const { data: conv, error: e2 } = await db.from("conversations")
         .upsert({ workspace_id: ws, contact_id: c!.id, phone_number_id: "import", source_label: sourceLabel(name) }, { onConflict: "workspace_id,contact_id,phone_number_id" })
-        .select("id,source").single();
+        .select("id,source,ad_signal").single();
       if (e2) throw new Error(e2.message);
-      if (chat.from_ad && conv!.source !== "ad") await db.from("conversations").update({ source: "ad" }).eq("id", conv!.id);
+      if (chat.from_ad && conv!.source !== "ad" && conv!.ad_signal !== "owner") await db.from("conversations").update({ source: "ad" }).eq("id", conv!.id);
       const rows = [];
       for (let i = 0; i < msgs.length; i++) {
         const m = msgs[i];

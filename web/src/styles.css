@@ -676,3 +676,5 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 /* "are you sure?" dialog (Settings → Rules & rates) */
 /* sits above the blurred scrim (an un-positioned box would be painted under it and look blurred) */
 .confirm-modal { position: relative; z-index: 1; width: 100%; max-width: 420px; display: grid; gap: 12px; padding: 22px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .12); animation: dr-pop-in .32s cubic-bezier(.2, .9, .3, 1.15) both; }
+/* "Came from an ad? Yes / No" in the chat's side panel */
+.cc-fromad { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
