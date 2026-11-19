@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { enterCards, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, L, ago, money, fmt, canEdit } from "./lib";
+import { KitoLogo } from "./Logo";
 
 type ChatItem = {
   chat_id: string; name: string | null; wa_id: string | null; last_message_at: string | null; last_dir: "in" | "out" | null;
@@ -109,9 +110,12 @@ export default function Kito({ ws }: { ws: Workspace }) {
   return (
     <div className="shell-grid" ref={pageRef}>
       <div className="hero">
-        <div>
+        <div className="kito-hero">
+          <KitoLogo size={52} title="Kito" />
+          <div>
           <h2>{T("Ask Kito", "Muulize Kito")}</h2>
           <div className="sub"><span>{T("Ask anything about your chats, customers, ads and sales. Kito answers from your own data.", "Uliza chochote kuhusu chat, wateja, matangazo na mauzo yako. Kito anajibu kutoka kwenye data yako.")}</span></div>
+        </div>
         </div>
         {turns.length > 0 && <button className="small" onClick={() => setTurns([])} disabled={busy}>{T("New conversation", "Mazungumzo mapya")}</button>}
       </div>
@@ -161,6 +165,7 @@ function AnswerCard({ a, ws, onAsk, stale }: { a: Answer; ws: Workspace; onAsk: 
   const T = (en: string, sw: string) => (ws.language === "sw" ? sw : en);
   return (
     <div className="card kito-answer">
+      <div className="kito-by"><KitoLogo size={28} /><b>Kito</b></div>
       {stale && <p className="small muted" style={{ margin: 0 }}>{T(`Saved answer from ${ago(a.created_at)}. Ask again for fresh numbers.`, `Jibu lililohifadhiwa ${ago(a.created_at)}. Uliza tena kupata takwimu mpya.`)}</p>}
       <Prose text={a.answer} />
       {a.blocks.map((b, i) => <BlockView key={i} b={b} ws={ws} />)}

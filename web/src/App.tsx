@@ -12,7 +12,7 @@ import Report from "./Report";
 import Actions from "./Actions";
 import Content from "./Content";
 import Kito from "./Kito";
-import Logo from "./Logo";
+import Logo, { KitoLogo } from "./Logo";
 import { hidePreloader } from "./preloader";
 import { useIsPlatformAdmin } from "./adminAccess";
 
@@ -353,7 +353,7 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
   const L = (en: string, s: string) => (sw ? s : en);
   const main: [View, string, JSX.Element][] = [
     ["dashboard", L("Home", "Nyumbani"), <Ico d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />],
-    ["kito", "Kito", <Ico d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />],
+    ["kito", "Kito", <KitoLogo size={22} />],
     ["chats", "Chats", <Ico d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z" />],
   ];
   const more = moreItems(sw);

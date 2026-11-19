@@ -251,6 +251,9 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
 /* ---------- Ask Kito ---------- */
 a.btn { display: inline-block; text-decoration: none; }
 .btn.small { padding: 5px 12px; font-size: 13px; }
+.kito-hero { display: flex; align-items: center; gap: 14px; }
+.kito-hero .kito-logo { border-radius: 12px; box-shadow: 0 8px 22px -12px #131a2a99; }
+.kito-by { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .kito-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
 .kito-suggest button { text-align: left; white-space: normal; }
 .kito-recent { display: grid; gap: 6px; }
@@ -636,6 +639,8 @@ button.wa-send:hover:not(:disabled) { background: #06cf9c; }
 button.wa-send:disabled { opacity: .45; }
 button.wa-kito { height: 42px; padding: 0 12px; border-radius: 21px; display: inline-flex; align-items: center; gap: 6px; flex: none; background: transparent; border: 1px solid var(--wa-line); color: var(--wa-ink); font-weight: 650; }
 button.wa-kito > :first-child, button.wa-kito { font-size: 14px; }
+button .kito-logo { margin-right: 6px; vertical-align: -4px; }
+button.wa-kito .kito-logo { margin-right: 0; }
 button.wa-kito:hover:not(:disabled) { background: var(--wa-dot); }
 .wa-compose-note { color: var(--wa-meta); padding: 0 4px; }
 .wa-compose-note.err { color: var(--bad); }

@@ -52,3 +52,25 @@ export default function Logo({ size = 32, variant, cycle = true }: { size?: numb
     </svg>
   );
 }
+
+
+/** Kito mark: the "kito." wordmark on the same rounded tile as the ita. logo (navy tile, white
+ *  letters, yellow dot). Below 28 px the full word gets too small to read, so it switches to the
+ *  compact "k." mark. `tone="light"` is the white tile with navy letters. */
+const KITO_FULL = "M174.9 621.5V408.5H233.1V512.3L281.1 459.5H348.9L286.5 524.9L350.1 621.5H288.2L249.2 556.1L233.1 573.5V621.5ZM371.4 621.5V459.5H429.6V621.5ZM370.5 443.3V402.5H430.5V443.3ZM526.8 621.5Q499.5 621.5 486.9 608.8Q474.2 596 474.2 568.1V500.6H446.7V459.5H474.2V421.4H532.5V459.5H574.8V500.6H532.5V559.7Q532.5 571.7 537.4 576Q542.4 580.4 552.5 580.4H574.8V621.5ZM669.6 625.1Q643.1 625.1 623.5 614.6Q603.9 604.1 592.9 585Q582 566 582 540.5Q582 515 592.9 496.1Q603.9 477.2 623.5 466.6Q643.1 455.9 669.6 455.9Q696 455.9 715.6 466.6Q735.2 477.2 746.2 496.1Q757.1 515 757.1 540.5Q757.1 566 746.2 585Q735.2 604.1 715.6 614.6Q696 625.1 669.6 625.1ZM669.6 583.4Q683.1 583.4 690.2 572.3Q697.5 561.2 697.5 540.5Q697.5 520.1 690.2 508.9Q683.1 497.6 669.6 497.6Q656.1 497.6 648.9 508.9Q641.6 520.1 641.6 540.5Q641.6 561.2 648.9 572.3Q656.1 583.4 669.6 583.4Z";
+const KITO_K = "M256.6 732.1V291.9H376.8V506.4L476 397.3H616.2L487.2 532.5L618.6 732.1H490.9L410.3 596.9L376.8 632.9V732.1Z";
+export function KitoLogo({ size = 32, tone = "navy", compact, title }: { size?: number; tone?: "navy" | "light"; compact?: boolean; title?: string }) {
+  const small = compact ?? size < 28;
+  const c = tone === "light" ? { bg: "#ffffff", fg: "#131a2a", edge: "#e6e8ec" } : { bg: "#131a2a", fg: "#ffffff", edge: "#ffffff1f" };
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 1024 1024" className="kito-logo"
+      role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}
+      style={{ flex: "none", display: "inline-block", verticalAlign: "middle" }}
+    >
+      <rect x="8" y="8" width="1008" height="1008" rx="224" fill={c.bg} stroke={c.edge} strokeWidth="16" />
+      <path fill={c.fg} d={small ? KITO_K : KITO_FULL} />
+      <circle cx={small ? 705.4 : 809.2} cy={small ? 670.1 : 581.5} r={small ? 62 : 40} fill="#f5c84c" />
+    </svg>
+  );
+}

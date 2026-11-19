@@ -5,6 +5,7 @@ import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
 import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
+import { KitoLogo } from "./Logo";
 
 type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "not" | "ids";
 type Source = "any" | "live" | "import";
@@ -276,7 +277,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
           <span className="small muted">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
         <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
-          {rechecking ? <span className="kito-spin sm" aria-hidden /> : "✦ "}{rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
+          {rechecking ? <span className="kito-spin sm" aria-hidden /> : <KitoLogo size={18} />}{rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
         </button>
       </div>
 
@@ -687,7 +688,7 @@ function Composer({ r, ws, T, phone, msgs, onSent }: { r: Outcome; ws: Workspace
       )}
       <div className="wa-compose-row">
         <button className="wa-kito" onClick={draft} disabled={drafting || sending} title={T("Kito writes a reply from this chat. You check it before sending.", "Kito anaandika jibu kutoka chat hii. Unaliangalia kabla ya kutuma.")}>
-          {drafting ? <span className="kito-spin sm" aria-hidden style={{ marginRight: 0 }} /> : "✦"}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
+          {drafting ? <span className="kito-spin sm" aria-hidden style={{ marginRight: 0 }} /> : <KitoLogo size={20} />}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
         </button>
         <textarea ref={box} rows={1} value={text} placeholder={T("Type a message", "Andika ujumbe")} aria-label={T("Message", "Ujumbe")}
           onChange={(e) => setText(e.target.value)}
