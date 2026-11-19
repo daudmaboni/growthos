@@ -381,7 +381,11 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome;
 }
 
 const nameOf = (r: Outcome, T: Tr) => (r.contact_name ?? "").replace(/✅/g, "").trim() || T("Customer", "Mteja");
-const fromOf = (r: Outcome, T: Tr, adName?: string) => r.source === "ad" ? T(`From the ad "${adName ?? r.source_label ?? "ad"}"`, `Kutoka tangazo "${adName ?? r.source_label ?? "tangazo"}"`)
+const fromOf = (r: Outcome, T: Tr, adName?: string) => r.source === "ad"
+  ? (adName || r.source_label ? T(`From the ad "${adName ?? r.source_label}"`, `Kutoka tangazo "${adName ?? r.source_label}"`)
+    : r.ad_signal === "greeting_card" ? T("From an ad (opened with your ad greeting)", "Kutoka tangazo (ilianza na salamu ya tangazo)")
+    : r.ad_signal === "ad_text" ? T("From an ad (sent the ad's ready-made message)", "Kutoka tangazo (alituma ujumbe tayari wa tangazo)")
+    : T("From an ad", "Kutoka tangazo"))
   : r.source_label ? T(`From ${r.source_label}`, `Kutoka ${r.source_label}`)
   : r.source === "organic" ? T("Messaged you directly", "Alikutumia ujumbe moja kwa moja") : T("Source unknown", "Chanzo hakijulikani");
 const prettyPhone = (p: string) => (p.length === 12 && p.startsWith("255") ? `+255 ${p.slice(3, 6)} ${p.slice(6, 9)} ${p.slice(9)}` : "+" + p);

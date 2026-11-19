@@ -29,7 +29,7 @@ export type FunnelMetrics = {
   spend: Metric; impressions: Metric; clicks: Metric; platformConversations: Metric;
   chats: Metric; adChats: Metric; organicChats: Metric; unknownChats: Metric;
   replied: Metric; priced: Metric; paymentSignals: Metric; unconfirmedSignals: Metric;
-  attributedSales: Metric; attributedAdSales: Metric; attributedRevenue: Metric;
+  attributedSales: Metric; attributedAdSales: Metric; attributedRevenue: Metric; attributedAdRevenue: Metric;
   ordersPaid: Metric; revenue: Metric; revenueManual: Metric; revenueImported: Metric; ordersUnlinked: Metric;
   replyRate: Metric; priceRate: Metric; signalRate: Metric; saleRate: Metric; adSaleRate: Metric;
   costPerPlatformConversation: Metric; costPerAdChat: Metric; costPerQualifiedInquiry: Metric; costPerAttributedSale: Metric;
@@ -138,7 +138,7 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
     spend: m(spend, "platform"), impressions: m(impressions, "platform"), clicks: m(clicks, "platform"), platformConversations: m(platformConv, "platform"),
     chats: m(convs.length, "observed"), adChats: m(adChats.length, "matched"), organicChats: m(organic.length, "observed"), unknownChats: m(unknown.length, "observed"),
     replied: m(replied.length, "observed"), priced: m(priced.length, "inferred"), paymentSignals: m(signals.length, "inferred"), unconfirmedSignals: m(unconfirmed.length, "inferred"),
-    attributedSales: m(attributedChats.length, "matched"), attributedAdSales: m(attributedAd.length, "matched"), attributedRevenue: m(attributedRevenue, "matched"),
+    attributedSales: m(attributedChats.length, "matched"), attributedAdSales: m(attributedAd.length, "matched"), attributedRevenue: m(attributedRevenue, "matched"), attributedAdRevenue: m(attributedAdRevenue, "matched"),
     ordersPaid: m(paid.length, "confirmed"), revenue: m(revenue, "confirmed"), revenueManual: m(revenueManual, "confirmed"), revenueImported: m(revenueImported, "imported"), ordersUnlinked: m(unlinked, "confirmed"),
     replyRate: ratio(replied.length, convs.length, "observed"), priceRate: ratio(priced.length, convs.length, "inferred"),
     signalRate: ratio(signals.length, convs.length, "inferred"), saleRate: ratio(attributedChats.length, convs.length, "matched"), adSaleRate: ratio(attributedAd.length, adChats.length, "matched"),

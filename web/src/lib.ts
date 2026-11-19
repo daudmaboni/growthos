@@ -29,7 +29,7 @@ export const canManage = (ws: Workspace) => ws.role === "owner" || ws.role === "
 
 export type Outcome = {
   id: string; contact_name: string | null; contact_id: string; started_at: string | null; last_message_at: string | null;
-  source: string; source_label: string | null; ad_id: string | null; first_response_sec: number | null; price_asked: boolean; price_shared: boolean;
+  source: string; source_label: string | null; ad_id: string | null; ad_signal?: "meta_tag" | "greeting_card" | "ad_text" | null; first_response_sec: number | null; price_asked: boolean; price_shared: boolean;
   replied_after_price: boolean; payment_signal: boolean; payment_amount: number | null; objections: string[];
   followed_up: boolean; warm: boolean; stage: string | null; auto_outcome: string | null; outcome_override: string | null;
   label: string | null; kito_outcome: string | null; kito_label: string | null; kito_amount: number | null; kito_objections: string[] | null; kito_tags: string[] | null; kito_temp: "hot" | "warm" | "cold" | null; kito_blocker: string | null; last_dir: "in" | "out" | null; kito_summary: string | null; kito_next: string | null; kito_confidence: string | null; kito_checked_at: string | null; kito_error: string | null; outcome: string | null; sale_amount: number | null; sale_provenance: string | null;
