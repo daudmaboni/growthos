@@ -388,8 +388,9 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
   useEffect(() => { setLens(idx, false); }, [idx]);
   const go = (i: number) => {
     if (i >= SLOTS - 1) { setOpen(true); setLens(SLOTS - 1, false); return; }
-    setOpen(false);
-    if (ORDER[i] !== view) { window.scrollTo({ top: 0 }); location.hash = ORDER[i]; } else setLens(i, false);
+    setOpen(false); // always close the More sheet first, so the tab works on the first tap
+    if (ORDER[i] !== view) { window.scrollTo({ top: 0 }); location.hash = ORDER[i]; }
+    else setLens(i, false);
   };
 
   // Drag along the bar: the lens follows the finger and snaps to the tab where it is released.
@@ -491,9 +492,10 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
         onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}>
         <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
-          <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined} onClick={() => window.scrollTo({ top: 0 })}>{icon}<span>{label}</span>{v === "chats" && badges && <NavBadge badge={chatsBadge(badges, sw)} />}</a>
+          <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined}
+            onClick={(e) => { e.preventDefault(); go(ORDER.indexOf(v)); }}>{icon}<span>{label}</span>{v === "chats" && badges && <NavBadge badge={chatsBadge(badges, sw)} />}</a>
         ))}
-        <button type="button" className={moreOn || open ? "on" : ""} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button type="button" className={moreOn || open ? "on" : ""} aria-expanded={open} onClick={() => (open ? (setOpen(false), setLens(Math.max(0, ORDER.indexOf(view)), false)) : setOpen(true))}>
           <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span>{L("More", "Zaidi")}</span>{badges && <NavBadge badge={actionsBadge(badges, sw)} />}
         </button>
       </nav>
