@@ -1,0 +1,96 @@
+/* Dashboard, in the admin business-card style: navy + yellow, Bricolage Grotesque headings, Instrument Sans text,
+   flat white cards with a thin border, and soft grey rows for lists. Scoped to the Dashboard page (.dash-ia). */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:wght@400..700&display=swap');
+
+.dash-ia {
+  --navy: #16224A; --navy2: #22336B; --yellow: #F7C948; --lav: #A9B3D6; --track: #E4E7EF; --row: #F1F2F6;
+  --paper: #F1F2F6; --card: #FFFFFF; --raised: #F1F2F6; --panel: #FFFFFF;
+  --ink: #141B34; --ink-2: #2A3352; --muted: #5D6580; --line: #E2E5EE; --line-2: #CDD2E0;
+  --accent: #16224A; --accent-from: #22336B; --accent-to: #16224A; --accent-soft: #16224A14; --accent-text: #16224A; --accent-glow: #16224A40; --on-accent: #FFFFFF;
+  --good: #178A55; --good-soft: #178A551c; --warn: #C46A0B; --warn-soft: #C46A0B1c; --bad: #C8372D; --bad-soft: #C8372D18; --info: #2C5A8C; --info-soft: #2C5A8C18;
+  --c1: #F7C948; --c2: #16224A; --c3: #A9B3D6; --c4: #3B5BA9; --c5: #E2544A; --c6: #2FBF7A;
+  --shadow-sm: none; --shadow: none;
+  --font: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font); color: var(--ink);
+}
+:root:not([data-theme="light"]) .dash-ia {
+  --lav: #6E79A3; --track: #ffffff14; --row: #ffffff0a;
+  --paper: #0E1530; --card: #16224A; --raised: #ffffff0d; --panel: #16224A;
+  --ink: #FFFFFF; --ink-2: #DDE2F2; --muted: #A9B3D6; --line: #ffffff17; --line-2: #ffffff2b;
+  --accent: #F7C948; --accent-from: #F7C948; --accent-to: #EDB92E; --accent-soft: #F7C94824; --accent-text: #F7C948; --accent-glow: #F7C94855; --on-accent: #16224A;
+  --good: #4FD394; --good-soft: #4FD39424; --warn: #F3B25A; --warn-soft: #F3B25A24; --bad: #FF8569; --bad-soft: #FF856924; --info: #8FB7FF;
+  --c1: #F7C948; --c2: #FFFFFF; --c3: #6E79A3; --c4: #8FB7FF; --c5: #FF8569; --c6: #4FD394;
+}
+/* Page background follows the card style while the dashboard is open. */
+body:has(.dash-ia) { background: #F1F2F6; }
+:root:not([data-theme="light"]) body:has(.dash-ia) { background: #0E1530; }
+
+/* Type */
+.dash-ia h2, .dash-ia h3 { font-family: var(--display); font-weight: 700; letter-spacing: -0.01em; }
+.dash-ia h2 { font-size: 16px; }
+.dash-ia .hero h2 { font-size: clamp(24px, 2.6vw, 32px); letter-spacing: -0.025em; }
+.dash-ia .big { font: 700 34px/1.05 var(--display); letter-spacing: -0.025em; }
+.dash-ia .small { font-size: 13px; }
+
+/* Cards: flat, thin border, rounded like the admin drawer sections */
+.dash-ia .card { border-radius: 16px; padding: 16px 18px; gap: 12px; box-shadow: none; }
+.dash-ia .card:hover { border-color: var(--line-2); }
+.dash-ia .empty { border-radius: 16px; background: var(--card); }
+
+/* KPI tiles */
+.dash-ia .kpis { gap: 12px; }
+.dash-ia .kpi { border-radius: 14px; padding: 14px 16px; box-shadow: none; }
+.dash-ia .kpi .k { font-size: 12.5px; color: var(--muted); }
+.dash-ia .kpi .v { font: 700 26px/1.1 var(--display); letter-spacing: -0.02em; }
+.dash-ia .kpi-s2 { border-top-color: var(--line); }
+.dash-ia .kpi-click:hover, .dash-ia .kpi-click.on { border-color: var(--navy); box-shadow: inset 0 -3px 0 var(--yellow); }
+:root:not([data-theme="light"]) .dash-ia .kpi-click:hover, :root:not([data-theme="light"]) .dash-ia .kpi-click.on { border-color: var(--yellow); }
+@media (max-width: 640px) { .dash-ia .kpi { padding: 12px 13px; } .dash-ia .kpi .v { font-size: 21px; } }
+
+/* Change pills and chips */
+.dash-ia .delta { font-weight: 600; background: var(--row); }
+.dash-ia .chip { background: var(--row); border-color: transparent; font-weight: 500; }
+.dash-ia .chip.ok { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.dash-ia .chip.bad { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.dash-ia .src { font-family: var(--font); }
+
+/* Bars: navy on a grey track, yellow for "signals", green for paid */
+.dash-ia .bar { height: 10px; background: var(--track); border-radius: 5px; }
+.dash-ia .bar > i { background: var(--c2); border-radius: 5px; }
+.dash-ia .bar.warn > i { background: var(--yellow); }
+.dash-ia .bar.good > i { background: var(--good); }
+.dash-ia .fstep { font-size: 13.5px; padding: 4px 0; }
+.dash-ia .split { height: 16px; border-radius: 6px; background: var(--track); }
+.dash-ia .legend .sw { border-radius: 3px; }
+.dash-ia .legend .li { font-size: 13.5px; padding: 6px 10px; border-radius: 8px; background: var(--row); }
+.dash-ia .legend { gap: 2px; }
+.dash-ia .costrow .val { font: 700 15px var(--display); }
+.dash-ia .chart text { font-family: var(--font); }
+
+/* Grey rows (coverage, objections), like the admin card's mini list */
+.dash-ia .dmini { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dash-ia .dmini li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; padding: 7px 10px; border-radius: 8px; background: var(--row); }
+.dash-ia .dmini li > span { color: var(--muted); display: flex; gap: 8px; align-items: center; min-width: 0; }
+.dash-ia .dmini li > b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.dash-ia .dmini .status-dot { width: 8px; height: 8px; flex: none; }
+
+/* "What to fix" findings */
+.dash-ia .finding { background: var(--row); border-left-width: 3px; border-radius: 0 10px 10px 0; padding: 10px 12px; }
+.dash-ia .finding b { font-weight: 600; }
+.dash-ia .finding.warn { border-color: var(--yellow); }
+
+/* Ads table */
+.dash-ia table { font-size: 13.5px; }
+.dash-ia th { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.dash-ia td, .dash-ia th { padding: 11px 10px; }
+.dash-ia tbody tr:hover td { background: var(--row); }
+.dash-ia td.rank { font-family: var(--display); font-weight: 600; }
+
+/* Buttons and inputs on this page */
+.dash-ia button.primary { background: var(--accent); box-shadow: none; }
+.dash-ia button.primary:hover:not(:disabled) { background: var(--accent-from); filter: none; }
+.dash-ia input, .dash-ia select { background: var(--row); border-color: transparent; border-radius: 10px; }
+.dash-ia input:focus-visible, .dash-ia select:focus-visible { border-color: var(--accent); background: var(--card); }
+
+/* Loading skeletons in the same tones */
+.dash-ia .skeleton { border-radius: 14px; }

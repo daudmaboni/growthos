@@ -10,6 +10,7 @@ import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
 import PaidOrders from "./PaidOrders";
+import "./dashboard.css";
 
 export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Workspace) => void }) {
   const [range, setRangeState] = useState<RangeSel>(() => loadRange("dashboard", { key: "last_7" }));
@@ -72,7 +73,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   }, [fxMissing, ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if ((loading && !g.cached) || !mx || !prev) return (
-    <div className="skeletons" aria-busy="true" aria-label="Loading">
+    <div className="skeletons dash-ia" aria-busy="true" aria-label="Loading">
       
       <div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
       <div className="two"><div className="skeleton" style={{ minHeight: 300 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>
@@ -90,7 +91,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   ];
 
   return (
-    <div className="shell-grid" ref={pageRef}>
+    <div className="shell-grid dash-ia" ref={pageRef}>
       <div className="hero">
         <div style={{ display: "grid", gap: 4 }}>
           <h2>{greeting(lang, ws.timezone)}</h2>
@@ -171,6 +172,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           </section>
           <section className="card">
             <h2>{T("Data coverage & sources", "Ukamilifu wa data na vyanzo")}</h2>
+            <ul className="dmini">
             <Cov label={T("Ad account", "Akaunti ya matangazo")} ok={adsConn.length > 0 && adsConn.every((c) => c.status === "active")} note={adsConn.length ? `${T("last successful sync", "usawazishaji wa mwisho")} ${ago(lastSync)}${adsConn.some((c) => c.last_error) ? " · " + T("last run had an error", "mara ya mwisho kulikuwa na hitilafu") : ""}` : T("not connected", "haijaunganishwa")} />
             <Cov label="WhatsApp" ok={waConn.length > 0} note={waConn.length ? `${g.nums.map((n) => n.display_phone ?? n.phone_number_id).join(", ")} · ${T("history", "historia")}: ${g.nums[0]?.history_status ?? "–"}` : T("not connected; using uploaded chat exports", "haijaunganishwa; chats zilizopakiwa tu")} />
             <Cov label={T("Webhook events", "Matukio ya webhook")} ok={!failed || failed.events === 0} note={g.health.length ? g.health.map((h) => `${h.status}: ${h.events}`).join(" · ") : T("none received yet", "hakuna bado")} />
@@ -179,6 +181,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
             <Cov label={T("Exchange rate", "Kiwango cha kubadilisha")} ok={!mx.coverage.fxNeeded || mx.coverage.fxSet} note={!mx.coverage.fxNeeded ? T("not needed", "haihitajiki") : mx.coverage.fxSet ? `1 ${rawAdCur} = ${fmt(ws.fx_rate)} ${ws.currency} · ${ws.fx_auto !== false ? T("automatic", "kiotomatiki") : T("set by you", "umeweka wewe")}` : T("needed for return on ad spend", "inahitajika kwa mapato kwa tangazo")} />
             <Cov label={T("Order costs", "Gharama za oda")} ok={mx.coverage.ordersMissingCost === 0 || mx.coverage.expensesCount > 0} note={mx.coverage.ordersMissingCost ? T(`${mx.coverage.ordersMissingCost} paid orders this period have no cost`, `Oda ${mx.coverage.ordersMissingCost} kipindi hiki hazina gharama`) : mx.ordersPaid.value ? T(`every order has a cost · ${money(W(mx.coverage.orderCosts), wsCur)}`, `kila oda ina gharama · ${money(W(mx.coverage.orderCosts), wsCur)}`) : T("no paid orders this period", "hakuna oda kipindi hiki")} />
             <Cov label={T("Orders", "Oda")} ok={(mx.ordersPaid.value ?? 0) > 0 || (mx.chats.value ?? 0) === 0} note={`${fmt(mx.ordersPaid.value)} ${T("paid", "zilizolipwa")} · ${money(W(mx.revenueManual.value), wsCur)} ${T("confirmed by you", "umethibitisha")} · ${money(W(mx.revenueImported.value), wsCur)} ${T("imported", "zimeingizwa")}${mx.ordersUnlinked.value ? ` · ${mx.ordersUnlinked.value} ${T("not linked to a chat", "hazijaunganishwa na chat")}` : ""}`} />
+            </ul>
             <ProvenanceLegend lang={lang} />
           </section>
         </div>
@@ -229,7 +232,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
 
 function Objections({ list, lang }: { list: [string, number][]; lang: "sw" | "en" }) {
   if (!list.length) return <span className="small muted">–</span>;
-  return <>{list.map(([k, n]) => <div className="row between small" key={k}><span>{L[lang].obj[k] ?? k}</span><b>{n}</b></div>)}</>;
+  return <ul className="dmini">{list.map(([k, n]) => <li key={k}><span>{L[lang].obj[k] ?? k}</span><b>{n}</b></li>)}</ul>;
 }
 
 /** "1–7 Nov" style label for the Revenue card, so it's clear which days are counted. */
@@ -240,7 +243,7 @@ function periodText(p: { from: string; to: string }, lang: "sw" | "en") {
 }
 
 function Cov({ label, ok, note }: { label: string; ok: boolean; note: string }) {
-  return <div className="row between small" style={{ gap: 8 }}><span><span className={"status-dot " + (ok ? "on" : "err")} /> {label}</span><span className="muted" style={{ textAlign: "right" }}>{note}</span></div>;
+  return <li><span><span className={"status-dot " + (ok ? "on" : "err")} />{label}</span><b>{note}</b></li>;
 }
 
 /** KPI tile. Pass `n` + `f` to count the value up on load instead of showing `v` at once. */
