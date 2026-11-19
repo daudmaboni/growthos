@@ -124,7 +124,7 @@ export type ApiUsage = {
 
 export const FEATURE_LABEL: Record<string, string> = {
   ask_kito: 'Ask Kito', chat_analysis: 'Chat analysis (Kito labels)', reply_draft: 'Reply drafts',
-  content_ideas: 'Content ideas', receipt_reading: 'Payment screenshots',
+  content_ideas: 'Content ideas', receipt_reading: 'Payment screenshots', product_matching: 'Product photos',
 };
 
 /** Straight-line month-end projection from spend so far. */

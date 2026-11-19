@@ -5,7 +5,7 @@ import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money, amt } from "./lib";
 import { AssignChat } from "./team";
-import { useProducts, ProductPicker, itemsCost, itemsLabel, type Item } from "./Products";
+import { useProducts, ProductPicker, itemsCost, itemsLabel, productPhotosReady, itemsFromMatches, type Item, type ProductMatch } from "./Products";
 import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
 
@@ -13,7 +13,7 @@ type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "not" | 
 type Source = "any" | "live" | "import";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
 type Receipt = { is_receipt: boolean; amount: number | null; currency: string | null; txn_code: string | null; provider: string | null; paid_to: string | null; sender: string | null; paid_at: string | null; confidence: string; notes: string | null };
-type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string; type: string; media: { path?: string; mime?: string; receipt?: Receipt | null; error?: string } | null };
+type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null; origin: string; type: string; media: { path?: string; mime?: string; receipt?: Receipt | null; error?: string; product_match?: ProductMatch | null } | null };
 type Lite = { id: string; outcome: string | null; kito_temp: string | null; warm: boolean; paid_orders: number; payment_signal: boolean; kito_outcome: string | null; outcome_override: string | null; override_by: string | null; phone_number_id: string };
 type Tr = (en: string, sw: string) => string;
 
@@ -550,7 +550,7 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
                     {sep && <div className="wa-day"><span>{dayLabel(k)}</span></div>}
                     <div className={"wa-msg " + m.direction + (tail ? " tail" : "")}>
                       <div className="wa-bub">
-                        {m.media?.path ? <MediaView m={m} T={T} /> : <span className={"wa-text" + (special(m) ? " wa-special" : "")}>{special(m) ?? m.body ?? ""}</span>}
+                        {m.media?.path ? <MediaView m={m} ws={ws} T={T} /> : <span className={"wa-text" + (special(m) ? " wa-special" : "")}>{special(m) ?? m.body ?? ""}</span>}
                         <span className="wa-meta">{m.origin === "itaos" && <span className="wa-via" title={T("Sent from itaOS", "Imetumwa kutoka itaOS")}>itaOS · </span>}{hhmm(m.sent_at)}{m.direction === "out" && <span className="wa-ticks" aria-hidden>✓✓</span>}</span>
                       </div>
                     </div>
@@ -774,6 +774,17 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   const { products } = useProducts(ws.id);
   const [items, setItems] = useState<Item[]>([]);
   useEffect(() => { const c = itemsCost(items); if (c != null) setCost(String(c)); }, [items]);
+  const [prePicked, setPrePicked] = useState(false);
+  const [fromPhotos, setFromPhotos] = useState(false);
+  useEffect(() => {   // photos in this chat that itaOS recognised as your products are picked for you (change them freely)
+    if (!products?.length || prePicked) return;
+    supabase.from("messages").select("media").eq("workspace_id", ws.id).eq("conversation_id", r.id).eq("direction", "in").not("media->product_match", "is", null).order("sent_at", { ascending: false }).limit(20)
+      .then(({ data }) => {
+        const found = itemsFromMatches(((data ?? []) as any[]).map((x) => x.media?.product_match).filter(Boolean), products);
+        setPrePicked(true);
+        if (found.length) setItems((cur) => { if (cur.length) return cur; setFromPhotos(true); return found; });
+      });
+  }, [products, r.id]);
   const [dupOk, setDupOk] = useState(false);
   const [dup, setDup] = useState<string | null>(null);
 
@@ -847,6 +858,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
           {pm && <span className="muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}{pm.snippet ? `: “${pm.snippet.slice(0, 60)}${pm.snippet.length > 60 ? "…" : ""}”` : ""}</span>}</label>
         {products && products.some((p) => p.active) && <div style={{ gridColumn: "1 / -1" }}><ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} /></div>}
         <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={ws.unit_cost != null ? T(`empty = default ${amt(Number(ws.unit_cost), ws.currency)}`, `wazi = kawaida ${amt(Number(ws.unit_cost), ws.currency)}`) : T("product + delivery", "bidhaa + usafiri")} />
+          {fromPhotos && items.length > 0 && <span className="muted">{T("Products picked from the customer's photos — check they're right.", "Bidhaa zimechaguliwa kutoka picha za mteja — hakikisha ni sahihi.")}</span>}
           <span className="muted">{items.length ? T("Filled in from the products picked. You can change it.", "Imejazwa kutoka bidhaa ulizochagua. Unaweza kuibadilisha.") : T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>
       </div>
       {dup && <span className="warnt small">⚠ {dup}</span>}
@@ -861,8 +873,23 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
 }
 
 /** A saved image or PDF from the customer, with what Kito read from it. */
-function MediaView({ m, T }: { m: Msg; T: Tr }) {
+function MediaView({ m, ws, T }: { m: Msg; ws: Workspace; T: Tr }) {
   const [url, setUrl] = useState<string | null>(null);
+  // Which of My products is in a customer's photo (asked once per photo; a suggestion, not a sale).
+  const [pm, setPm] = useState<ProductMatch | null>(m.media?.product_match ?? null);
+  const [matching, setMatching] = useState(false);
+  useEffect(() => {
+    const md = m.media;
+    if (m.direction !== "in" || !md?.path || !/^image\//.test(md.mime ?? "") || md.receipt?.is_receipt || md.product_match) return;
+    let live = true;
+    productPhotosReady(ws.id).then((ok) => {
+      if (!ok || !live) return;
+      setMatching(true);
+      callFn<{ match: ProductMatch | null }>("product-match", { workspace_id: ws.id, message_id: m.id })
+        .then((r) => { if (live) setPm(r.match ?? null); }).catch(() => {}).finally(() => { if (live) setMatching(false); });
+    });
+    return () => { live = false; };
+  }, [m.id, m.media?.receipt?.is_receipt]);
   const [big, setBig] = useState(false);
   useEffect(() => {
     if (!m.media?.path) return;
@@ -878,6 +905,9 @@ function MediaView({ m, T }: { m: Msg; T: Tr }) {
         : <img src={url} alt={m.direction === "in" ? T("Image from customer", "Picha kutoka kwa mteja") : T("Image you sent", "Picha uliyotuma")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
       {caption && <span>{caption}</span>}
       {r?.is_receipt ? <span className="mv-tag">🧾 {T("Payment screenshot", "Picha ya malipo")}{r.amount ? ` · ${Math.round(r.amount).toLocaleString("en-US")}` : ""}{r.txn_code ? ` · ${r.txn_code}` : ""}</span>
+        : pm?.is_product_photo && pm.name ? <span className="mv-tag" title={pm.notes ?? ""}>🏷 {pm.confidence === "low" ? T("Maybe", "Huenda ni") : T("Looks like", "Inaonekana ni")} {pm.name}{pm.alternatives.length ? ` (${T("or", "au")} ${pm.alternatives.map((a) => a.name).join(", ")})` : ""} <span className={"chip conf-" + pm.confidence}>{pm.confidence === "high" ? T("sure", "uhakika") : pm.confidence === "medium" ? T("fairly sure", "karibu uhakika") : T("not sure", "sina uhakika")}</span></span>
+        : pm?.is_product_photo ? <span className="mv-tag muted">🏷 {T("A product, but not one of yours I recognise", "Ni bidhaa, lakini siitambui kati ya zako")}</span>
+        : matching ? <span className="mv-tag muted">{T("Checking which product…", "Inaangalia ni bidhaa gani…")}</span>
         : r ? <span className="mv-tag muted">{r.notes ?? T("Not a payment", "Si malipo")}</span> : null}
     </span>
   );

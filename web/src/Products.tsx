@@ -352,3 +352,25 @@ export default function Products({ ws }: { ws: Workspace }) {
     </div>
   );
 }
+
+/** What itaOS thinks is in a customer's photo (saved by the product-match function). A suggestion only. */
+export type ProductMatch = {
+  product_id: string | null; name: string | null; confidence: "high" | "medium" | "low";
+  alternatives: { product_id: string; name: string }[]; is_product_photo: boolean; notes: string | null; checked_at: string;
+};
+const ready: Record<string, Promise<boolean>> = {};
+/** Does this business have at least one active product with photos? (Cached per page load.) */
+export function productPhotosReady(wsId: string): Promise<boolean> {
+  return (ready[wsId] ??= Promise.resolve(supabase.from("products").select("id", { count: "exact", head: true }).eq("workspace_id", wsId).eq("active", true).neq("photos", "{}"))
+    .then(({ count }) => (count ?? 0) > 0, () => false));
+}
+/** Items to pre-pick from photos in a chat that itaOS matched with good confidence. */
+export function itemsFromMatches(matches: ProductMatch[], products: Product[]): Item[] {
+  const out: Item[] = [];
+  for (const m of matches) {
+    if (!m.product_id || m.confidence === "low" || out.some((x) => x.product_id === m.product_id)) continue;
+    const p = products.find((x) => x.id === m.product_id && x.active);
+    if (p) out.push({ product_id: p.id, name: p.name, qty: 1, unit_cost: p.cost != null ? Number(p.cost) : null, unit_price: p.price != null ? Number(p.price) : null });
+  }
+  return out;
+}
