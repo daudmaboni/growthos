@@ -350,3 +350,24 @@ html.hp-page body { background: #fff; }
   box-shadow: inset 0 1px 1px #ffffffa6, inset 0 -2px 5px #0000001f, 0 14px 30px -10px #0000005c; transition: transform .35s var(--hg-spring); }
 .hp-wa:active { transform: scale(.94); }
 @media (prefers-reduced-motion: reduce) { .hp-pill, .hp-ghost, .hp-wa, .hp-burger, .hp-x, .hp-nav > a { transition: none; } }
+
+/* ---------- Scroll-spy: the link for the section on screen gets a glass lens that slides between links ---------- */
+.hp-nav { position: relative; }
+.hp-nav > a, .hp-nav > .hp-lang { position: relative; z-index: 1; }
+.hp-nav-lens { position: absolute; z-index: 0; left: 0; top: 0; width: 0; height: 0; border-radius: 999px; pointer-events: none; opacity: 0;
+  background: #ffffff2e linear-gradient(180deg, #ffffff66 0%, #ffffff14 50%, #ffffff00 62%, #ffffff1f 100%); border: 1px solid #ffffff59;
+  -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
+  box-shadow: inset 0 1px 1px #ffffff80, inset 0 -1px 2px #0000001f, 0 8px 20px -10px #00000080;
+  transition: transform .55s cubic-bezier(.34, 1.45, .5, 1), width .55s cubic-bezier(.34, 1.45, .5, 1), opacity .3s ease; }
+.hp-nav-lens.on { opacity: 1; }
+.hp-nav > a.on { color: #fff; }
+/* while the lens is showing, the hover pill on the current link is not needed */
+.hp-nav > a.on:hover { background: none; border-color: transparent; box-shadow: none; }
+/* Bar tightens a little once you start scrolling */
+.hp-bar-in { transition: height .35s cubic-bezier(.22, 1, .36, 1); }
+.hp-bar.scrolled .hp-bar-in { height: 58px; }
+.hp-bar.scrolled { box-shadow: inset 0 -1px 0 #ffffff26, 0 14px 34px -16px #0a3d29b3; }
+/* Phone menu: current section is bright with a mint dot */
+.hp-menu nav a.on { color: #fff; }
+.hp-menu nav a.on::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--mint); margin-right: 14px; vertical-align: middle; box-shadow: 0 0 0 4px #5ef0ae33; }
+@media (prefers-reduced-motion: reduce) { .hp-nav-lens, .hp-bar-in { transition: none; } }
