@@ -139,7 +139,9 @@ language sql stable set search_path = public as $$
   ), c as (
     select id, sent_at, b,
       case
-        when direction='out' and private.rule_paid_hit(b, (select rule_paid_texts from pt)) then 1
+        when direction='out' and exists (select 1 from pt, unnest(pt.rule_paid_texts) p
+          where length(regexp_replace(lower(p), '[\s-]+', '', 'g')) >= 4
+            and regexp_replace(lower(b), '[\s-]+', '', 'g') like '%' || replace(replace(replace(regexp_replace(lower(p), '[\s-]+', '', 'g'), '\', '\\'), '%', '\%'), '_', '\_') || '%') then 1
         when direction='in' and ((media->'receipt'->>'is_receipt')='true' or b ilike '[picha ya malipo]%'
           or b ~* '(imethibitishwa|\mconfirmed\M[. ]|umetuma (tsh|tzs|sh)|umelipa (tsh|tzs|sh)|you have paid|paid to lipa|kwenda kwa mpokeaji)') then 2
         when direction='out' and b ~ '(✅|✔)' and length(b) <= 160

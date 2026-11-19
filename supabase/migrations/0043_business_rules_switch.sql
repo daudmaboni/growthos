@@ -2,6 +2,8 @@
 -- Kayani-only ones on Kayani's data: "from an ad" gave the same answer on all 14,643 chats, and the payment day was
 -- the same on 1,816 chats (every chat with an order, a payment sign or a "Matumizi" message, plus the latest 1,500).
 -- The payment-day reason is now called 'payment_message' (it was 'kayatox').
+-- payment_moment runs with the caller's rights (owners call it from the app), so the "after-payment message"
+-- check is written inline rather than through private.rule_paid_hit, which owners can't execute.
 
 create or replace function private.ad_signal_for(p_conv uuid)
 returns text language sql stable security definer set search_path = public as $$
@@ -51,7 +53,9 @@ language sql stable set search_path = public as $$
   ), c as (
     select id, sent_at, b,
       case
-        when direction='out' and private.rule_paid_hit(b, (select rule_paid_texts from pt)) then 1
+        when direction='out' and exists (select 1 from pt, unnest(pt.rule_paid_texts) p
+          where length(regexp_replace(lower(p), '[\s-]+', '', 'g')) >= 4
+            and regexp_replace(lower(b), '[\s-]+', '', 'g') like '%' || replace(replace(replace(regexp_replace(lower(p), '[\s-]+', '', 'g'), '\', '\\'), '%', '\%'), '_', '\_') || '%') then 1
         when direction='in' and ((media->'receipt'->>'is_receipt')='true' or b ilike '[picha ya malipo]%'
           or b ~* '(imethibitishwa|\mconfirmed\M[. ]|umetuma (tsh|tzs|sh)|umelipa (tsh|tzs|sh)|you have paid|paid to lipa|kwenda kwa mpokeaji)') then 2
         when direction='out' and b ~ '(✅|✔)' and length(b) <= 160
