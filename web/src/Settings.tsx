@@ -120,7 +120,7 @@ function PaymentsCurrency({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace)
       {ask && createPortal(
         <div className="dr-layer" data-noswipe role="dialog" aria-modal="true" aria-labelledby="cur-ask-h">
           <div className="dr-scrim" onClick={cancel} aria-hidden />
-          <div className="card dr-modal confirm-modal">
+          <div className="confirm-modal">
             <h2 id="cur-ask-h">{T("Are you sure?", "Una uhakika?")}</h2>
             <p style={{ margin: 0 }}>{T(`Change customer payments from ${ws.currency} to ${pick}?`, `Badilisha malipo ya wateja kutoka ${ws.currency} kwenda ${pick}?`)}</p>
             <p className="small muted" style={{ margin: 0 }}>{T(`Every sale, old and new, will be read as ${pick}. A sale typed as 205,000 will mean ${pick} 205,000. Only do this if your customers really pay in ${pick}.`, `Kila mauzo, ya zamani na mapya, yatasomwa kama ${pick}. Mauzo ya 205,000 yatamaanisha ${pick} 205,000. Fanya hivi tu kama wateja wanalipa kwa ${pick} kweli.`)}</p>
