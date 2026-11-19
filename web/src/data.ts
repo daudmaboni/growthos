@@ -17,15 +17,34 @@ export type GrowthData = {
   today: string;
 };
 
+// Only the columns the metrics, diagnosis and dashboard read. Leaves out Kito's long text
+// (summary, next step, evidence, error) and override notes, which made each page several times heavier.
+const OUTCOME_COLS = [
+  "id", "contact_id", "contact_name", "started_at", "last_message_at", "source", "source_label", "ad_id", "ad_signal",
+  "first_response_sec", "price_asked", "price_shared", "replied_after_price", "payment_signal", "payment_amount", "objections",
+  "followed_up", "warm", "stage", "auto_outcome", "outcome_override", "label", "kito_outcome", "kito_label", "kito_amount",
+  "kito_objections", "kito_tags", "kito_temp", "kito_blocker", "last_dir", "kito_confidence", "kito_checked_at", "outcome",
+  "sale_amount", "sale_provenance", "override_by", "override_at", "paid_orders", "first_paid_at", "last_paid_at", "last_out_at",
+  "pay_instructions",
+].join(",");
+
+// Pages are fetched 4 at a time instead of one after another.
 export async function loadConversations(ws: string, fromIso: string) {
+  const PAGE = 1000, WAVE = 4;
   const rows: Outcome[] = [];
-  for (let start = 0; ; start += 1000) {
-    const page = await supabase.from("conversation_outcomes").select("*")
-      .eq("workspace_id", ws).gte("started_at", fromIso)
-      .order("started_at", { ascending: true }).order("id", { ascending: true }).range(start, start + 999);
-    if (page.error) throw page.error;
-    rows.push(...((page.data as Outcome[]) ?? []));
-    if (!page.data || page.data.length < 1000) break;
+  const page = (start: number) => supabase.from("conversation_outcomes").select(OUTCOME_COLS)
+    .eq("workspace_id", ws).gte("started_at", fromIso)
+    .order("started_at", { ascending: true }).order("id", { ascending: true }).range(start, start + PAGE - 1);
+  for (let start = 0; ; start += PAGE * WAVE) {
+    const res = await Promise.all(Array.from({ length: WAVE }, (_, i) => page(start + i * PAGE)));
+    let done = false;
+    for (const r of res) {
+      if (r.error) throw r.error;
+      const data = ((r.data as unknown) as Outcome[]) ?? [];
+      rows.push(...data);
+      if (data.length < PAGE) { done = true; break; }
+    }
+    if (done) break;
   }
   return rows;
 }
@@ -46,18 +65,30 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
   // Live: a new chat message, a Kito label or a recorded sale refreshes the numbers right away.
   useEffect(() => {
     let t: number | undefined;
-    const soon = () => { window.clearTimeout(t); t = window.setTimeout(() => setTick((x) => x + 1), 1500); };
+    // Throttled, not debounced: at most one refresh per 5 s, however many chats change.
+    const soon = () => { if (t !== undefined) return; t = window.setTimeout(() => { t = undefined; setTick((x) => x + 1); }, 5000); };
     const ch = supabase.channel("growth-" + ws.id)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, soon)
       .subscribe();
     return () => { window.clearTimeout(t); supabase.removeChannel(ch); };
   }, [ws.id]);
+  // A refresh that arrives while a load is running no longer cancels it (that kept the cards on
+  // skeletons while chats were changing every few seconds). It waits and runs once afterwards.
+  const reqKey = useRef("");
+  const busy = useRef(false);
+  const again = useRef(false);
+  useEffect(() => () => { reqKey.current = ""; }, []);
   useEffect(() => {
-    let live = true;
     const rk = JSON.stringify(range);
     const key = ws.id + "|" + rk + "|" + ws.timezone;
+    const keyChanged = reqKey.current !== key;
+    reqKey.current = key;
+    if (!keyChanged && busy.current) { again.current = true; return; }
+    const live = () => reqKey.current === key;
     const silent = loadedKey.current === key;
+    busy.current = true;
+    again.current = false;
     const tz = ws.timezone || "Africa/Dar_es_Salaam";
     const today = localDay(new Date(), tz);
     const period = resolveRange(range, today);
@@ -78,11 +109,11 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
           supabase.rpc("webhook_health", { p_ws: ws.id }),
           supabase.from("import_batches").select("kind,created_at,created_count").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(5),
         ]);
-        if (!live) return;
+        if (!live()) return;
         // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
         let o2: any = o;
         if (o.error) o2 = await supabase.from("orders").select("*").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000);
-        if (!live) return;
+        if (!live()) return;
         loadedKey.current = key;
         const firstErr = [a, ap, d, o2, e, cn, nm, h, ib].find((r) => r.error)?.error;
         const daily = ((d.data as any[]) ?? []).map((r) => ({ day: r.day, spend: Number(r.spend), currency: r.currency, impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks ?? 0), messaging_conversations: Number(r.messaging_conversations ?? 0) }));
@@ -97,10 +128,14 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
         });
       } catch (err) {
-        if (live && !silent) setState((s) => ({ ...s, loading: false, err: (err as Error).message }));
+        if (live() && !silent) setState((s) => ({ ...s, loading: false, err: (err as Error).message }));
+      } finally {
+        if (live()) {
+          busy.current = false;
+          if (again.current) { again.current = false; setTick((x) => x + 1); }
+        }
       }
     })();
-    return () => { live = false; };
   }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), tick]);
   return state;
 }
