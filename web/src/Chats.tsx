@@ -104,11 +104,18 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [qText, setQText] = useState("");
   const [search, setSearch] = useState("");
   useEffect(() => { const t = window.setTimeout(() => { setSearch(qText.trim()); setLimit(PAGE); }, 350); return () => window.clearTimeout(t); }, [qText]);
-  const [range, setRangeState] = useState<RangeSel | null>(() => { try { return localStorage.getItem("itaos:chats:alldates") === "1" ? null : loadRange("chats", null as any); } catch { return null; } });
+  const [range, setRangeState] = useState<RangeSel | null>(() => { try { return localStorage.getItem("itaos:chats:alldates") === "1" ? null : (r => (r && r.key === "all" ? null : r))(loadRange("chats", null as any)); } catch { return null; } });
   const setRange = (r: RangeSel | null) => { setRangeState(r); setLimit(PAGE); try { if (r) { saveRange("chats", r); localStorage.removeItem("itaos:chats:alldates"); } else localStorage.setItem("itaos:chats:alldates", "1"); } catch { /* storage blocked */ } };
   const tzChats = ws.timezone || "Africa/Dar_es_Salaam";
   const todayChats = localDay(new Date(), tzChats);
   const period = range ? resolveRange(range, todayChats) : null;
+  // First day with a chat, so "All time" in the date picker shows the real span (no range = every chat).
+  const [chatStart, setChatStart] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("conversation_outcomes").select("last_message_at").eq("workspace_id", ws.id).not("last_message_at", "is", null)
+      .order("last_message_at", { ascending: true }).limit(1)
+      .then(({ data }) => { const t = (data as any)?.[0]?.last_message_at; setChatStart(t ? localDay(new Date(t), tzChats) : null); });
+  }, [ws.id, tzChats]);
   const [openConfirm, setOpenConfirm] = useState(false);
   const [adNames, setAdNames] = useState<Record<string, string>>({});
   const [phones, setPhones] = useState<Record<string, string>>({});
@@ -351,9 +358,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       {filter !== "ids" && (
         <div className="chats-find">
           <input type="search" className="chats-search" value={qText} onChange={(e) => setQText(e.target.value)} placeholder={T("Search name or phone…", "Tafuta jina au namba…")} aria-label={T("Search chats", "Tafuta chat")} />
-          <DateRange value={range ?? { key: "today" }} onChange={(r) => setRange(r)} today={todayChats} tz={tzChats} lang={lang} />
-          {range ? <button className="small linkish" onClick={() => setRange(null)}>{T("All dates", "Tarehe zote")}</button>
-            : <span className="small muted chats-alldates">{T("Showing all dates", "Inaonyesha tarehe zote")}</span>}
+          <DateRange value={range ?? { key: "all" }} onChange={(r) => setRange(r.key === "all" ? null : r)} today={todayChats} tz={tzChats} lang={lang} start={chatStart} />
         </div>
       )}
       {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
