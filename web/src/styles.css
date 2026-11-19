@@ -851,3 +851,81 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
   .inbox.frame .wa-compose { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
   .inbox.frame .wa-compose.closed, .inbox.frame .wa-compose:not(.open) { margin: 0 10px max(10px, env(safe-area-inset-bottom)); }
 }
+
+/* ===== Chats page — purple inbox design (19 Nov): flat panels, purple for "you" and for actions ===== */
+.chats {
+  --ib: #5b4fe9; --ib-deep: #4b3fd6; --ib-text: #3a2fb8; --ib-soft: #f1effe; --ib-soft-2: #e6e3fd; --ib-line: #dcd9fb; --ib-out-meta: #e7e4ff;
+  --ib-ink: #16152b; --ib-muted: #6b6a85; --ib-wall: #f7f7fb; --ib-card: #ffffff; --ib-edge: #ecebf3;
+  --accent: var(--ib); --accent-from: var(--ib); --accent-to: var(--ib-deep); --accent-soft: #5b4fe91f; --accent-text: var(--ib-text); --accent-glow: #5b4fe966; --on-accent: #ffffff;
+  --brand: var(--ib); --on-brand: #ffffff;
+}
+:root:not([data-theme="light"]) .chats {
+  --ib: #6d62f2; --ib-deep: #5b4fe9; --ib-text: #b3acff; --ib-soft: #6d62f229; --ib-soft-2: #6d62f23d; --ib-line: #6d62f259; --ib-out-meta: #e7e4ff;
+  --ib-ink: #f3f3f7; --ib-muted: #a6a5bf; --ib-wall: #111118; --ib-card: #17161f; --ib-edge: #ffffff14;
+  --accent-soft: #6d62f229;
+}
+.chats .inbox.frame {
+  --wa-wall: var(--ib-wall); --wa-head: var(--ib-card); --wa-in: var(--ib-card); --wa-out: var(--ib);
+  --wa-ink: var(--ib-ink); --wa-meta: var(--ib-muted); --wa-day: var(--ib-card); --wa-line: var(--ib-edge); --wa-side: var(--ib-card);
+}
+
+/* Top of the page: dark pill for the open tab, soft search box */
+.chats .chips-tabs button { border-radius: 999px; box-shadow: none; border-color: transparent; background: var(--raised); color: var(--ib-muted); }
+.chats .chips-tabs button:hover:not(.on) { color: var(--ib-ink); background: var(--ib-soft); }
+.chats .chips-tabs button.on { background: var(--ib-ink); color: var(--ib-card); border-color: var(--ib-ink); }
+.chats .chats-search { border-radius: 12px; border-color: transparent; background: var(--raised); padding: 10px 14px; }
+.chats .chats-search:focus { border-color: var(--ib); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+
+/* Left list: quiet rows; the open chat is soft purple with a purple ring */
+.chats .cc-avatar { background: var(--ib-soft-2); color: var(--ib-text); }
+.chats .cc.sel { background: var(--ib-soft); border-color: var(--ib); }
+.chats .cc.sel .cc-name { color: var(--ib-ink); }
+.chats .cc.sel .cc-avatar { background: var(--ib); color: #fff; }
+.chats .cc.sel::after { display: none; }
+.chats .cc-heat { border-radius: 6px; }
+
+/* Conversation: plain light wall, rounded bubbles, yours in purple */
+.chats .inbox.frame .wa-thread { gap: 4px; }
+.chats .inbox.frame .wa-bub { border-radius: 18px; padding: 9px 13px 10px; border-color: var(--ib-edge); font-size: 14.5px; line-height: 1.45; }
+.chats .inbox.frame .wa-msg.in .wa-bub { border-bottom-left-radius: 6px; }
+.chats .inbox.frame .wa-msg.out .wa-bub { border-color: transparent; border-bottom-right-radius: 6px; color: #fff; }
+.chats .inbox.frame .wa-msg.tail.in .wa-bub { border-top-left-radius: 18px; }
+.chats .inbox.frame .wa-msg.tail.out .wa-bub { border-top-right-radius: 18px; }
+.chats .inbox.frame .wa-msg.out .wa-meta, .chats .inbox.frame .wa-msg.out .wa-via { color: var(--ib-out-meta); }
+.chats .inbox.frame .wa-msg.out .wa-special { color: var(--ib-out-meta); }
+.chats .inbox.frame .wa-msg.out .mv-tag { color: #fff; }
+.chats .inbox.frame .wa-msg.out a { color: #fff; }
+.chats .inbox.frame .wa-day span { background: var(--ib-card); border-color: var(--ib-edge); color: var(--ib-muted); }
+
+/* Header */
+.chats .inbox.frame .wa-head { background: var(--ib-card); border-bottom-color: var(--ib-edge); }
+.chats .inbox.frame .wa-head-main b { font-weight: 700; }
+
+/* Reply box: white bar with a purple send button */
+.chats .inbox.frame .wa-compose-row { border-radius: 16px; border-color: var(--ib-edge); background: var(--ib-card); }
+.chats .inbox.frame .wa-compose-row:focus-within { border-color: var(--ib); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chats .inbox.frame button.wa-send { border-radius: 12px; width: 42px; height: 42px; background: var(--ib); color: #fff; }
+.chats .inbox.frame button.wa-send:hover:not(:disabled) { background: var(--ib-deep); }
+.chats .inbox.frame button.wa-kito { border-radius: 12px; background: var(--ib-soft); color: var(--ib-text); }
+.chats .inbox.frame button.wa-kito:hover:not(:disabled) { background: var(--ib-soft-2); }
+
+/* Customer panel: soft tinted cards */
+.chats .inbox.frame .wa-side { background: var(--ib-card); }
+.chats .inbox.frame .wa-card { background: var(--ib-wall); border-color: var(--ib-edge); border-radius: 14px; }
+
+@media (min-width: 900px) {
+  .chats .inbox.frame { border-color: var(--ib-edge); border-radius: 20px; background: var(--ib-card); }
+  .chats .inbox.frame > .cc-list { background: var(--ib-card); border-right-color: var(--ib-edge); padding: 10px; gap: 4px; }
+  .chats .inbox.frame .cc { border-radius: 14px; }
+  .chats .inbox.frame .cc:hover { background: var(--raised); }
+  .chats .inbox.frame .cc-top { padding: 11px 12px; border-radius: 14px; }
+  .chats .inbox.frame .cc-avatar { width: 44px; height: 44px; }
+  .chats .inbox.frame .cc.sel { background: var(--ib-soft); box-shadow: inset 0 0 0 1.5px var(--ib); }
+  .chats .inbox.frame .cc.sel::after { display: none; }
+  .chats .inbox.frame .cc.sel .cc-avatar { background: var(--ib); color: #fff; }
+  /* Where they came from, as a small tag under each name */
+  .chats .inbox.frame .cc-from { display: inline-block; justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--ib-soft); color: var(--ib-text); opacity: 1; }
+  .chats .inbox.frame .ib-empty { background: var(--ib-wall); }
+  .chats .inbox.frame .wa-head { padding: 14px 20px; }
+}
