@@ -303,7 +303,8 @@ function runState(status: string | null | undefined, spentRecently: boolean): Ru
   const st = (status ?? "").toUpperCase();
   if (st === "ACTIVE") return "on";
   if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(st)) return "review";
-  if (["WITH_ISSUES", "DISAPPROVED", "PENDING_BILLING_INFO"].includes(st)) return "issue";
+  // A problem only matters while the ad would otherwise be delivering; an old disapproved ad is just stopped.
+  if (["WITH_ISSUES", "DISAPPROVED", "PENDING_BILLING_INFO"].includes(st)) return spentRecently ? "issue" : "off";
   if (st) return "off";
   return spentRecently ? "on" : "unknown";   // no status stored yet: spending in the last 2 days counts as running
 }
