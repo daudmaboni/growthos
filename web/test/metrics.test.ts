@@ -78,6 +78,14 @@ describe("cost metrics", () => {
     const withCost = computeFunnel({ ...base, ws: { ...WS, unit_cost: 20000 }, conversations: [], daily, orders: [order({ amount: 100000 })] });
     expect(withCost.contribution.value).toBe(100000 - 20 * 2600 - 20000);
   });
+  it("uses the cost typed on each order, and waits until every order has one", () => {
+    const typed = computeFunnel({ ...base, ws: WS, conversations: [], daily, orders: [order({ amount: 100000, cost: 35000 }), order({ id: "o2", amount: 50000, cost: 15000 })] });
+    expect(typed.contribution.value).toBe(150000 - 20 * 2600 - 50000);
+    const partial = computeFunnel({ ...base, ws: WS, conversations: [], daily, orders: [order({ amount: 100000, cost: 35000 }), order({ id: "o2", amount: 50000 })] });
+    expect(partial.contribution.value).toBeNull();
+    expect(partial.contribution.note).toBe("needs order costs");
+    expect(partial.coverage.ordersMissingCost).toBe(1);
+  });
 });
 
 describe("delta", () => {

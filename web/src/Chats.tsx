@@ -4,9 +4,9 @@
 import { enterRows, usePageEnter, select } from "./motion";
 import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, dur, fmt, L, when, canEdit, canManage, money } from "./lib";
-import { OrderForm, OrderList, inferredFrom, signalDismissed } from "./Orders";
+import { OrderForm, OrderList, inferredFrom, signalDismissed, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 
-type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "ids";
+type Filter = "follow" | "lost" | "open" | "sold" | "signals" | "all" | "not" | "ids";
 type Source = "any" | "live" | "import";
 type Run = { id: number; trigger: "auto" | "manual"; ran_at: string; checked: number; failed: number; remaining: number; note: string | null };
 type Receipt = { is_receipt: boolean; amount: number | null; currency: string | null; txn_code: string | null; provider: string | null; paid_to: string | null; sender: string | null; paid_at: string | null; confidence: string; notes: string | null };
@@ -19,6 +19,7 @@ const inFilter = (r: Lite, f: Filter) =>
   f === "all" ? true
   : f === "follow" ? r.outcome !== "sold" && (r.kito_temp === "hot" || r.kito_temp === "warm" || (r.kito_temp == null && r.warm))
   : f === "signals" ? Number(r.paid_orders) === 0 && !signalDismissed(r) && (r.payment_signal || r.kito_outcome === "sold" || r.outcome_override === "sold")
+  : f === "sold" ? Number(r.paid_orders) > 0
   : r.outcome === f;
 const inSource = (r: Lite, s: Source) => s === "any" || (s === "import" ? (r as any).phone_number_id === "import" : r.phone_number_id !== "import");
 
@@ -150,6 +151,11 @@ export default function Chats({ ws }: { ws: Workspace }) {
     if (filter !== "ids" && src === "import") q = q.eq("phone_number_id", "import");
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
     if (filter === "ids" && ids) q = q.in("id", ids);
+    if (filter === "not") q = q.eq("not_customer", true);
+    else if (filter !== "ids") q = q.eq("not_customer", false);
+    if (filter === "ids" && ids) { /* handled below */ }
+    else if (filter === "not") { /* everyone marked "not a customer" */ }
+    else if (filter === "sold") q = q.gt("paid_orders", 0);   // Bought = a sale you recorded, nothing else
     else if (filter === "follow") q = q.neq("outcome", "sold").or("kito_temp.in.(hot,warm),and(kito_temp.is.null,warm.eq.true)");
     else if (filter === "signals") q = q.eq("paid_orders", 0).or("payment_signal.eq.true,kito_outcome.eq.sold,outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold");
     else if (filter !== "all") q = q.eq("outcome", filter);
@@ -242,7 +248,13 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const total = counts ? Number(counts.all ?? 0) : lite.length;
   const shownTotal = filter === "ids" ? rows.length : count(filter);
   const tz = ws.timezone || "Africa/Dar_es_Salaam";
-  const openRow = openId ? rows.find((x) => x.id === openId) ?? null : null;
+  // Keep the open chat open even when it leaves the current tab (e.g. you confirm a payment from "Check payment").
+  const [openSnap, setOpenSnap] = useState<Outcome | null>(null);
+  const found = openId ? rows.find((x) => x.id === openId) ?? null : null;
+  useEffect(() => { if (found) setOpenSnap(found); }, [found]);
+  const openRow = found ?? (openSnap && openSnap.id === openId ? openSnap : null);
+  // After a change in the open chat, refresh in place: no loading skeleton, the list keeps its scroll position.
+  const refreshQuiet = () => { setQuiet(true); refresh(); };
   const tabs: [Filter, string, string][] = [
     ["all", T("All", "Wote"), T("Every customer", "Wateja wote")],
     ["follow", T("Follow up", "Wafuatilie"), T("Interested — talk to them again", "Wana hamu — waongeleshe tena")],
@@ -250,6 +262,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
     ["open", T("Still talking", "Bado mnaongea"), T("No decision yet", "Bado hawajaamua")],
     ["sold", T("Bought", "Wamenunua"), T("Paid and recorded", "Wamelipa na imerekodiwa")],
     ["lost", T("Didn't buy", "Hawakununua"), T("Went quiet or said no", "Wamekaa kimya au wamekataa")],
+    ["not", T("Not customers", "Si wateja"), T("Delivery, suppliers, staff, family: kept out of your numbers", "Usafirishaji, wasambazaji, wafanyakazi, familia: hawahesabiwi")],
   ];
   const emptyText = filter === "follow" ? T("Nobody to follow up right now.", "Hakuna wa kufuatilia kwa sasa.")
     : filter === "signals" ? T("No payments to check.", "Hakuna malipo ya kuhakiki.")
@@ -269,7 +282,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
 
       <div className="chats-bar">
         <div className="chips-tabs" role="tablist" aria-label={T("Show", "Onyesha")}>
-          {tabs.map(([f, label, hint]) => (
+          {tabs.filter(([f]) => f !== "not" || count("not") > 0 || filter === "not").map(([f, label, hint]) => (
             <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => pick(f)} title={hint}>
               {label}<span className="cnt">{count(f)}</span>
             </button>
@@ -304,7 +317,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
               <div key={r.id} style={{ display: "contents" }}>
                 {head && <h3 className="cc-group">{g}</h3>}
                 <Card r={r} ws={ws} T={T} adName={r.ad_id ? adNames[r.ad_id] : undefined} phone={phoneOf(phones[r.contact_id])}
-                  task={tasks[r.id]} selected={openId === r.id} onOpen={(c) => { setOpenId(r.id); setOpenConfirm(!!c); }} />
+                  task={tasks[r.id]} selected={openId === r.id} onOpen={(c) => { setOpenId(r.id); setOpenConfirm(!!c); }} onChange={refreshQuiet} />
               </div>
             );
           })}
@@ -315,7 +328,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
           )}
         </div>
         {openRow && <ChatPane key={openRow.id} r={openRow} ws={ws} T={T} adName={openRow.ad_id ? adNames[openRow.ad_id] : undefined} phone={phoneOf(phones[openRow.contact_id])}
-          task={tasks[openRow.id]} onChange={refresh} onClose={() => setOpenId(null)} startConfirm={openConfirm} />}
+          task={tasks[openRow.id]} onChange={refreshQuiet} onClose={() => setOpenId(null)} startConfirm={openConfirm} />}
         </div>
       )}
 
@@ -346,7 +359,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
 }
 
 /** One customer in the list. Clicking it opens the chat on the right (full screen on a phone). */
-function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome; ws: Workspace; T: Tr; adName?: string; phone: string | null; task?: Task; selected: boolean; onOpen: (confirm?: boolean) => void }) {
+function Card({ r, ws, T, adName, phone, task, selected, onOpen, onChange }: { r: Outcome; ws: Workspace; T: Tr; adName?: string; phone: string | null; task?: Task; selected: boolean; onOpen: (confirm?: boolean) => void; onChange: () => void }) {
   const editor = canEdit(ws);
   const st = statusOf(r, T, ws.currency);
   const temp = interest(r);
@@ -375,6 +388,7 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome;
             : r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
           {!kitoStale(r) && r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
           {task && <div className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")}</div>}
+          {editor && <PartyHint r={r} T={T} onChange={onChange} />}
         </div>
         <div className="cc-act" onClick={(e) => e.stopPropagation()}>
           {main}
@@ -383,6 +397,33 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen }: { r: Outcome;
       </div>
     </article>
   );
+}
+
+const PARTY: Record<string, [string, string]> = {
+  delivery: ["a delivery person (bodaboda, bus, courier)", "msafirishaji (bodaboda, basi, courier)"],
+  supplier: ["a supplier", "msambazaji"], staff: ["someone who works with you", "mfanyakazi wako"],
+  personal: ["family or a friend", "familia au rafiki"], other: ["not a buyer", "si mnunuzi"],
+};
+/** Kito thinks this person isn't a customer (e.g. Hassan the bodaboda talks money but doesn't buy). */
+function PartyHint({ r, T, onChange }: { r: Outcome; T: Tr; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const p = r.kito_party;
+  if (!p || p === "customer" || r.not_customer || r.party_decided || Number(r.paid_orders) > 0) return null;
+  const who = PARTY[p] ?? PARTY.other;
+  const set = async (v: boolean) => { setBusy(true); await markNotCustomer(r, v, p); setBusy(false); onChange(); };
+  return (
+    <div className="cc-party small" onClick={(e) => e.stopPropagation()}>
+      <span>✦ {T(`Kito thinks this is ${who[0]}, not a customer.`, `Kito anadhani huyu ni ${who[1]}, si mteja.`)}</span>
+      <span className="row" style={{ gap: 6 }}>
+        <button className="small primary" disabled={busy} onClick={() => set(true)}>{T("Not a customer", "Si mteja")}</button>
+        <button className="small" disabled={busy} onClick={() => set(false)}>{T("They're a customer", "Ni mteja")}</button>
+      </span>
+    </div>
+  );
+}
+async function markNotCustomer(r: Outcome, value: boolean, note?: string | null) {
+  const { error } = await supabase.rpc("set_not_customer", { p_contact: r.contact_id, p_value: value, p_note: note ?? null });
+  if (error) alert(error.message);
 }
 
 const nameOf = (r: Outcome, T: Tr) => (r.contact_name ?? "").replace(/✅/g, "").trim() || T("Customer", "Mteja");
@@ -529,6 +570,12 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
           </div>
           {editor && !task && !confirmed && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
           {task && <span className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")} · <a href="#actions">{T("see reminders", "ona vikumbusho")}</a></span>}
+          {editor && !confirmed && (r.not_customer
+            ? <div className="cc-party small"><span>{T("Marked as not a customer", "Umeweka si mteja")}{r.not_customer_note && PARTY[r.not_customer_note] ? ` · ${T(PARTY[r.not_customer_note][0], PARTY[r.not_customer_note][1])}` : ""}. {T("Kept out of your customer lists, numbers and Kito.", "Haonekani kwenye orodha ya wateja, takwimu wala Kito.")}</span>
+                <button className="small" disabled={busy} onClick={async () => { setBusy(true); await markNotCustomer(r, false); setBusy(false); onChange(); }}>{T("Undo: they're a customer", "Rudisha: ni mteja")}</button></div>
+            : <>{<PartyHint r={r} T={T} onChange={onChange} />}
+                <button className="small linkish" style={{ justifySelf: "start" }} disabled={busy} title={T("For delivery people, suppliers, staff or family you talk money with. They leave your customer lists and numbers.", "Kwa wasafirishaji, wasambazaji, wafanyakazi au familia mnaoongea pesa. Wanatoka kwenye orodha na takwimu za wateja.")}
+                  onClick={async () => { setBusy(true); await markNotCustomer(r, true, r.kito_party && r.kito_party !== "customer" ? r.kito_party : "other"); setBusy(false); onChange(); }}>{T("Not a customer (delivery, supplier, staff…)", "Si mteja (msafirishaji, msambazaji, mfanyakazi…)")}</button></>)}
           <details className="cc-why">
             <summary className="small muted">{T("How itaOS decided this", "itaOS imeamuaje hili")}</summary>
             <div className="small muted" style={{ display: "grid", gap: 4, marginTop: 6 }}>
@@ -690,18 +737,42 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => { if (!amount && guess) setAmount(Math.round(Number(guess)).toLocaleString("en-US")); }, [guess]);
+  // The day the customer paid, read from the chat (receipt, "nimetuma", your delivery-details message…).
+  const pm = usePaymentMoment(r.id);
+  const [paidOn, setPaidOn] = useState("");
+  useEffect(() => { if (!paidOn && pm !== undefined) setPaidOn(toLocalInput(rc?.sent_at ?? pm?.at ?? r.last_message_at ?? new Date().toISOString())); }, [pm, rc?.sent_at]);
+  const [cost, setCost] = useState("");
+  const [dupOk, setDupOk] = useState(false);
+  const [dup, setDup] = useState<string | null>(null);
 
   async function yes() {
     const a = Number(amount.replace(/[^\d.]/g, ""));
     if (!(a > 0)) return setErr(T("Enter the amount that came in.", "Weka kiasi kilichoingia."));
+    const c = cost.trim() ? Number(cost.replace(/[^\d.]/g, "")) : null;
+    if (c != null && !(c >= 0)) return setErr(T("Cost must be a number.", "Gharama iwe namba."));
+    if (!paidOn) return setErr(T("Enter the day they paid.", "Weka siku aliyolipa."));
+    const paidAt = fromLocalInput(paidOn);
+    if (!(Date.parse(paidAt) <= Date.now() + 3600e3)) return setErr(T("The payment day can't be in the future.", "Siku ya malipo haiwezi kuwa baadaye."));
     const txn = code.trim().toUpperCase().replace(/\s+/g, "");
     setBusy(true); setErr("");
+    // Same customer, same amount, within 3 days of this payment: probably already recorded (e.g. from your ✅ message).
+    if (!dupOk) {
+      const t = Date.parse(paidAt);
+      const { data: near } = await supabase.from("orders").select("id,paid_at,amount").eq("workspace_id", ws.id).eq("conversation_id", r.id).eq("status", "paid")
+        .gte("paid_at", new Date(t - 3 * 864e5).toISOString()).lte("paid_at", new Date(t + 3 * 864e5).toISOString());
+      const same = (near ?? []).find((o: any) => Math.round(Number(o.amount)) === Math.round(a));
+      if (same) {
+        setBusy(false); setDupOk(true);
+        return setDup(T(`A sale of ${money(a, ws.currency)} is already recorded for this customer on ${new Date(same.paid_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Dar_es_Salaam" })}. If this is a second payment, press "Yes" again.`,
+          `Mauzo ya ${money(a, ws.currency)} tayari yamerekodiwa kwa mteja huyu tarehe ${new Date(same.paid_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Dar_es_Salaam" })}. Kama ni malipo ya pili, bonyeza "Ndiyo" tena.`));
+      }
+    }
     const { data: user } = await supabase.auth.getUser();
-    const now = new Date().toISOString();
     const { error } = await supabase.from("orders").insert({
       workspace_id: ws.id, conversation_id: r.id, amount: a, discount: 0, currency: ws.currency, status: "paid", fulfillment_status: "not_shipped",
-      occurred_at: now, paid_at: now, provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id,
-      external_ref: txn ? "txn:" + txn : null, notes: txn ? `Transaction ${txn}` : null,
+      occurred_at: paidAt, paid_at: paidAt, provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c,
+      external_ref: txn ? "txn:" + txn : null,
+      notes: [txn ? `Transaction ${txn}` : null, pm ? `Paid date read from the chat (${pm.kind}): "${pm.snippet.slice(0, 80)}"` : null].filter(Boolean).join("\n") || null,
     });
     setBusy(false);
     if (error) setErr(error.code === "23505" ? T(`Transaction ${txn} is already recorded for another sale. The same payment can't count twice.`, `Muamala ${txn} tayari umerekodiwa kwa mauzo mengine. Malipo hayo hayawezi kuhesabiwa mara mbili.`) : error.message);
@@ -737,9 +808,14 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
         <li>{T("Copy its transaction code (e.g. QK41ABC9XY) below.", "Nakili namba ya muamala (mf. QK41ABC9XY) hapa chini.")}</li>
       </ol>
       <div className="cc-pay-fields">
-        <label className="small">{T("Amount received", "Kiasi kilichoingia")} ({ws.currency})<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="155,000" /></label>
+        <label className="small">{T("Amount received", "Kiasi kilichoingia")} ({ws.currency})<input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setDupOk(false); setDup(null); }} placeholder="155,000" /></label>
         <label className="small">{T("Transaction code", "Namba ya muamala")}<input value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} placeholder="QK41ABC9XY" /></label>
+        <label className="small">{T("Paid on", "Alilipa lini")}<input type="datetime-local" value={paidOn} onChange={(e) => { setPaidOn(e.target.value); setDupOk(false); setDup(null); }} />
+          {pm && <span className="muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}{pm.snippet ? `: “${pm.snippet.slice(0, 60)}${pm.snippet.length > 60 ? "…" : ""}”` : ""}</span>}</label>
+        <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} />
+          <span className="muted">{T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>
       </div>
+      {dup && <span className="warnt small">⚠ {dup}</span>}
       <div className="cc-ask-btns">
         <button className="small primary" disabled={busy} onClick={yes}>✓ {T("Yes, money received", "Ndiyo, pesa imeingia")}</button>
         <button className="small" disabled={busy} onClick={no}>✗ {T("No, nothing came in", "Hapana, haijaingia")}</button>

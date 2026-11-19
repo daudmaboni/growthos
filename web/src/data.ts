@@ -2,6 +2,7 @@
 // period, then runs the central metrics. One place, so both views agree.
 import { useEffect, useRef, useState } from "react";
 import { supabase, Workspace, Outcome, AdPerf, Order, localDay } from "./lib";
+import { diagnose, Finding } from "./diagnosis";
 import { computeFunnel, comparisonOf, FunnelMetrics, DailyInsight, Expense } from "./metrics";
 import { RangeSel, resolveRange } from "./ranges";
 
@@ -15,6 +16,10 @@ export type GrowthData = {
   convs: Outcome[]; ads: AdPerf[]; adsPrev: AdPerf[]; orders: Order[]; daily: DailyInsight[]; expenses: Expense[];
   conns: Conn[]; nums: Num[]; health: Health[]; importBatches: { kind: string; created_at: string; created_count: number }[];
   today: string;
+  findings: Finding[];                       // top of the weekly diagnosis for this period
+  objections: [string, number][];            // objections in unsold chats started this period
+  allTime: { orders: number; revenue: number; chats: number } | null;   // every recorded sale, any date
+  cached: boolean;                           // numbers shown are from the last visit; fresh ones are loading
 };
 
 // Only the columns the metrics, diagnosis and dashboard read. Leaves out Kito's long text
@@ -28,22 +33,29 @@ const OUTCOME_COLS = [
   "pay_instructions",
 ].join(",");
 
-// One request: the database scans once and returns columns as arrays (migration 0026).
-// Falls back to paging the view if the function is missing.
-export async function loadConversations(ws: string, fromIso: string): Promise<Outcome[]> {
-  const { data, error } = await supabase.rpc("dashboard_conversations", { p_ws: ws, p_from: fromIso });
-  if (!error && data && Array.isArray((data as any).id)) {
-    const cols = data as Record<string, unknown[]>;
-    const keys = Object.keys(cols);
-    const n = cols.id.length;
-    const rows = new Array(n);
-    for (let i = 0; i < n; i++) {
-      const r: Record<string, unknown> = {};
-      for (const k of keys) r[k] = cols[k][i];
-      rows[i] = r;
+// One request: the database scans once and returns columns as arrays (migrations 0026, 0028).
+// v2 sends only the columns the dashboard reads, times as epoch seconds, and leaves out people
+// marked "not a customer". Falls back to v1, then to paging the view.
+const EPOCH_COLS = new Set(["started_at", "last_message_at", "kito_checked_at", "first_paid_at", "last_out_at"]);
+function zip(cols: Record<string, unknown[]>): Outcome[] {
+  const keys = Object.keys(cols).filter((k) => Array.isArray(cols[k]));
+  const n = cols.id.length;
+  const rows = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const r: Record<string, unknown> = {};
+    for (const k of keys) {
+      const v = cols[k][i];
+      r[k] = EPOCH_COLS.has(k) && typeof v === "number" ? new Date(v * 1000).toISOString() : v;
     }
-    return rows as Outcome[];
+    rows[i] = r;
   }
+  return rows as Outcome[];
+}
+export async function loadConversations(ws: string, fromIso: string): Promise<Outcome[]> {
+  const v2 = await supabase.rpc("dashboard_conversations2", { p_ws: ws, p_from: fromIso });
+  if (!v2.error && v2.data && Array.isArray((v2.data as any).id)) return zip(v2.data as Record<string, unknown[]>);
+  const { data, error } = await supabase.rpc("dashboard_conversations", { p_ws: ws, p_from: fromIso });
+  if (!error && data && Array.isArray((data as any).id)) return zip(data as Record<string, unknown[]>);
   return loadConversationsPaged(ws, fromIso);
 }
 
@@ -68,8 +80,38 @@ async function loadConversationsPaged(ws: string, fromIso: string) {
   return rows;
 }
 
-export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
-  const [state, setState] = useState<GrowthData>({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), ws.timezone) });
+// The last numbers shown for a workspace + period, kept in the browser so the dashboard opens
+// instantly; fresh numbers replace them a moment later. Chats themselves are not kept (too big).
+const CACHE_V = 1;
+const cacheKey = (ws: string, rk: string) => `itaos:dash:${CACHE_V}:${ws}:${rk}`;
+function readCache(key: string): Partial<GrowthData> | null {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function writeCache(key: string, g: GrowthData) {
+  const { convs: _c, orders, loading: _l, err: _e, cached: _x, ...rest } = g;
+  try { localStorage.setItem(key, JSON.stringify({ ...rest, orders: orders.slice(0, 300) })); }
+  catch { try { localStorage.removeItem(key); } catch { /* storage full or blocked */ } }
+}
+
+/** Objections raised in chats started this period that didn't end in a sale, most common first. */
+export function objectionTally(convs: Outcome[], period: { from: string; to: string }, tz: string): [string, number][] {
+  const tally: Record<string, number> = {};
+  for (const c of convs) {
+    if (!c.started_at || c.outcome === "sold") continue;
+    const d = localDay(c.started_at, tz);
+    if (d < period.from || d > period.to) continue;
+    for (const o of new Set([...(c.objections ?? []), ...(c.kito_objections ?? [])])) tally[o as string] = (tally[o as string] ?? 0) + 1;
+  }
+  return Object.entries(tally).sort((a, b) => b[1] - a[1]);
+}
+
+const EMPTY = (tz: string): GrowthData => ({ loading: true, err: "", mx: null, prev: null, convs: [], ads: [], adsPrev: [], orders: [], daily: [], expenses: [], conns: [], nums: [], health: [], importBatches: [], today: localDay(new Date(), tz), findings: [], objections: [], allTime: null, cached: false });
+
+export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: boolean } = {}): GrowthData {
+  const [state, setState] = useState<GrowthData>(() => {
+    const hit = opts.cache ? readCache(cacheKey(ws.id, JSON.stringify(range))) : null;
+    return hit?.mx ? { ...EMPTY(ws.timezone), ...hit, loading: false, cached: true } : EMPTY(ws.timezone);
+  });
   // Background refresh: re-read every 2 min and whenever the tab comes back into view.
   // Refreshes are silent (no skeletons); only a new workspace or period shows the loading state.
   const [tick, setTick] = useState(0);
@@ -114,10 +156,16 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
     const period = resolveRange(range, today);
     const prevP = comparisonOf(period);
     const fromIso = new Date(new Date(prevP.from + "T00:00:00Z").getTime() - 2 * 864e5).toISOString(); // generous: filtered precisely by local day later
-    if (!silent) setState((s) => ({ ...s, loading: true, err: "" }));
+    const ck = cacheKey(ws.id, rk);
+    if (!silent) {
+      // Show the last numbers for this period straight away (if we have them) while fresh ones load.
+      const hit = opts.cache ? readCache(ck) : null;
+      if (hit?.mx) setState({ ...EMPTY(tz), ...hit, loading: false, err: "", cached: true });
+      else setState((s) => ({ ...s, loading: true, err: "", cached: false }));
+    }
     (async () => {
       try {
-        const [a, ap, c, d, o, e, cn, nm, h, ib] = await Promise.all([
+        const [a, ap, c, d, o, e, cn, nm, h, ib, all] = await Promise.all([
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
@@ -128,6 +176,8 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
           supabase.from("wa_numbers").select("phone_number_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id),
           supabase.rpc("webhook_health", { p_ws: ws.id }),
           supabase.from("import_batches").select("kind,created_at,created_count").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(5),
+          // Every recorded sale, any date, so the Revenue card can be checked against the Bought tab.
+          supabase.from("orders").select("conversation_id,amount,discount,refund_amount").eq("workspace_id", ws.id).eq("status", "paid").limit(10000),
         ]);
         if (!live()) return;
         // If the chat-source join is ever refused, fall back to plain orders so revenue still shows.
@@ -142,13 +192,22 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
         const base = { ws, conversations: c, daily, orders, expenses };
         const mx = computeFunnel({ ...base, period, ads: (a.data as AdPerf[]) ?? [] });
         const prev = computeFunnel({ ...base, period: prevP, ads: (ap.data as AdPerf[]) ?? [] });
-        setState({
+        const allRows = ((all.data as any[]) ?? []);
+        const allTime = all.error ? null : {
+          orders: allRows.length,
+          revenue: allRows.reduce((s, x) => s + Number(x.amount) - Number(x.discount ?? 0) - Number(x.refund_amount ?? 0), 0),
+          chats: new Set(allRows.map((x) => x.conversation_id).filter(Boolean)).size,
+        };
+        const next: GrowthData = {
           loading: false, err: firstErr ? "Some data could not be loaded: " + firstErr.message : "",
           mx, prev, convs: c, ads: (a.data as AdPerf[]) ?? [], adsPrev: (ap.data as AdPerf[]) ?? [], orders, daily, expenses,
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
-        });
+          findings: diagnose(mx, c, orders, tz).slice(0, 4), objections: objectionTally(c, period, tz), allTime, cached: false,
+        };
+        setState(next);
+        if (opts.cache) writeCache(ck, next);
       } catch (err) {
-        if (live() && !silent) setState((s) => ({ ...s, loading: false, err: (err as Error).message }));
+        if (live() && !silent) setState((s) => ({ ...s, loading: false, cached: false, err: (err as Error).message }));
       } finally {
         if (live()) {
           busy.current = false;
@@ -156,6 +215,6 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
         }
       }
     })();
-  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), tick]);
+  }, [ws.id, ws.timezone, ws.fx_rate, ws.unit_cost, ws.display_currency, ws.conversion_window_days, ws.follow_up_hours, JSON.stringify(range), tick]);
   return state;
 }

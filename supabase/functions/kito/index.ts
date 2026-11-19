@@ -20,6 +20,7 @@ const LABELS = ["new", "talking", "priced", "awaiting_payment", "paid", "shipped
 const OBJECTIONS = ["price", "think", "money", "trust", "delivery"];
 const TEMPS = ["hot", "warm", "cold"];
 const BLOCKERS = ["price", "think", "money", "trust", "delivery", "business_slow", "none"];
+const PARTIES = ["customer", "delivery", "supplier", "staff", "personal", "other"];
 const TAGS = ["buyer", "repeat_buyer", "price_sensitive", "needs_trust", "far_location", "pays_on_delivery", "slow_decider", "not_serious"];
 
 /** Remove phone numbers, payment codes and emails before a chat leaves our database. */
@@ -70,11 +71,12 @@ Decide:
 - summary: one sentence, at most 25 words, in ${lang === "sw" ? "natural Tanzanian Kiswahili" : "plain English"}, saying what happened.
 - next: the single best next step for the business, at most 20 words, same language. Empty string if nothing is needed.
 - confidence: "high", "medium" or "low" in the outcome.
+- party: who MTEJA really is to the business. "customer" = buys or might buy the products for themselves or someone else (most chats). "delivery" = a bodaboda rider, bus or parcel agent, courier or dispatcher who carries orders — money talk is about fares or customers' payments, not buying. "supplier" = sells goods, packaging or services TO the business. "staff" = works for the business (seller, agent, assistant). "personal" = family or a friend talking about non-business matters. "other" = clearly not a buyer for another reason (wrong number, another business, spam). If unsure, "customer".
 - evidence: up to 3 short quotes (max 120 characters each) copied exactly from the chat that support the outcome and label. Never paraphrase; if nothing supports it, return [].
 
 Rules: describe only what the chat says. Do not judge whether the product works or make any health claim. Do not infer religion, health conditions, ethnicity or other sensitive personal details; they are not labels.
 
-Return only JSON: {"outcome":"","label":"","amount":null,"objections":[],"tags":[],"temperature":"","blocker":"","summary":"","next":"","confidence":"","evidence":[]}`;
+Return only JSON: {"party":"customer","outcome":"","label":"","amount":null,"objections":[],"tags":[],"temperature":"","blocker":"","summary":"","next":"","confidence":"","evidence":[]}`;
 }
 
 const TOOL = {
@@ -94,8 +96,9 @@ const TOOL = {
       next: { type: "string" },
       confidence: { type: "string", enum: ["high", "medium", "low"] },
       evidence: { type: "array", items: { type: "string" }, maxItems: 3 },
+      party: { type: "string", enum: PARTIES },
     },
-    required: ["outcome", "label", "amount", "objections", "tags", "temperature", "blocker", "summary", "next", "confidence"],
+    required: ["party", "outcome", "label", "amount", "objections", "tags", "temperature", "blocker", "summary", "next", "confidence"],
   },
 };
 
@@ -282,7 +285,9 @@ Deno.serve(async (req) => {
   // reads that chat within seconds instead of at the next 15-minute run.
   const only: string[] = isCron && Array.isArray(body.conversation_ids)
     ? body.conversation_ids.map(String).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20) : [];
-  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at")
+  // People marked "not a customer" (bodaboda, suppliers, staff…) are not read: they aren't sales chats.
+  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+    .eq("contacts.not_customer", false)
     .not("last_message_at", "is", null).order("last_message_at", { ascending: false }).limit(400);
   if (wsFilter) q = q.eq("workspace_id", wsFilter);
   if (only.length) q = q.in("id", only);
@@ -326,6 +331,7 @@ Deno.serve(async (req) => {
         kito_next: String(r.next ?? "").slice(0, 300),
         kito_confidence: ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low",
         kito_evidence: Array.isArray(r.evidence) ? r.evidence.filter((q: unknown) => typeof q === "string").map((q: string) => redact(q).slice(0, 160)).slice(0, 3) : [],
+        kito_party: PARTIES.includes(r.party) ? r.party : null,
         kito_checked_at: new Date().toISOString(), kito_error: null,
       }).eq("id", c.id);
       if (e2) throw new Error(e2.message);

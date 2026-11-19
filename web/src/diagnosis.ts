@@ -161,7 +161,7 @@ export function diagnose(mx: FunnelMetrics, convs: Outcome[], orders: Order[], t
   // 9. Data gaps that limit the diagnosis
   const gaps: string[] = [];
   if (mx.coverage.fxNeeded && !mx.coverage.fxSet) gaps.push("exchange rate (ad account currency ≠ sales currency)");
-  if (!mx.coverage.unitCostSet && mx.coverage.expensesCount === 0) gaps.push("cost per order or expenses (for contribution)");
+  if (mx.coverage.ordersMissingCost > 0 && mx.coverage.expensesCount === 0) gaps.push("order costs (type them when you confirm a payment in Chats)");
   if (mx.coverage.knownSourceShare != null && mx.coverage.knownSourceShare < 0.5) gaps.push("chat sources (ad vs organic)");
   if (mx.coverage.kitoReadShare != null && mx.coverage.kitoReadShare < 0.7) gaps.push("Kito reading (add ANTHROPIC_API_KEY or run Kito)");
   if ((mx.spend.value ?? 0) === 0) gaps.push("ad spend (connect the ad account or no spend this period)");

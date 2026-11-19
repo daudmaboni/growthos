@@ -1,13 +1,12 @@
 import type { ReactNode, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
-import { Workspace, fmt, pct, dur, L, amt, money, ago, localDay, supabase, callFn, canManage } from "./lib";
+import { Workspace, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
 import { useGrowthData } from "./data";
 import DateRange from "./DateRange";
 import { RangeSel, loadRange, saveRange } from "./ranges";
 import { Metric, delta, DEFINITIONS } from "./metrics";
-import { diagnose } from "./diagnosis";
 import { SourceBadge, ProvenanceLegend } from "./Provenance";
 
 export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Workspace) => void }) {
@@ -16,29 +15,37 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const D = (k: string) => DEFINITIONS[k]?.[lang] ?? "";
-  const g = useGrowthData(ws, range);
+  const g = useGrowthData(ws, range, { cache: true });
   const { mx, prev, ads, daily, loading, err } = g;
-  const adCur = mx?.adCurrency ?? ws.currency;
-
-  const findings = useMemo(() => (mx ? diagnose(mx, g.convs, g.orders, ws.timezone).slice(0, 4) : []), [mx, g.convs, g.orders, ws.timezone]);
+  const rawAdCur = mx?.adCurrency ?? ws.currency;
+  // Every amount on this page is shown in one currency (Settings → Currency). Ad spend comes from
+  // Meta in USD and sales are in TZS, so one of them is converted with the exchange rate.
+  const cur = displayCurrency(ws);
+  const cv = converter(ws);
+  const canConvert = rawAdCur === cur || cv(1, rawAdCur) != null;
+  const adCur = canConvert ? cur : rawAdCur;            // currency ad amounts are shown in
+  const A = (n: number | null | undefined) => (canConvert ? cv(n, rawAdCur) : n ?? null);   // ad amount → shown
+  const W = (n: number | null | undefined) => cv(n, ws.currency) ?? (n ?? null);           // sales amount → shown
+  const wsCur = cv(1, ws.currency) != null ? cur : ws.currency;
+  const findings = g.findings;
 
   const costBars = useMemo(() => {
     const withSales = ads.filter((a) => Number(a.sold) > 0);
-    if (withSales.length) return { kind: "sale" as const, items: withSales.map((a) => ({ name: a.ad_name ?? a.ad_id, cost: Number(a.spend) / Number(a.sold), note: `${amt(Number(a.spend), adCur)} · ${a.sold} ${T("attributed sales", "mauzo")}` })).sort((x, y) => x.cost - y.cost).slice(0, 8) };
-    return { kind: "chat" as const, items: ads.filter((a) => Number(a.platform_conversations) > 0 && Number(a.spend) > 0).map((a) => ({ name: a.ad_name ?? a.ad_id, cost: Number(a.spend) / Number(a.platform_conversations), note: `${amt(Number(a.spend), adCur)} · ${fmt(a.platform_conversations)} chats` })).sort((x, y) => x.cost - y.cost).slice(0, 8) };
-  }, [ads, lang, adCur]);
+    if (withSales.length) return { kind: "sale" as const, items: withSales.map((a) => ({ name: a.ad_name ?? a.ad_id, cost: A(Number(a.spend) / Number(a.sold)) ?? 0, note: `${amt(A(Number(a.spend)), adCur)} · ${a.sold} ${T("attributed sales", "mauzo")}` })).sort((x, y) => x.cost - y.cost).slice(0, 8) };
+    return { kind: "chat" as const, items: ads.filter((a) => Number(a.platform_conversations) > 0 && Number(a.spend) > 0).map((a) => ({ name: a.ad_name ?? a.ad_id, cost: A(Number(a.spend) / Number(a.platform_conversations)) ?? 0, note: `${amt(A(Number(a.spend)), adCur)} · ${fmt(a.platform_conversations)} chats` })).sort((x, y) => x.cost - y.cost).slice(0, 8) };
+  }, [ads, lang, adCur, ws.fx_rate]);
 
   const trend = useMemo(() => {
     if (!mx || !prev) return { labels: [], cur: [], prev: [], total: 0, change: null as number | null };
     const byDay: Record<string, number> = {};
-    for (const r of daily) byDay[r.day] = (byDay[r.day] ?? 0) + r.spend;
+    for (const r of daily) byDay[r.day] = (byDay[r.day] ?? 0) + (A(r.spend) ?? 0);
     const dayList = (from: string, n: number) => Array.from({ length: n }, (_, i) => new Date(new Date(from + "T00:00:00Z").getTime() + i * 864e5).toISOString().slice(0, 10));
     const labels = dayList(mx.period.from, mx.period.days), prevDays = dayList(prev.period.from, prev.period.days);
     const cur = labels.map((d) => byDay[d] ?? 0), pv = prevDays.map((d) => byDay[d] ?? 0);
-    return { labels, cur, prev: pv, total: mx.spend.value ?? 0, change: delta(mx.spend, prev.spend) };
-  }, [daily, mx, prev]);
+    return { labels, cur, prev: pv, total: A(mx.spend.value) ?? 0, change: delta(mx.spend, prev.spend) };
+  }, [daily, mx, prev, adCur, ws.fx_rate]);
 
-  const noData = !loading && !ads.length && !g.convs.length && !g.orders.length;
+  const noData = !loading && !ads.length && !mx?.chats.value && !g.orders.length && !g.allTime?.orders;
   const pageRef = usePageEnter<HTMLDivElement>((root) => {
     if (loading) return;
     enterRows(select(root, ".hero > *"), { y: 10, stagger: 0.08 });
@@ -59,7 +66,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
       .catch(() => { /* the hourly job will try again */ });
   }, [fxMissing, ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading || !mx || !prev) return (
+  if ((loading && !g.cached) || !mx || !prev) return (
     <div className="skeletons" aria-busy="true" aria-label="Loading">
       <div className="kpis">{[0, 1, 2, 3, 4, 5, 6].map((i) => <div className="skeleton" key={i} />)}</div>
       <div className="two"><div className="skeleton" style={{ minHeight: 300 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>
@@ -86,6 +93,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           )}
         </div>
         <div className="row">
+          {g.cached && <span className="small muted" aria-live="polite"><span className="kito-spin sm" aria-hidden /> {T("Updating…", "Inasasisha…")}</span>}
           <DateRange value={range} onChange={setRange} today={g.today} tz={ws.timezone || "Africa/Dar_es_Salaam"} lang={lang} />
         </div>
       </div>
@@ -95,17 +103,18 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
         <div className="empty">{T("No data yet. Connect the ad account and WhatsApp, or upload chats and import orders, in ", "Bado hakuna data. Unganisha matangazo na WhatsApp, au pakia chats na uingize oda, kwenye ")}<a href="#connect">{T("Connections", "Connections")}</a>.</div>
       ) : (<>
         <div className="kpis">
-          <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(mx.spend.value, adCur)} n={mx.spend.value} f={(x) => money(x, adCur)} s={`${fmt(mx.platformConversations.value)} ${T("chats (Meta)", "chats (Meta)")}`} d={delta(mx.spend, prev.spend)} src={mx.spend.provenance} title={D("spend")} />
-          <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(mx.costPerPlatformConversation.value, adCur)} n={mx.costPerPlatformConversation.value} f={(x) => money(x, adCur)} s={T("As in Ads Manager", "Kama Ads Manager")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
-          <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(mx.costPerQualifiedInquiry.value, adCur)} s={mx.costPerQualifiedInquiry.value == null ? (mx.adChats.value ? T(`${fmt(mx.adChats.value)} chats came from ads; none got a price yet`, `Chat ${fmt(mx.adChats.value)} zimetoka matangazo; hakuna iliyopewa bei bado`) : T("No chats from ads in this period.", "Hakuna chat kutoka matangazo kipindi hiki.")) : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
-          <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(mx.costPerAttributedSale.value, adCur)} n={mx.costPerAttributedSale.value} f={(x) => money(x, adCur)} s={mx.attributedAdSales.value ? `${mx.attributedAdSales.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}` : T("No paid order from an ad chat yet. Your ✅ messages now record sales automatically.", "Bado hakuna oda kutoka chat ya tangazo. Ujumbe wako wa ✅ sasa unarekodi mauzo wenyewe.")} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
-          <Kpi k={T("Revenue", "Mapato")} v={money(mx.revenue.value, ws.currency)} n={mx.revenue.value} f={(x) => money(x, ws.currency)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")} />
-          <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? (ws.fx_auto !== false ? T("Getting today's exchange rate…", "Inapata kiwango cha leo…") : T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio")) : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(mx.attributedAdRevenue.value, ws.currency) + T(" in sales from ad chats that started in this period", " mauzo kutoka chats za matangazo zilizoanza kipindi hiki")} src="matched" title={D("returnOnAdSpend")}
-            s2={mx.returnOnAdSpendAllAdCustomers.value != null && mx.adCustomerOrders.value ? T(`Counting every ad customer who paid in this period, including those who clicked an ad earlier: ${mx.returnOnAdSpendAllAdCustomers.value.toFixed(1)}× (${money(mx.adCustomerRevenue.value, ws.currency)}, ${mx.adCustomerOrders.value} orders)`, `Ukihesabu kila mteja wa tangazo aliyelipa kipindi hiki, hata aliyebofya tangazo awali: ${mx.returnOnAdSpendAllAdCustomers.value.toFixed(1)}× (${money(mx.adCustomerRevenue.value, ws.currency)}, oda ${mx.adCustomerOrders.value})`) : undefined}
-            fix={mx.returnOnAdSpend.note === "needs exchange rate" && ws.fx_auto === false ? <SetNumber ws={ws} onWs={onWs} field="fx_rate" label={T(`1 ${adCur} =`, `1 ${adCur} =`)} unit={ws.currency} placeholder="2,600" hint={T("Use your bank's rate. You can change it later in Settings.", "Tumia kiwango cha benki yako. Unaweza kubadilisha baadaye kwenye Mipangilio.")} T={T} /> : null} />
-          <Kpi k={T("Contribution", "Faida ya mchango")} v={money(mx.contribution.value, ws.currency)} s={mx.contribution.value == null ? (mx.contribution.note === "needs exchange rate" ? T("Needs the exchange rate", "Inahitaji kiwango cha kubadilisha") : mx.contribution.note === "no paid orders in period" ? T("No paid orders this period", "Hakuna oda zilizolipwa") : T("Set cost per order in Settings or import expenses", "Weka gharama kwa oda au uingize matumizi")) : T("after ad spend and costs", "baada ya matangazo na gharama")} src="derived" title={D("contribution")}
+          <Kpi k={T("Ad spend", "Matumizi ya matangazo")} v={money(A(mx.spend.value), adCur)} n={A(mx.spend.value)} f={(x) => money(x, adCur)} s={`${fmt(mx.platformConversations.value)} ${T("chats (Meta)", "chats (Meta)")}`} d={delta(mx.spend, prev.spend)} src={mx.spend.provenance} title={D("spend")} />
+          <Kpi k={T("Cost per chat", "Gharama kwa chat")} v={money(A(mx.costPerPlatformConversation.value), adCur)} n={A(mx.costPerPlatformConversation.value)} f={(x) => money(x, adCur)} s={T("As in Ads Manager", "Kama Ads Manager")} d={delta(mx.costPerPlatformConversation, prev.costPerPlatformConversation)} invert src="platform" title={D("costPerPlatformConversation")} />
+          <Kpi k={T("Cost per qualified inquiry", "Gharama kwa mteja aliyepewa bei")} v={money(A(mx.costPerQualifiedInquiry.value), adCur)} s={mx.costPerQualifiedInquiry.value == null ? (mx.adChats.value ? T(`${fmt(mx.adChats.value)} chats came from ads; none got a price yet`, `Chat ${fmt(mx.adChats.value)} zimetoka matangazo; hakuna iliyopewa bei bado`) : T("No chats from ads in this period.", "Hakuna chat kutoka matangazo kipindi hiki.")) : `${mx.costPerQualifiedInquiry.d} ${T("ad chats priced", "chats za tangazo zilizopewa bei")}`} d={delta(mx.costPerQualifiedInquiry, prev.costPerQualifiedInquiry)} invert src="matched" title={D("costPerQualifiedInquiry")} />
+          <Kpi k={T("Cost per attributed sale", "Gharama kwa mauzo yaliyounganishwa")} v={money(A(mx.costPerAttributedSale.value), adCur)} n={A(mx.costPerAttributedSale.value)} f={(x) => money(x, adCur)} s={mx.attributedAdSales.value ? `${mx.attributedAdSales.value} ${T("paid orders from ad chats", "oda kutoka chats za matangazo")}` : T("No paid order from an ad chat yet. Your ✅ messages now record sales automatically.", "Bado hakuna oda kutoka chat ya tangazo. Ujumbe wako wa ✅ sasa unarekodi mauzo wenyewe.")} d={delta(mx.costPerAttributedSale, prev.costPerAttributedSale)} invert cls={mx.costPerAttributedSale.value == null ? "" : "ok"} src="matched" title={D("costPerAttributedSale")} />
+          <Kpi k={T("Revenue", "Mapato")} v={money(W(mx.revenue.value), wsCur)} n={W(mx.revenue.value)} f={(x) => money(x, wsCur)} s={`${mx.ordersPaid.value} ${T("paid orders", "oda zilizolipwa")} ${T(`paid ${periodText(mx.period, lang)}`, `zilizolipwa ${periodText(mx.period, lang)}`)}${mx.unconfirmedSignals.value ? ` · ${mx.unconfirmedSignals.value} ${T("unconfirmed signals", "dalili bila uthibitisho")}` : ""}`} d={delta(mx.revenue, prev.revenue)} src="confirmed" title={D("revenue")}
+            s2={g.allTime ? T(`All time (the Bought tab): ${fmt(g.allTime.orders)} orders from ${fmt(g.allTime.chats)} customers · ${money(W(g.allTime.revenue), wsCur)}. Each sale counts on the day the payment shows in the chat.`, `Tangu mwanzo (Wamenunua): oda ${fmt(g.allTime.orders)} kutoka wateja ${fmt(g.allTime.chats)} · ${money(W(g.allTime.revenue), wsCur)}. Kila mauzo yanahesabiwa siku malipo yanaonekana kwenye chat.`) : undefined} />
+          <Kpi k={T("Return on ad spend", "Mapato kwa shilingi ya tangazo")} v={mx.returnOnAdSpend.value == null ? "–" : mx.returnOnAdSpend.value.toFixed(1) + "×"} s={mx.returnOnAdSpend.value == null ? (mx.returnOnAdSpend.note === "needs exchange rate" ? (ws.fx_auto !== false ? T("Getting today's exchange rate…", "Inapata kiwango cha leo…") : T("Set the exchange rate in Settings → Rules", "Weka kiwango cha kubadilisha kwenye Mipangilio")) : T("No ad spend this period", "Hakuna matumizi ya matangazo")) : money(W(mx.attributedAdRevenue.value), wsCur) + T(" in sales from ad chats that started in this period", " mauzo kutoka chats za matangazo zilizoanza kipindi hiki")} src="matched" title={D("returnOnAdSpend")}
+            s2={mx.returnOnAdSpendAllAdCustomers.value != null && mx.adCustomerOrders.value ? T(`Counting every ad customer who paid in this period, including those who clicked an ad earlier: ${mx.returnOnAdSpendAllAdCustomers.value.toFixed(1)}× (${money(W(mx.adCustomerRevenue.value), wsCur)}, ${mx.adCustomerOrders.value} orders)`, `Ukihesabu kila mteja wa tangazo aliyelipa kipindi hiki, hata aliyebofya tangazo awali: ${mx.returnOnAdSpendAllAdCustomers.value.toFixed(1)}× (${money(W(mx.adCustomerRevenue.value), wsCur)}, oda ${mx.adCustomerOrders.value})`) : undefined}
+            fix={mx.returnOnAdSpend.note === "needs exchange rate" && ws.fx_auto === false ? <SetNumber ws={ws} onWs={onWs} field="fx_rate" label={T(`1 ${rawAdCur} =`, `1 ${rawAdCur} =`)} unit={ws.currency} placeholder="2,600" hint={T("Use your bank's rate. You can change it later in Settings.", "Tumia kiwango cha benki yako. Unaweza kubadilisha baadaye kwenye Mipangilio.")} T={T} /> : null} />
+          <Kpi k={T("Contribution", "Faida ya mchango")} v={money(W(mx.contribution.value), wsCur)} s={mx.contribution.value == null ? (mx.contribution.note === "needs exchange rate" ? T("Needs the exchange rate", "Inahitaji kiwango cha kubadilisha") : mx.contribution.note === "no paid orders in period" ? T("No paid orders this period", "Hakuna oda zilizolipwa") : T(`${fmt((mx.contribution.d ?? 0) - (mx.contribution.n ?? 0))} of ${fmt(mx.contribution.d)} orders have no cost yet`, `Oda ${fmt((mx.contribution.d ?? 0) - (mx.contribution.n ?? 0))} kati ya ${fmt(mx.contribution.d)} hazina gharama bado`)) : T(`after ad spend and the cost of ${fmt(mx.ordersPaid.value)} orders (${money(W(mx.coverage.orderCosts), wsCur)})`, `baada ya matangazo na gharama za oda ${fmt(mx.ordersPaid.value)} (${money(W(mx.coverage.orderCosts), wsCur)})`)} src="derived" title={D("contribution")}
             fix={mx.contribution.note === "needs exchange rate" ? <span className="small muted">{ws.fx_auto !== false ? T("Waiting for today's exchange rate.", "Inasubiri kiwango cha leo.") : T("Set the exchange rate on the card before this one.", "Weka kiwango cha kubadilisha kwenye kadi iliyotangulia.")}</span>
-              : mx.contribution.note === "needs cost per order or expenses" ? <SetNumber ws={ws} onWs={onWs} field="unit_cost" label={T("Cost per order", "Gharama kwa oda")} unit={ws.currency} placeholder="40,000" hint={T("What one order costs you (product + delivery), before ads.", "Oda moja inakugharimu kiasi gani (bidhaa + usafiri), kabla ya matangazo.")} T={T} /> : null} />
+              : mx.contribution.note === "needs order costs" ? <span className="small muted">{T("Type what each order cost you (product + delivery) when you press \"Yes, money received\" in Chats. Orders already recorded: open them in ", "Andika gharama ya kila oda (bidhaa + usafiri) unapobonyeza \"Ndiyo, pesa imeingia\" kwenye Chats. Oda zilizokwisha rekodiwa: zifungue kwenye ")}<a href="#orders">{T("Orders", "Oda")}</a>.</span> : null} />
           <Kpi k={T("Median first reply", "Muda wa kujibu")} v={dur(mx.medianFirstReply.value)} s={`${mx.over1h.value} ${T("waited over 1 h", "zilisubiri > saa 1")}${mx.noReply.value ? ` · ${mx.noReply.value} ${T("no reply", "hazikujibiwa")}` : ""}`} cls={mx.medianFirstReply.value != null && mx.medianFirstReply.value > 900 ? "flag" : ""} src="observed" />
           <Kpi k={T("Warm, waiting for follow-up", "Wenye nia, wanasubiri ufuatiliaji")} v={fmt(mx.warmNoFollowUp.value)} n={mx.warmNoFollowUp.value} f={(x) => fmt(Math.round(x))} s={`${T("of", "kati ya")} ${mx.warmNoFollowUp.n} ${T("warm", "wenye nia")} · ${T("rule", "kanuni")}: ${ws.follow_up_hours} h`} cls={mx.warmNoFollowUp.value ? "flag" : "ok"} src="inferred" />
         </div>
@@ -155,9 +164,9 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
             <Cov label={T("Webhook events", "Matukio ya webhook")} ok={!failed || failed.events === 0} note={g.health.length ? g.health.map((h) => `${h.status}: ${h.events}`).join(" · ") : T("none received yet", "hakuna bado")} />
             <Cov label={T("Chat sources known", "Vyanzo vya chats vinajulikana")} ok={(mx.coverage.knownSourceShare ?? 0) >= 0.5} note={mx.coverage.knownSourceShare == null ? "–" : pct(mx.coverage.knownSourceShare) + " " + T("of chats have a known source", "ya chats zina chanzo")} />
             <Cov label={T("Read by Kito", "Zimesomwa na Kito")} ok={(mx.coverage.kitoReadShare ?? 0) >= 0.7} note={mx.coverage.kitoReadShare == null ? "–" : pct(mx.coverage.kitoReadShare) + " " + T("of chats this period", "ya chats kipindi hiki")} />
-            <Cov label={T("Exchange rate", "Kiwango cha kubadilisha")} ok={!mx.coverage.fxNeeded || mx.coverage.fxSet} note={!mx.coverage.fxNeeded ? T("not needed", "haihitajiki") : mx.coverage.fxSet ? `1 ${adCur} = ${fmt(ws.fx_rate)} ${ws.currency} · ${ws.fx_auto !== false ? T("automatic", "kiotomatiki") : T("set by you", "umeweka wewe")}` : T("needed for return on ad spend", "inahitajika kwa mapato kwa tangazo")} />
-            <Cov label={T("Costs", "Gharama")} ok={mx.coverage.unitCostSet || mx.coverage.expensesCount > 0} note={mx.coverage.unitCostSet ? `${T("cost per order", "gharama kwa oda")} ${money(ws.unit_cost, ws.currency)}` : mx.coverage.expensesCount ? `${mx.coverage.expensesCount} ${T("imported expenses", "matumizi yaliyoingizwa")}` : T("none; contribution hidden", "hakuna; faida haionyeshwi")} />
-            <Cov label={T("Orders", "Oda")} ok={(mx.ordersPaid.value ?? 0) > 0 || (mx.chats.value ?? 0) === 0} note={`${fmt(mx.ordersPaid.value)} ${T("paid", "zilizolipwa")} · ${money(mx.revenueManual.value, ws.currency)} ${T("confirmed by you", "umethibitisha")} · ${money(mx.revenueImported.value, ws.currency)} ${T("imported", "zimeingizwa")}${mx.ordersUnlinked.value ? ` · ${mx.ordersUnlinked.value} ${T("not linked to a chat", "hazijaunganishwa na chat")}` : ""}`} />
+            <Cov label={T("Exchange rate", "Kiwango cha kubadilisha")} ok={!mx.coverage.fxNeeded || mx.coverage.fxSet} note={!mx.coverage.fxNeeded ? T("not needed", "haihitajiki") : mx.coverage.fxSet ? `1 ${rawAdCur} = ${fmt(ws.fx_rate)} ${ws.currency} · ${ws.fx_auto !== false ? T("automatic", "kiotomatiki") : T("set by you", "umeweka wewe")}` : T("needed for return on ad spend", "inahitajika kwa mapato kwa tangazo")} />
+            <Cov label={T("Order costs", "Gharama za oda")} ok={mx.coverage.ordersMissingCost === 0 || mx.coverage.expensesCount > 0} note={mx.coverage.ordersMissingCost ? T(`${mx.coverage.ordersMissingCost} paid orders this period have no cost`, `Oda ${mx.coverage.ordersMissingCost} kipindi hiki hazina gharama`) : mx.ordersPaid.value ? T(`every order has a cost · ${money(W(mx.coverage.orderCosts), wsCur)}`, `kila oda ina gharama · ${money(W(mx.coverage.orderCosts), wsCur)}`) : T("no paid orders this period", "hakuna oda kipindi hiki")} />
+            <Cov label={T("Orders", "Oda")} ok={(mx.ordersPaid.value ?? 0) > 0 || (mx.chats.value ?? 0) === 0} note={`${fmt(mx.ordersPaid.value)} ${T("paid", "zilizolipwa")} · ${money(W(mx.revenueManual.value), wsCur)} ${T("confirmed by you", "umethibitisha")} · ${money(W(mx.revenueImported.value), wsCur)} ${T("imported", "zimeingizwa")}${mx.ordersUnlinked.value ? ` · ${mx.ordersUnlinked.value} ${T("not linked to a chat", "hazijaunganishwa na chat")}` : ""}`} />
             <ProvenanceLegend lang={lang} />
           </section>
         </div>
@@ -174,11 +183,11 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
         <div className="two">
           <section className="card">
             <div><h2>{T("Where the money went", "Pesa ilienda wapi")}</h2><span className="small muted">{T("Spend by ad, ", "Matumizi kwa tangazo, ") + adCur}</span></div>
-            <SpendSplit total={mx.spend.value ?? 0} f={(n) => amt(n, adCur)} items={ads.filter((a) => Number(a.spend) > 0).map((a) => ({ name: a.ad_name ?? a.ad_id, value: Number(a.spend) }))} />
+            <SpendSplit total={A(mx.spend.value) ?? 0} f={(n) => amt(n, adCur)} items={ads.filter((a) => Number(a.spend) > 0).map((a) => ({ name: a.ad_name ?? a.ad_id, value: A(Number(a.spend)) ?? 0 }))} />
           </section>
           <section className="card">
             <h2>{T("Objections in unsold chats", "Pingamizi kwenye chats zisizouza")}</h2>
-            <Objections convs={g.convs} mx={mx} lang={lang} tz={ws.timezone} />
+            <Objections list={g.objections} lang={lang} />
           </section>
         </div>
 
@@ -191,9 +200,9 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
                 <tr key={a.ad_id}>
                   <td className="rank">{String(i + 1).padStart(2, "0")}</td>
                   <td><b>{a.ad_name ?? a.ad_id}</b><div className="small muted">{a.campaign_name}</div></td>
-                  <td className="n">{amt(Number(a.spend), adCur)}</td><td className="n">{fmt(a.clicks)}</td><td className="n">{fmt(a.platform_conversations)}</td><td className="n">{fmt(a.chats)}</td>
+                  <td className="n">{amt(A(Number(a.spend)), adCur)}</td><td className="n">{fmt(a.clicks)}</td><td className="n">{fmt(a.platform_conversations)}</td><td className="n">{fmt(a.chats)}</td>
                   <td className="n">{fmt(a.priced)}</td><td className="n muted">{fmt(a.payment_signals)}</td><td className="n"><b>{fmt(a.sold)}</b></td>
-                  <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no confirmed sales", "hakuna mauzo yaliyothibitishwa")}</span> : "–") : amt(Number(a.spend) / Number(a.sold), adCur)}</td>
+                  <td className="n">{!(Number(a.sold) > 0) ? (a.spend > 0 && a.chats > 0 ? <span className="chip bad">{T("no confirmed sales", "hakuna mauzo yaliyothibitishwa")}</span> : "–") : amt(A(Number(a.spend) / Number(a.sold)), adCur)}</td>
                 </tr>
               ))}
               {!ads.length && <tr><td colSpan={10} className="muted small">{T("No ad data for this period.", "Hakuna data ya matangazo kipindi hiki.")}</td></tr>}
@@ -206,15 +215,16 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
   );
 }
 
-function Objections({ convs, mx, lang, tz }: { convs: any[]; mx: any; lang: "sw" | "en"; tz: string }) {
-  const list = useMemo(() => {
-    const inP = convs.filter((c) => c.started_at && localDay(c.started_at, tz) >= mx.period.from && localDay(c.started_at, tz) <= mx.period.to);
-    const tally: Record<string, number> = {};
-    for (const c of inP) if (c.outcome !== "sold") for (const o of new Set([...(c.objections ?? []), ...(c.kito_objections ?? [])])) tally[o as string] = (tally[o as string] ?? 0) + 1;
-    return Object.entries(tally).sort((a, b) => b[1] - a[1]);
-  }, [convs, mx.period.from, mx.period.to, tz]);
+function Objections({ list, lang }: { list: [string, number][]; lang: "sw" | "en" }) {
   if (!list.length) return <span className="small muted">–</span>;
   return <>{list.map(([k, n]) => <div className="row between small" key={k}><span>{L[lang].obj[k] ?? k}</span><b>{n}</b></div>)}</>;
+}
+
+/** "1–7 Nov" style label for the Revenue card, so it's clear which days are counted. */
+function periodText(p: { from: string; to: string }, lang: "sw" | "en") {
+  const f = (d: string, withMonth: boolean) => new Date(d + "T00:00:00Z").toLocaleDateString(lang === "sw" ? "sw-TZ" : "en-GB", { day: "numeric", ...(withMonth ? { month: "short" } : {}), timeZone: "UTC" });
+  const same = p.from.slice(0, 7) === p.to.slice(0, 7);
+  return p.from === p.to ? f(p.to, true) : `${f(p.from, !same)}–${f(p.to, true)}`;
 }
 
 function Cov({ label, ok, note }: { label: string; ok: boolean; note: string }) {

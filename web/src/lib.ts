@@ -22,8 +22,8 @@ export async function callFn<T = any>(name: string, body: Record<string, unknown
 
 export type Role = "owner" | "admin" | "analyst" | "viewer";
 export type Workspace = { id: string; name: string; currency: string; language: "sw" | "en"; unit_cost: number | null; fx_rate: number | null; fx_auto?: boolean; fx_updated_at?: string | null; fx_source?: string | null; fx_base?: string | null;
-  timezone: string; follow_up_hours: number; conversion_window_days: number; send_enabled?: boolean; role?: Role };
-export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,fx_auto,fx_updated_at,fx_source,fx_base,timezone,follow_up_hours,conversion_window_days,send_enabled";
+  timezone: string; follow_up_hours: number; conversion_window_days: number; send_enabled?: boolean; display_currency?: "TZS" | "USD" | null; role?: Role };
+export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,fx_auto,fx_updated_at,fx_source,fx_base,timezone,follow_up_hours,conversion_window_days,send_enabled,display_currency";
 export const canEdit = (ws: Workspace) => ws.role == null || ws.role !== "viewer";
 export const canManage = (ws: Workspace) => ws.role === "owner" || ws.role === "admin";
 
@@ -35,6 +35,7 @@ export type Outcome = {
   label: string | null; kito_outcome: string | null; kito_label: string | null; kito_amount: number | null; kito_objections: string[] | null; kito_tags: string[] | null; kito_temp: "hot" | "warm" | "cold" | null; kito_blocker: string | null; last_dir: "in" | "out" | null; kito_summary: string | null; kito_next: string | null; kito_confidence: string | null; kito_checked_at: string | null; kito_error: string | null; outcome: string | null; sale_amount: number | null; sale_provenance: string | null;
   kito_evidence: string[] | null; override_by: string | null; override_at: string | null; override_note: string | null;
   paid_orders: number; first_paid_at: string | null; last_paid_at: string | null; last_out_at: string | null; pay_instructions: boolean;
+  not_customer?: boolean; kito_party?: "customer" | "delivery" | "supplier" | "staff" | "personal" | "other" | null; party_decided?: boolean; not_customer_note?: string | null;
 };
 
 export type Order = {
@@ -42,6 +43,7 @@ export type Order = {
   status: "pending" | "paid" | "refunded" | "cancelled"; fulfillment_status: "not_applicable" | "not_shipped" | "shipped" | "delivered" | "returned";
   product: string | null; notes: string | null; occurred_at: string; paid_at: string | null; provenance: "manual" | "csv_import" | "provider" | "inferred";
   inferred_from: string | null; external_ref: string | null; created_by: string | null; updated_by: string | null; created_at: string; updated_at: string;
+  cost?: number | null;       // what this order cost the business (product + delivery), typed when confirming
   conv_source?: string | null; // source of the linked chat (any start date), joined in by the dashboard
 };
 export const orderNet = (o: Pick<Order, "amount" | "discount" | "refund_amount">) => Number(o.amount) - Number(o.discount) - Number(o.refund_amount);
@@ -119,3 +121,19 @@ export const amt = (n: number | null | undefined, cur: string) =>
     : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** Number with its currency code, e.g. "USD 456.20" or "TZS 170,000". */
 export const money = (n: number | null | undefined, cur: string) => (n == null || !isFinite(n) ? "–" : cur + " " + amt(n, cur));
+
+/** The one currency the dashboard shows money in (Settings → Currency), and a converter into it.
+ *  fx_rate is "1 USD = fx_rate TZS". Amounts in a currency we can't convert stay as they are. */
+export function displayCurrency(ws: Pick<Workspace, "currency" | "display_currency">) { return ws.display_currency ?? ws.currency; }
+export function converter(ws: Pick<Workspace, "currency" | "display_currency" | "fx_rate">) {
+  const to = displayCurrency(ws);
+  const rate = ws.fx_rate ? Number(ws.fx_rate) : null;
+  return (n: number | null | undefined, from: string): number | null => {
+    if (n == null || !isFinite(n)) return null;
+    if (from === to) return n;
+    if (!rate) return null;
+    if (from === "USD" && to === "TZS") return n * rate;
+    if (from === "TZS" && to === "USD") return n / rate;
+    return null;
+  };
+}

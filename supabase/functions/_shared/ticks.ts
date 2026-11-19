@@ -114,11 +114,12 @@ export function lastPriceBefore(msgs: TickMsg[], at: string): number | null {
 export async function confirmTicks(db: SupabaseClient, conversationId: string, msgs: TickMsg[]) {
   const ticks = findTicks(msgs);
   if (!ticks.length) return 0;
-  const { data: conv } = await db.from("conversations").select("workspace_id, contact_id, contacts(wa_id), workspaces(currency)").eq("id", conversationId).maybeSingle();
+  const { data: conv } = await db.from("conversations").select("workspace_id, contact_id, contacts(wa_id, not_customer), workspaces(currency)").eq("id", conversationId).maybeSingle();
   if (!conv) return 0;
   const ws = conv.workspace_id as string;
   const currency = (conv as any).workspaces?.currency ?? "TZS";
   const ownWa = (conv as any).contacts?.wa_id as string | undefined;
+  const ownNotCustomer = !!(conv as any).contacts?.not_customer;   // e.g. the bodaboda: never a sale on their chat
   let created = 0;
   for (const t of ticks) {
     const { data: done } = await db.from("orders").select("id").eq("workspace_id", ws).like("notes", `%[wamsg:${t.messageId}]%`).limit(1);
@@ -132,7 +133,8 @@ export async function confirmTicks(db: SupabaseClient, conversationId: string, m
       target = null;
       let name: string | null = null;
       for (const ph of others) {
-        const { data: c } = await db.from("contacts").select("id,name").eq("workspace_id", ws).eq("wa_id", ph).maybeSingle();
+        const { data: c } = await db.from("contacts").select("id,name,not_customer").eq("workspace_id", ws).eq("wa_id", ph).maybeSingle();
+        if (c?.not_customer) continue;   // a number marked "not a customer" is never the buyer
         const { data: cv } = c ? await db.from("conversations").select("id").eq("workspace_id", ws).eq("contact_id", c.id).order("last_message_at", { ascending: false }).limit(1) : { data: null };
         if (cv?.[0]?.id) { target = cv[0].id; other = ph; name = c?.name ?? null; break; }
         name ??= c?.name ?? null;
@@ -143,6 +145,7 @@ export async function confirmTicks(db: SupabaseClient, conversationId: string, m
         targetMsgs = (tm as TickMsg[]) ?? [];
       } else targetMsgs = [];
     }
+    if (!other && ownNotCustomer) continue;
     const ev = evidence(targetMsgs, t.sentAt, t.amount, currency);
     // "Umelipiwa✅" with no number and no price: only trust it in a chat where the customer
     // showed payment (otherwise it is probably a note to staff, and the amount would be a guess).

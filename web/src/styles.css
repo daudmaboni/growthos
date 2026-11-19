@@ -505,7 +505,13 @@ nav.tabs.glass-tabs a.on { background: none; color: var(--ink); }
 
 /* ===== Chats inbox: list on the left, WhatsApp-style chat on the right (full screen on a phone) ===== */
 .inbox { display: grid; gap: 12px; align-items: start; }
-.cc.sel { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 60%, var(--card)); box-shadow: 0 0 0 1px var(--accent-soft), var(--shadow-sm); }
+/* The chat that is open on the right: clearly marked so you can find your place in the list. */
+.cc.sel { border-color: var(--accent); border-left: 6px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 85%, var(--card)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-sm); position: relative; }
+.cc.sel .cc-name { color: var(--accent); }
+.cc.sel .cc-avatar { background: var(--accent); color: #fff; }
+.cc.sel::after { content: ""; position: absolute; right: 10px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--accent); }
+/* Kito thinks this person isn't a customer / marked as not a customer. */
+.cc-party { display: grid; gap: 6px; padding: 8px 10px; margin-top: 6px; border-radius: 10px; border: 1px dashed var(--line-2); background: var(--paper, transparent); }
 @media (min-width: 900px) {
   .inbox.has-pane { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
   .inbox.has-pane > .cc-list { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding-right: 4px; overscroll-behavior: contain; }

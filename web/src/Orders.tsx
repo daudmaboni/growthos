@@ -16,11 +16,43 @@ export function inferredFrom(r: Outcome): "kito" | "rules" | "name_mark" | null 
   return null;
 }
 
+/** When the customer paid, read from the chat (database function payment_moment): their receipt or
+ *  M-Pesa SMS, "nimetuma", your "Tuma majina ya mpokeaji", or the first usage instructions — never the
+ *  moment you press the button. Returned as local "YYYY-MM-DDTHH:mm" for a datetime input. */
+export type PayMoment = { at: string; kind: "receipt" | "customer_said_paid" | "business_confirmed" | "goods_received" | "last_message"; snippet: string };
+export function usePaymentMoment(conversationId: string) {
+  const [pm, setPm] = useState<PayMoment | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    supabase.rpc("payment_moment", { p_conv: conversationId }).then(({ data, error }) => {
+      if (!live) return;
+      const row = !error && Array.isArray(data) ? (data[0] as PayMoment | undefined) : undefined;
+      setPm(row ?? null);
+    });
+    return () => { live = false; };
+  }, [conversationId]);
+  return pm;
+}
+/** ISO time → "YYYY-MM-DDTHH:mm" in East Africa time (what a datetime-local input shows). */
+export const toLocalInput = (iso: string) => new Date(Date.parse(iso) + 3 * 3600e3).toISOString().slice(0, 16);
+/** "YYYY-MM-DDTHH:mm" in East Africa time → ISO. */
+export const fromLocalInput = (v: string) => new Date(v + ":00+03:00").toISOString();
+export function momentWhy(kind: PayMoment["kind"], T: (en: string, sw: string) => string) {
+  return kind === "receipt" ? T("the customer's receipt / M-Pesa message", "risiti / ujumbe wa M-Pesa wa mteja")
+    : kind === "customer_said_paid" ? T("the customer saying they paid", "mteja aliposema amelipa")
+    : kind === "business_confirmed" ? T("your message right after payment", "ujumbe wako baada ya malipo")
+    : kind === "goods_received" ? T("delivery / usage instructions (payment was just before)", "maelekezo ya matumizi / mzigo kufika (malipo yalikuwa kabla)")
+    : T("the customer's last message (no payment message found)", "ujumbe wa mwisho wa mteja (hakuna ujumbe wa malipo)");
+}
+
 export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outcome; onDone: () => void; onCancel: () => void }) {
   const lang = ws.language; const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const [amount, setAmount] = useState(String(r.kito_amount ?? r.payment_amount ?? ""));
   const [discount, setDiscount] = useState("");
-  const [date, setDate] = useState(() => (r.last_message_at ?? new Date().toISOString()).slice(0, 10));
+  const pm = usePaymentMoment(r.id);
+  const [date, setDate] = useState("");
+  useEffect(() => { if (!date && pm !== undefined) setDate(toLocalInput(pm?.at ?? r.last_message_at ?? new Date().toISOString())); }, [pm]);
+  const [cost, setCost] = useState("");
   const [product, setProduct] = useState("");
   const [status, setStatus] = useState<Order["status"]>("paid");
   const [fulfil, setFulfil] = useState<Order["fulfillment_status"]>("not_applicable");
@@ -32,14 +64,16 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
     const a = Number(amount.replace(/[^\d.]/g, "")), d = discount ? Number(discount.replace(/[^\d.]/g, "")) : 0;
     if (!(a >= 0) || !isFinite(a)) return setErr(T("Enter the amount.", "Weka kiasi."));
     if (!(d >= 0) || d > a) return setErr(T("Discount must be between 0 and the amount.", "Punguzo liwe kati ya 0 na kiasi."));
-    if (!date || Date.parse(date) > Date.now() + 864e5) return setErr(T("Enter a valid date.", "Weka tarehe sahihi."));
+    if (!date || Date.parse(fromLocalInput(date)) > Date.now() + 864e5) return setErr(T("Enter a valid date.", "Weka tarehe sahihi."));
+    const c = cost.trim() ? Number(cost.replace(/[^\d.]/g, "")) : null;
+    if (c != null && !(c >= 0)) return setErr(T("Cost must be a number.", "Gharama iwe namba."));
     setBusy(true); setErr("");
     const { data: user } = await supabase.auth.getUser();
-    const occurred = new Date(date + "T12:00:00+03:00").toISOString();
+    const occurred = fromLocalInput(date);
     const { error } = await supabase.from("orders").insert({
       workspace_id: ws.id, conversation_id: r.id, amount: a, discount: d, currency: ws.currency, status, fulfillment_status: fulfil,
       product: product.trim() || null, notes: notes.trim() || null, occurred_at: occurred, paid_at: status === "paid" ? occurred : null,
-      provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id,
+      provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c,
     });
     setBusy(false);
     if (error) setErr(error.message); else onDone();
@@ -51,7 +85,8 @@ export function OrderForm({ ws, r, onDone, onCancel }: { ws: Workspace; r: Outco
       <div className="map">
         <label>{T("Amount", "Kiasi")} ({ws.currency})<input inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
         <label>{T("Discount", "Punguzo")}<input inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" /></label>
-        <label>{T("Date", "Tarehe")}<input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label>{T("Paid on", "Alilipa lini")}<input type="datetime-local" required value={date} onChange={(e) => setDate(e.target.value)} />{pm && <span className="small muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}</span>}</label>
+        <label>{T("Cost of this order", "Gharama ya oda hii")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={T("product + delivery", "bidhaa + usafiri")} /></label>
         <label>{T("Status", "Hali")}<select value={status} onChange={(e) => setStatus(e.target.value as any)}>{(["paid", "pending", "refunded", "cancelled"] as const).map((s) => <option key={s} value={s}>{L[lang].orderStatus[s]}</option>)}</select></label>
         <label>{T("Delivery", "Usafirishaji")}<select value={fulfil} onChange={(e) => setFulfil(e.target.value as any)}>{(["not_applicable", "not_shipped", "shipped", "delivered", "returned"] as const).map((s) => <option key={s} value={s}>{L[lang].fulfillment[s]}</option>)}</select></label>
         <label>{T("Product (optional)", "Bidhaa (si lazima)")}<input value={product} onChange={(e) => setProduct(e.target.value)} /></label>
@@ -98,12 +133,15 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
             <span className="small muted">{o.paid_at ? T("paid", "imelipwa") + " " + when(o.paid_at) : when(o.occurred_at)}{o.product ? ` · ${o.product}` : ""}{o.external_ref && !o.external_ref.startsWith("auto:") ? ` · ref ${o.external_ref}` : ""}</span>
           </div>
           {(Number(o.discount) > 0 || Number(o.refund_amount) > 0) && <span className="small muted">{T("gross", "jumla")} {amt(Number(o.amount), o.currency)}{Number(o.discount) > 0 ? ` − ${T("discount", "punguzo")} ${amt(Number(o.discount), o.currency)}` : ""}{Number(o.refund_amount) > 0 ? ` − ${T("refund", "marejesho")} ${amt(Number(o.refund_amount), o.currency)}` : ""}</span>}
+          {o.status === "paid" && <span className="small muted">{o.cost != null ? `${T("Cost", "Gharama")} ${amt(Number(o.cost), o.currency)} · ${T("profit before ads", "faida kabla ya matangazo")} ${amt(orderNet(o) - Number(o.cost), o.currency)}` : T("No cost typed yet — add it to see profit.", "Gharama bado haijaandikwa — iongeze uone faida.")}</span>}
           {o.notes && <span className={"small" + (o.notes.includes("⚠") ? " warnt" : "")}>{o.notes.replace(/\s*\[(wamsg|phone):[^\]]*\]/g, "")}</span>}
           <span className="small muted">{T("last change", "badiliko la mwisho")} {when(o.updated_at)} · <button className="small" style={{ padding: 0, border: 0, background: "none", color: "var(--accent)" }} onClick={() => toggleHistory(o)}>{events[o.id] ? T("hide history", "ficha historia") : T("history", "historia")}</button></span>
           {events[o.id] && <div className="small muted" style={{ display: "grid", gap: 2 }}>{events[o.id].map((e) => <span key={e.id}>{when(e.at)} · {e.action}{e.action === "update" && e.before && e.after ? ": " + Object.keys(e.after).filter((k) => JSON.stringify(e.before[k]) !== JSON.stringify(e.after[k]) && !["updated_at", "updated_by"].includes(k)).map((k) => `${k} ${JSON.stringify(e.before[k])} → ${JSON.stringify(e.after[k])}`).join(", ") : ""}{e.actor ? "" : T(" (server)", " (mfumo)")}</span>)}</div>}
           {editor && (
             <div className="row" style={{ gap: 6 }}>
               {o.status !== "paid" && <button className="small" disabled={busy === o.id} onClick={() => update(o, { status: "paid", paid_at: new Date().toISOString() })}>{T("Mark paid", "Weka imelipwa")}</button>}
+              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("What did this order cost you? (product + delivery)", "Oda hii ilikugharimu kiasi gani? (bidhaa + usafiri)"), o.cost != null ? String(o.cost) : ""); if (v == null) return; const n = v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")); if (n == null || n >= 0) update(o, { cost: n }); }}>{o.cost != null ? T("Change cost", "Badili gharama") : T("Add cost", "Ongeza gharama")}</button>}
+              {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Paid on (YYYY-MM-DD HH:MM, East Africa time)", "Alilipa lini (YYYY-MM-DD HH:MM)"), o.paid_at ? toLocalInput(o.paid_at).replace("T", " ") : ""); if (!v) return; const m = v.trim().match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/); if (!m) return; const iso = fromLocalInput(`${m[1]}T${(m[2] ?? "12").padStart(2, "0")}:${m[3] ?? "00"}`); if (Date.parse(iso) <= Date.now() + 864e5) update(o, { paid_at: iso, occurred_at: iso }); }}>{T("Change date", "Badili tarehe")}</button>}
               {o.status === "paid" && <button className="small" disabled={busy === o.id} onClick={() => { const v = prompt(T("Refund amount", "Kiasi cha marejesho"), String(orderNet(o))); const n = v == null ? NaN : Number(v.replace(/[^\d.]/g, "")); if (n >= 0 && n <= orderNet(o)) update(o, { status: "refunded", refund_amount: Number(o.refund_amount) + n }); }}>{T("Refund", "Rudisha pesa")}</button>}
               {o.status !== "cancelled" && <button className="small" disabled={busy === o.id} onClick={() => confirm(T("Cancel this order? It stays in the history as cancelled.", "Ghairi oda hii? Itabaki kwenye historia kama iliyoghairiwa.")) && update(o, { status: "cancelled" })}>{T("Cancel order", "Ghairi oda")}</button>}
               <select value={o.fulfillment_status} disabled={busy === o.id} onChange={(e) => update(o, { fulfillment_status: e.target.value as any })} style={{ padding: "3px 8px" }}>{(["not_applicable", "not_shipped", "shipped", "delivered", "returned"] as const).map((s) => <option key={s} value={s}>{L[lang].fulfillment[s]}</option>)}</select>

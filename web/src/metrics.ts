@@ -35,7 +35,7 @@ export type FunnelMetrics = {
   costPerPlatformConversation: Metric; costPerAdChat: Metric; costPerQualifiedInquiry: Metric; costPerAttributedSale: Metric;
   returnOnAdSpend: Metric; contribution: Metric;
   medianFirstReply: Metric; over1h: Metric; noReply: Metric; silentAfterPrice: Metric; warmNoFollowUp: Metric; kitoRead: Metric;
-  coverage: { knownSourceShare: number | null; kitoReadShare: number | null; chatsWithoutMessages: number; fxNeeded: boolean; fxSet: boolean; unitCostSet: boolean; expensesCount: number };
+  coverage: { knownSourceShare: number | null; kitoReadShare: number | null; chatsWithoutMessages: number; fxNeeded: boolean; fxSet: boolean; unitCostSet: boolean; expensesCount: number; ordersMissingCost: number; orderCosts: number };
 };
 
 export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
@@ -53,7 +53,7 @@ export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
   costPerQualifiedInquiry: { en: "Ad spend ÷ ad chats where a price was shared.", sw: "Matumizi ÷ chats za matangazo zilizopewa bei." },
   costPerAttributedSale: { en: "Ad spend ÷ attributed sales from ad chats. A matched estimate.", sw: "Matumizi ÷ mauzo yaliyounganishwa na chats za matangazo. Ni makadirio." },
   returnOnAdSpend: { en: "Attributed revenue from ad chats ÷ ad spend (converted with your exchange rate).", sw: "Mapato yaliyounganishwa na matangazo ÷ matumizi (kwa kiwango chako cha kubadilisha)." },
-  contribution: { en: "Revenue − ad spend − cost per order × orders − imported expenses. Shown only when those inputs exist.", sw: "Mapato − matangazo − gharama kwa oda × oda − matumizi yaliyoingizwa. Inaonyeshwa tu data ikiwepo." },
+  contribution: { en: "Revenue − ad spend − the cost you typed on each order − imported expenses. Shown when every order in the period has a cost.", sw: "Mapato − matangazo − gharama uliyoandika kwa kila oda − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama." },
 };
 
 const m = (value: number | null, provenance: Provenance, extra: Partial<Metric> = {}): Metric => ({ value, provenance, ...extra });
@@ -131,10 +131,16 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
   const spendInWs = fx != null ? spend * fx : null;
   const expenses = i.expenses.filter((e) => inPeriod(e.day, p) && e.currency === i.ws.currency);
   const expensesTotal = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  // Order costs: typed on each order when the payment is confirmed. The old workspace-wide
+  // "cost per order" (unit_cost) still fills in for orders recorded before that existed.
   const unitCost = i.ws.unit_cost != null ? Number(i.ws.unit_cost) : null;
-  const contribution = spendInWs != null && (unitCost != null || expenses.length > 0) && paid.length > 0
-    ? m(revenue - spendInWs - (unitCost ?? 0) * paid.length - expensesTotal, "derived", { note: unitCost != null && expenses.length ? "unit cost + expenses" : unitCost != null ? "unit cost per order" : "imported expenses" })
-    : m(null, "derived", { note: spendInWs == null ? "needs exchange rate" : paid.length === 0 ? "no paid orders in period" : "needs cost per order or expenses" });
+  const costOf = (o: Order) => (o.cost != null ? Number(o.cost) : unitCost);
+  const missingCost = paid.filter((o) => costOf(o) == null).length;
+  const orderCosts = paid.reduce((s, o) => s + (costOf(o) ?? 0), 0);
+  const costsKnown = paid.length > 0 && (missingCost === 0 || expenses.length > 0);
+  const contribution = spendInWs != null && costsKnown
+    ? m(revenue - spendInWs - orderCosts - expensesTotal, "derived", { n: paid.length - missingCost, d: paid.length, note: missingCost ? "some orders have no cost" : "order costs" })
+    : m(null, "derived", { n: paid.length - missingCost, d: paid.length, note: spendInWs == null ? "needs exchange rate" : paid.length === 0 ? "no paid orders in period" : "needs order costs" });
 
   return {
     period: p, adCurrency,
@@ -162,7 +168,7 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
       knownSourceShare: convs.length ? (convs.length - unknown.length) / convs.length : null,
       kitoReadShare: convs.length ? kitoRead / convs.length : null,
       chatsWithoutMessages: convs.filter((c) => !c.last_message_at).length,
-      fxNeeded, fxSet: !!i.ws.fx_rate, unitCostSet: unitCost != null, expensesCount: expenses.length,
+      fxNeeded, fxSet: !!i.ws.fx_rate, unitCostSet: unitCost != null, expensesCount: expenses.length, ordersMissingCost: missingCost, orderCosts,
     },
   };
 }

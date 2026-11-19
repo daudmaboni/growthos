@@ -65,13 +65,11 @@ function Business({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void
   const manager = canManage(ws);
   const [name, setName] = useState(ws.name);
   const [currency, setCurrency] = useState(ws.currency);
-  const [unit, setUnit] = useState(ws.unit_cost != null ? String(ws.unit_cost) : "");
+  const [show, setShow] = useState<"TZS" | "USD">((ws.display_currency ?? (ws.currency === "USD" ? "USD" : "TZS")) as "TZS" | "USD");
   const { msg, busy, save } = useSave(ws, onWs);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const u = unit.trim() === "" ? null : Number(unit.replace(/,/g, ""));
-    if (u !== null && !(u >= 0)) return;
-    await save({ name: name.trim(), currency, unit_cost: u }, e.currentTarget, T("Saved.", "Imehifadhiwa."));
+    await save({ name: name.trim(), currency, display_currency: show }, e.currentTarget, T("Saved.", "Imehifadhiwa."));
   }
   return (
     <form className="card" onSubmit={submit}>
@@ -80,9 +78,12 @@ function Business({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void
       <Field id="s-cur" label={T("Sales currency", "Sarafu ya mauzo")} hint={T("What customers pay in. Ad spend may be in another currency; set the rate under Rates.", "Wateja wanalipa kwa sarafu hii. Matangazo yanaweza kuwa sarafu nyingine; weka kiwango kwenye Viwango.")}>
         <select id="s-cur" value={currency} disabled={!manager} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
       </Field>
-      <Field id="s-unit" label={T("Cost per order", "Gharama kwa oda") + ` (${currency})`} hint={T("Product + delivery cost for one order. Optional; when set, the dashboard shows contribution after ad spend.", "Gharama ya bidhaa + usafirishaji kwa oda moja. Si lazima; ikiwekwa, dashibodi inaonyesha faida ya mchango.")}>
-        <input id="s-unit" inputMode="decimal" placeholder="e.g. 18000" value={unit} disabled={!manager} onChange={(e) => setUnit(e.target.value)} />
+      <Field id="s-show" label={T("Show money in", "Onyesha pesa kwa")} hint={T("Every amount on the dashboard is shown in this currency. Ad spend (USD from Meta) or sales (TZS) are converted with the exchange rate under Rates.", "Kila kiasi kwenye dashibodi kinaonyeshwa kwa sarafu hii. Matangazo (USD kutoka Meta) au mauzo (TZS) yanabadilishwa kwa kiwango kilicho kwenye Viwango.")}>
+        <div className="seg" role="group" id="s-show" aria-label={T("Show money in", "Onyesha pesa kwa")}>
+          {(["TZS", "USD"] as const).map((c) => <button key={c} type="button" disabled={!manager} className={show === c ? "on" : ""} aria-pressed={show === c} onClick={() => setShow(c)}>{c === "TZS" ? T("TZS (shillings)", "TZS (shilingi)") : T("USD (dollars)", "USD (dola)")}</button>)}
+        </div>
       </Field>
+      <p className="small muted" style={{ margin: 0 }}>{T("Order costs are now typed on each sale: in Chats, when you press \"Yes, money received\".", "Gharama za oda sasa zinaandikwa kwa kila mauzo: kwenye Chats, unapobonyeza \"Ndiyo, pesa imeingia\".")}</p>
       {manager && <SaveRow busy={busy} msg={msg} T={T} />}
     </form>
   );
