@@ -726,3 +726,13 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .nc-row { display: grid; gap: 8px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--paper); }
 .nc-row.open { outline: 1px solid var(--line-2); }
 .nc-edit { display: grid; gap: 8px; }
+/* 0035: "Came from an ad?" — the tapped answer is clearly marked: Yes turns green, No stays white with a dark outline */
+.cc-fromad .seg button { font-weight: 700; padding: 5px 14px; }
+.cc-fromad .seg button.yes.on { background: #1f8a4c; color: #fff; box-shadow: 0 0 0 1px #1f8a4c, var(--shadow-sm); }
+.cc-fromad .seg button.no.on { background: #fff; color: #111b21; box-shadow: 0 0 0 1.5px #111b21, var(--shadow-sm); }
+/* 0035: the side panel never runs off the right edge — everything wraps to its width */
+.wa-side { grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
+.wa-side > *, .wa-side .wa-card > *, .wa-side .cc-ask > * { min-width: 0; }
+.wa-side .cc-pay-fields { grid-template-columns: minmax(0, 1fr); }
+.wa-side input, .wa-side select, .wa-side textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.wa-side .cc-ask, .wa-side .wa-card { overflow-wrap: anywhere; }

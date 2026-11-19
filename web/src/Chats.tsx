@@ -485,13 +485,17 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
   useEffect(() => { const el = thread.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs?.length]);
 
   /** The owner's answer to "came from an ad?" wins over the automatic checks (ad_signal = 'owner'). */
+  // Shown at once when tapped; falls back to the saved value if the save fails.
+  const [src, setSrc] = useState(r.source);
+  useEffect(() => setSrc(r.source), [r.id, r.source]);
   async function setFromAd(yes: boolean) {
     if ((r.source === "ad") === yes && r.ad_signal === "owner") return;
+    setSrc(yes ? "ad" : "organic");
     setBusy(true); setErr("");
     let { error } = await supabase.from("conversations").update({ source: yes ? "ad" : "organic", ad_signal: "owner" }).eq("id", r.id);
     // Until migration 0032 is on the database, 'owner' isn't an allowed ad_signal: save the answer without it.
     if (error?.code === "23514") ({ error } = await supabase.from("conversations").update({ source: yes ? "ad" : "organic", ...(yes ? {} : { ad_signal: null }) }).eq("id", r.id));
-    setBusy(false); if (error) setErr(error.message); else onChange();
+    setBusy(false); if (error) { setSrc(r.source); setErr(error.message); } else onChange();
   }
   async function setOverride(v: "lost" | "open" | null) {
     setBusy(true); setErr("");
@@ -565,8 +569,8 @@ function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, startConfi
               <div className="cc-fromad">
                 <span className="small">{T("Came from an ad?", "Ametoka kwenye tangazo?")}</span>
                 <div className="seg" role="group" aria-label={T("Came from an ad?", "Ametoka kwenye tangazo?")}>
-                  <button type="button" className={r.source === "ad" ? "on" : ""} aria-pressed={r.source === "ad"} disabled={busy} onClick={() => setFromAd(true)}>{T("Yes", "Ndiyo")}</button>
-                  <button type="button" className={r.source !== "ad" ? "on" : ""} aria-pressed={r.source !== "ad"} disabled={busy} onClick={() => setFromAd(false)}>{T("No", "Hapana")}</button>
+                  <button type="button" className={"yes" + (src === "ad" ? " on" : "")} aria-pressed={src === "ad"} disabled={busy} onClick={() => setFromAd(true)}>{src === "ad" && "✓ "}{T("Yes", "Ndiyo")}</button>
+                  <button type="button" className={"no" + (src === "organic" ? " on" : "")} aria-pressed={src === "organic"} disabled={busy} onClick={() => setFromAd(false)}>{src === "organic" && "✓ "}{T("No", "Hapana")}</button>
                 </div>
               </div>
             )}
@@ -764,7 +768,7 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
   // The day the customer paid, read from the chat (receipt, "nimetuma", your delivery-details message…).
   const pm = usePaymentMoment(r.id);
   const [paidOn, setPaidOn] = useState("");
-  useEffect(() => { if (!paidOn && pm !== undefined) setPaidOn(toLocalInput(rc?.sent_at ?? pm?.at ?? r.last_message_at ?? new Date().toISOString())); }, [pm, rc?.sent_at]);
+  useEffect(() => { if (!paidOn && pm !== undefined) setPaidOn(toLocalInput(pm?.at ?? rc?.sent_at ?? r.last_message_at ?? new Date().toISOString())); }, [pm, rc?.sent_at]);
   const [cost, setCost] = useState("");
   // What the customer bought (My products): the cost fills in from the products picked, still editable.
   const { products } = useProducts(ws.id);

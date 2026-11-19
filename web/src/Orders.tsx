@@ -43,7 +43,7 @@ export function momentWhy(kind: PayMoment["kind"], T: (en: string, sw: string) =
   return kind === "receipt" ? T("the customer's receipt / M-Pesa message", "risiti / ujumbe wa M-Pesa wa mteja")
     : kind === "customer_said_paid" ? T("the customer saying they paid", "mteja aliposema amelipa")
     : kind === "business_confirmed" ? T("your message right after payment", "ujumbe wako baada ya malipo")
-    : kind === "goods_received" ? T("delivery / usage instructions (payment was just before)", "maelekezo ya matumizi / mzigo kufika (malipo yalikuwa kabla)")
+    : kind === "goods_received" ? T("your \"Matumizi ya…\" message, sent the day they paid", "ujumbe wako wa \"Matumizi ya…\", uliotumwa siku aliyolipa")
     : T("the customer's last message (no payment message found)", "ujumbe wa mwisho wa mteja (hakuna ujumbe wa malipo)");
 }
 
