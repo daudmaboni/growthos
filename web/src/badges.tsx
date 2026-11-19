@@ -26,11 +26,12 @@ export function useNavBadges(wsId: string, view: string): Badges {
   useEffect(() => {
     if (!wsId) return;
     let t: number | undefined;
-    const soon = () => { window.clearTimeout(t); t = window.setTimeout(load, 1500); };
+    // Throttled (one per 5 s) and only while the tab is visible; the visibility handler below catches up.
+    const soon = () => { if (t !== undefined || document.visibilityState !== "visible") return; t = window.setTimeout(() => { t = undefined; load(); }, 5000); };
     const ch = supabase.channel("badges-" + wsId)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${wsId}` }, soon)
       .subscribe();
-    const iv = window.setInterval(load, 60_000);
+    const iv = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 60_000);
     const vis = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", vis);
     return () => { window.clearTimeout(t); window.clearInterval(iv); document.removeEventListener("visibilitychange", vis); supabase.removeChannel(ch); };

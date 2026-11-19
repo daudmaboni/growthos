@@ -28,8 +28,27 @@ const OUTCOME_COLS = [
   "pay_instructions",
 ].join(",");
 
-// Pages are fetched 4 at a time instead of one after another.
-export async function loadConversations(ws: string, fromIso: string) {
+// One request: the database scans once and returns columns as arrays (migration 0026).
+// Falls back to paging the view if the function is missing.
+export async function loadConversations(ws: string, fromIso: string): Promise<Outcome[]> {
+  const { data, error } = await supabase.rpc("dashboard_conversations", { p_ws: ws, p_from: fromIso });
+  if (!error && data && Array.isArray((data as any).id)) {
+    const cols = data as Record<string, unknown[]>;
+    const keys = Object.keys(cols);
+    const n = cols.id.length;
+    const rows = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const r: Record<string, unknown> = {};
+      for (const k of keys) r[k] = cols[k][i];
+      rows[i] = r;
+    }
+    return rows as Outcome[];
+  }
+  return loadConversationsPaged(ws, fromIso);
+}
+
+// Old path: pages fetched 4 at a time.
+async function loadConversationsPaged(ws: string, fromIso: string) {
   const PAGE = 1000, WAVE = 4;
   const rows: Outcome[] = [];
   const page = (start: number) => supabase.from("conversation_outcomes").select(OUTCOME_COLS)
@@ -66,7 +85,8 @@ export function useGrowthData(ws: Workspace, range: RangeSel): GrowthData {
   useEffect(() => {
     let t: number | undefined;
     // Throttled, not debounced: at most one refresh per 5 s, however many chats change.
-    const soon = () => { if (t !== undefined) return; t = window.setTimeout(() => { t = undefined; setTick((x) => x + 1); }, 5000); };
+    // A tab in the background doesn't reload; it catches up when it comes back into view.
+    const soon = () => { if (t !== undefined || document.visibilityState !== "visible") return; t = window.setTimeout(() => { t = undefined; setTick((x) => x + 1); }, 5000); };
     const ch = supabase.channel("growth-" + ws.id)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `workspace_id=eq.${ws.id}` }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, soon)

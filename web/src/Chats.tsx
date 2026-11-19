@@ -111,7 +111,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
     let timer: number | undefined, kitoTimer: number | undefined;
     // At most one reload every 5 s: a newly connected number backfills thousands of rows at once.
     let last = 0;
+    let missed = false;
     const bump = () => {
+      // Background tabs don't reload on every change; they catch up once when shown again.
+      if (document.visibilityState !== "visible") { missed = true; return; }
       if (timer) return;
       const wait = Math.max(800, 5000 - (Date.now() - last));
       timer = window.setTimeout(() => { timer = undefined; last = Date.now(); setQuiet(true); refresh(); window.dispatchEvent(new Event("itaos:live")); }, wait);
@@ -129,7 +132,9 @@ export default function Chats({ ws }: { ws: Workspace }) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `workspace_id=eq.${ws.id}` }, bump)
       .subscribe((status) => setLive(status === "SUBSCRIBED"));
-    return () => { window.clearTimeout(timer); window.clearTimeout(kitoTimer); supabase.removeChannel(ch); };
+    const onVis = () => { if (document.visibilityState === "visible" && missed) { missed = false; bump(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { window.clearTimeout(timer); window.clearTimeout(kitoTimer); document.removeEventListener("visibilitychange", onVis); supabase.removeChannel(ch); };
   }, [ws.id]);
 
   useEffect(() => {
