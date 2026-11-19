@@ -508,6 +508,7 @@ const fromOf = (r: Outcome, T: Tr, adName?: string) => r.source === "ad"
   ? (adName || r.source_label ? T(`From the ad "${adName ?? r.source_label}"`, `Kutoka tangazo "${adName ?? r.source_label}"`)
     : r.ad_signal === "greeting_card" ? T("From an ad (opened with your ad greeting)", "Kutoka tangazo (ilianza na salamu ya tangazo)")
     : r.ad_signal === "ad_text" ? T("From an ad (sent the ad's ready-made message)", "Kutoka tangazo (alituma ujumbe tayari wa tangazo)")
+    : r.ad_signal === "location_reply" ? T("From an ad (asked where you are and got your location reply about the ad video)", "Kutoka tangazo (aliuliza mnapatikana wapi, akajibiwa kuhusu video ya tangazo)")
     : r.ad_signal === "owner" ? T("From an ad (you set this)", "Kutoka tangazo (umeweka wewe)")
     : T("From an ad", "Kutoka tangazo"))
   : r.source_label ? T(`From ${r.source_label}`, `Kutoka ${r.source_label}`)
