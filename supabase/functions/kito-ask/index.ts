@@ -284,6 +284,8 @@ Deno.serve(async (req) => {
   if (!KEY) return json({ error: "Kito has no AI key yet. Add the ANTHROPIC_API_KEY secret in Supabase." }, 503);
 
   const svc = admin();
+  const { data: capped } = await svc.rpc("svc_ai_paused", { p_ws: wsId });
+  if (capped === true) return json({ error: "Kito has reached this month's AI limit for your business. Pondi has been told; Kito answers again next month." }, 429);
   const since = new Date(Date.now() - 3600e3).toISOString();
   const { count } = await svc.from("kito_asks").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).gte("created_at", since);
   if ((count ?? 0) >= HOURLY) return json({ error: `You've asked Kito ${count} questions in the last hour. Try again a bit later.` }, 429);

@@ -22,8 +22,9 @@ export async function callFn<T = any>(name: string, body: Record<string, unknown
 
 export type Role = "owner" | "admin" | "analyst" | "viewer";
 export type Workspace = { id: string; name: string; currency: string; language: "sw" | "en"; unit_cost: number | null; fx_rate: number | null; fx_auto?: boolean; fx_updated_at?: string | null; fx_source?: string | null; fx_base?: string | null;
-  timezone: string; follow_up_hours: number; conversion_window_days: number; send_enabled?: boolean; display_currency?: "TZS" | "USD" | null; role?: Role };
-export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,fx_auto,fx_updated_at,fx_source,fx_base,timezone,follow_up_hours,conversion_window_days,send_enabled,display_currency";
+  timezone: string; follow_up_hours: number; conversion_window_days: number; send_enabled?: boolean; display_currency?: "TZS" | "USD" | null; role?: Role;
+  rule_ad_texts?: string[]; rule_loc_question?: string[]; rule_loc_reply?: string[]; rule_paid_texts?: string[] };
+export const WS_COLUMNS = "id,name,currency,language,unit_cost,fx_rate,fx_auto,fx_updated_at,fx_source,fx_base,timezone,follow_up_hours,conversion_window_days,send_enabled,display_currency,rule_ad_texts,rule_loc_question,rule_loc_reply,rule_paid_texts";
 export const canEdit = (ws: Workspace) => ws.role == null || ws.role !== "viewer";
 export const canManage = (ws: Workspace) => ws.role === "owner" || ws.role === "admin";
 

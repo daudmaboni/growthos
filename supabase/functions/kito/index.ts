@@ -48,7 +48,13 @@ function agoText(iso: string) {
   return m < 60 ? `${m} minutes ago` : m < 48 * 60 ? `${Math.round(m / 60)} hours ago` : `${Math.round(m / 1440)} days ago`;
 }
 
-function prompt(chat: string, lastAt: string, lang: string, currency: string) {
+/** The business's own "customer has paid" messages (Settings → Rules & rates), e.g. Kayani's "Matumizi ya KayaTox". */
+function paidLine(texts: string[]) {
+  const t = texts.map((x) => x.replace(/["\n]/g, " ").trim().slice(0, 80)).filter(Boolean).slice(0, 5);
+  return t.length ? `The business sending ${t.map((x) => `"${x}"`).join(" or ")} means the customer paid: that alone is "sold". ` : "";
+}
+
+function prompt(chat: string, lastAt: string, lang: string, currency: string, paidTexts: string[] = []) {
   return `You are Kito, an analyst inside itaOS. You read one WhatsApp sales chat between a small Tanzanian business (BIASHARA) and a customer (MTEJA) and label it. Chats are in Kiswahili, English or a mix.
 
 Now is ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC. The last message was sent ${lastAt.slice(0, 16).replace("T", " ")} UTC, ${agoText(lastAt)}. "(+26h)" means 26 hours passed before that message. "<Media omitted>" or "[image]" is a photo or screenshot that could not be read. "[picha ya malipo] …" is a payment receipt/screenshot the customer sent, already read by itaOS (provider · amount · transaction code · payee · time): treat it as strong evidence the customer paid, but it is not confirmed until the owner records the order. "[picha] …" is an image that is not a receipt.
@@ -60,7 +66,7 @@ ${chat}
 </chat>
 
 Decide:
-- outcome: "sold" if the customer paid or clearly received/collected the goods (the customer's payment message or "[picha ya malipo]", the business confirming it received the money, or the customer confirming they received/collected the goods). Only something that ALREADY happened counts: a question, a "what if" ("je mfano nikichukua dawa…", "kama nikilipa…", "nikitumia zisiponisaidia mnafanyeje?"), a plan ("nitalipa kesho", "nikifika dar") or asking how to pay is NOT payment, even when it uses words like "nimechukua", "nimelipa" or "nimetuma". When unsure whether money really moved, do not say "sold": use "open" and confidence "low". Delivery arranged ("unaletewa na boda", "tutakutumia kesho") is not payment until the customer confirms they paid or received the goods, or the business confirms it got the money. The business sending "Matumizi ya KayaTox" (KayaTox usage instructions) means the customer paid: that alone is "sold". Usage instructions for any other product ("Matumizi ya …") count only together with a payment sign (payment message, "[picha ya malipo]", the business confirming payment, or the customer confirming they received the goods). A photo that could not be read ("[image]", "<Media omitted>", "[media_placeholder]") is never payment on its own. "open" if the chat is still in progress: ANY message in the last 2 days means "open" unless the customer clearly said no. "lost" only when the chat went quiet for more than 2 days, or the customer clearly refused. A slow reply by the business is a blocker (business_slow), never by itself a reason for "lost".
+- outcome: "sold" if the customer paid or clearly received/collected the goods (the customer's payment message or "[picha ya malipo]", the business confirming it received the money, or the customer confirming they received/collected the goods). Only something that ALREADY happened counts: a question, a "what if" ("je mfano nikichukua dawa…", "kama nikilipa…", "nikitumia zisiponisaidia mnafanyeje?"), a plan ("nitalipa kesho", "nikifika dar") or asking how to pay is NOT payment, even when it uses words like "nimechukua", "nimelipa" or "nimetuma". When unsure whether money really moved, do not say "sold": use "open" and confidence "low". Delivery arranged ("unaletewa na boda", "tutakutumia kesho") is not payment until the customer confirms they paid or received the goods, or the business confirms it got the money. ${paidLine(paidTexts)}Usage instructions${paidTexts.length ? " for anything else" : ""} ("Matumizi ya …") count only together with a payment sign (payment message, "[picha ya malipo]", the business confirming payment, or the customer confirming they received the goods). A photo that could not be read ("[image]", "<Media omitted>", "[media_placeholder]") is never payment on its own. "open" if the chat is still in progress: ANY message in the last 2 days means "open" unless the customer clearly said no. "lost" only when the chat went quiet for more than 2 days, or the customer clearly refused. A slow reply by the business is a blocker (business_slow), never by itself a reason for "lost".
 - Judge mainly the latest part of the chat. Many chats have old messages weeks earlier and then a new conversation: the new conversation decides outcome and temperature; old messages are background.
 - Questions about price ("haipungui?", "bei ya mwisho?", "naweza kupata kwa ...?"), how to pay, where you are or delivery are buying signals: temperature at least "warm", usually "hot".
 - label: the furthest stage reached, one of ${JSON.stringify(LABELS)}.
@@ -202,50 +208,6 @@ async function draftReply(db: ReturnType<typeof admin>, ws: string, conversation
   return { draft_sw: str(out.draft_sw, 1200), draft_en: str(out.draft_en, 1200), why: str(out.why, 300), grounded_on: arr(out.grounded_on), missing: arr(out.missing), profile_used: !!profile, model: MODEL };
 }
 
-const IDEAS_TOOL = {
-  name: "content_ideas",
-  description: "Propose content ideas as editable drafts.",
-  input_schema: {
-    type: "object",
-    properties: { ideas: { type: "array", maxItems: 6, items: { type: "object", properties: {
-      title: { type: "string" }, draft: { type: "string" }, theme: { type: "string" }, hook: { type: "string" }, offer: { type: "string" }, format: { type: "string" }, based_on: { type: "string" },
-    }, required: ["title", "draft", "theme", "hook", "format", "based_on"] } } },
-    required: ["ideas"],
-  },
-};
-
-async function contentIdeas(db: ReturnType<typeof admin>, ws: string, lang: string) {
-  const [{ data: profile }, { data: posts }, { data: objections }] = await Promise.all([
-    db.from("business_profiles").select("products,delivery_areas,payment_methods,tone,faqs,constraints").eq("workspace_id", ws).maybeSingle(),
-    db.from("content_posts").select("theme,hook,offer,format,reach,likes,comments,shares,saves,posted_at").eq("workspace_id", ws).order("posted_at", { ascending: false }).limit(40),
-    db.from("conversations").select("kito_objections,objections").eq("workspace_id", ws).order("last_message_at", { ascending: false }).limit(300),
-  ]);
-  const tally: Record<string, number> = {};
-  for (const c of objections ?? []) for (const o of new Set([...(c.kito_objections ?? []), ...(c.objections ?? [])])) tally[o] = (tally[o] ?? 0) + 1;
-  const topObjections = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} (${n} chats)`).join(", ") || "none recorded";
-  const postLines = (posts ?? []).map((p) => `- ${p.format ?? "?"} | theme: ${p.theme ?? "?"} | hook: ${p.hook ?? "?"} | offer: ${p.offer ?? "-"} | reach ${p.reach ?? "?"} likes ${p.likes ?? "?"} comments ${p.comments ?? "?"} shares ${p.shares ?? "?"} saves ${p.saves ?? "?"}`).join("\n") || "(no posts recorded yet)";
-  const p = `You are Kito inside itaOS. Propose up to 6 content ideas for a small Tanzanian business as EDITABLE DRAFTS. Nothing you write is published automatically.
-
-Business profile (only source of product, price, delivery and payment facts):
-${profileText(profile as Profile)}
-
-Recorded posts and their engagement (observed, not proof of sales):
-${postLines}
-
-Most common customer objections in WhatsApp chats: ${topObjections}
-
-Rules: write captions in ${lang === "sw" ? "natural Tanzanian Kiswahili" : "plain English"}; no health or effectiveness claims; no invented prices, discounts or testimonials; no claims about customers. Each idea must say in "based_on" which observed pattern or objection it addresses (or "profile only" if none). Keep each draft under 80 words.`;
-  let r = await call({ messages: [{ role: "user", content: p }], tools: [IDEAS_TOOL], tool_choice: { type: "tool", name: "content_ideas" } }, { feature: "content_ideas", workspaceId: ws });
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "content_ideas", workspaceId: ws, attempt: 2 });
-  if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
-  const out = parse(r.body);
-  const ideas = (Array.isArray(out.ideas) ? out.ideas : []).slice(0, 6).map((i: any) => ({
-    title: String(i.title ?? "").slice(0, 120), draft: String(i.draft ?? "").slice(0, 1200), theme: String(i.theme ?? "").slice(0, 80),
-    hook: String(i.hook ?? "").slice(0, 160), offer: String(i.offer ?? "").slice(0, 120), format: String(i.format ?? "").slice(0, 40), based_on: String(i.based_on ?? "").slice(0, 200),
-  })).filter((i: any) => i.title && i.draft);
-  return { ideas, profile_used: !!profile, posts_seen: (posts ?? []).length };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const body = await req.json().catch(() => ({}));
@@ -262,16 +224,15 @@ Deno.serve(async (req) => {
   if (!KEY) return json({ ready: false, error: "Kito has no AI key yet. Add the ANTHROPIC_API_KEY secret in Supabase." }, isCron ? 200 : 503);
 
   // On-demand coaching: drafts only, never sent. Editors only, scoped to their workspace.
-  if (!isCron && (body.action === "draft_reply" || body.action === "content_ideas")) {
+  if (!isCron && body.action === "content_ideas") return json({ error: "Content ideas were removed from itaOS." }, 410);
+  if (!isCron && body.action === "draft_reply") {
     const { data: canEdit } = await userClient(req).rpc("can_edit", { ws: body.workspace_id });
     if (!canEdit) return json({ error: "You need an editor role to ask Kito for drafts." }, 403);
+    const { data: capped } = await db.rpc("svc_ai_paused", { p_ws: body.workspace_id });
+    if (capped === true) return json({ error: "Kito has reached this month's AI limit for your business. Pondi has been told; it starts again next month." }, 429);
     try {
-      if (body.action === "draft_reply") {
-        if (!/^[0-9a-f-]{36}$/i.test(String(body.conversation_id ?? ""))) return json({ error: "conversation_id required" }, 400);
-        return json({ draft: true, ...(await draftReply(db, body.workspace_id, body.conversation_id)) });
-      }
-      const { data: w } = await db.from("workspaces").select("language").eq("id", body.workspace_id).single();
-      return json({ draft: true, ...(await contentIdeas(db, body.workspace_id, w?.language ?? "sw")) });
+      if (!/^[0-9a-f-]{36}$/i.test(String(body.conversation_id ?? ""))) return json({ error: "conversation_id required" }, 400);
+      return json({ draft: true, ...(await draftReply(db, body.workspace_id, body.conversation_id)) });
     } catch (e) {
       return json({ error: String((e as Error).message).slice(0, 200) }, 502);
     }
@@ -306,25 +267,33 @@ Deno.serve(async (req) => {
   const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at)))];
   const batch = due.slice(0, isCron ? 12 : 20);
 
-  const wsInfo = new Map<string, { language: string; currency: string }>();
+  const wsInfo = new Map<string, { language: string; currency: string; paid: string[] }>();
   const tally = new Map<string, { checked: number; failed: number; note: string }>();
   const bump = (ws: string, k: "checked" | "failed", note = "") => {
     const t = tally.get(ws) ?? { checked: 0, failed: 0, note: "" };
     t[k]++; if (note) t.note = note; tally.set(ws, t);
   };
+  // Businesses over their monthly AI limit with "pause" chosen (set by Pondi staff) are skipped until next month.
+  const paused = new Set<string>();
+  for (const w of new Set(batch.map((c) => c.workspace_id))) {
+    const { data: p } = await db.rpc("svc_ai_paused", { p_ws: w });
+    if (p === true) paused.add(w);
+  }
   const started = Date.now();
   let done = 0, failed = 0; let lastError = "";
+  for (const w of paused) bump(w, "failed", "Paused: this business reached its monthly AI limit");
   for (const c of batch) {
+    if (paused.has(c.workspace_id)) continue;
     if (Date.now() - started > 100_000) break; // stay inside the function time limit
     try {
       if (!wsInfo.has(c.workspace_id)) {
-        const { data: w } = await db.from("workspaces").select("language,currency").eq("id", c.workspace_id).single();
-        wsInfo.set(c.workspace_id, { language: w?.language ?? "sw", currency: w?.currency ?? "TZS" });
+        const { data: w } = await db.from("workspaces").select("language,currency,rule_paid_texts").eq("id", c.workspace_id).single();
+        wsInfo.set(c.workspace_id, { language: w?.language ?? "sw", currency: w?.currency ?? "TZS", paid: Array.isArray(w?.rule_paid_texts) ? w.rule_paid_texts : [] });
       }
       const { data: msgs } = await db.from("messages").select("direction,sent_at,body,type").eq("conversation_id", c.id).order("sent_at");
       if (!msgs?.length) continue;
       const info = wsInfo.get(c.workspace_id)!;
-      const r = await ask(prompt(transcript(msgs), c.last_message_at, info.language, info.currency), c.workspace_id);
+      const r = await ask(prompt(transcript(msgs), c.last_message_at, info.language, info.currency, info.paid), c.workspace_id);
       const amount = typeof r.amount === "number" && r.amount >= 500 && r.amount < 1e8 ? r.amount : null;
       // Guard: a chat with a message in the last 2 days isn't "lost" unless the customer turned it down (cold).
       if (r.outcome === "lost" && Date.now() - Date.parse(c.last_message_at) < 48 * 3600e3 && r.temperature !== "cold") r.outcome = "open";

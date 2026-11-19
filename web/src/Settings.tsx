@@ -37,7 +37,7 @@ export default function Settings({ ws, onWs, theme, onTheme }: { ws: Workspace; 
       {tab === "business" && <Business ws={ws} onWs={onWs} T={T} />}
       {tab === "profile" && <Profile ws={ws} T={T} />}
       {tab === "appearance" && <Appearance ws={ws} onWs={onWs} theme={theme} onTheme={onTheme} T={T} />}
-      {tab === "rules" && <><PaymentsCurrency ws={ws} onWs={onWs} T={T} /><Rates ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
+      {tab === "rules" && <><PaymentsCurrency ws={ws} onWs={onWs} T={T} /><Rates ws={ws} onWs={onWs} T={T} /><ChatRules ws={ws} onWs={onWs} T={T} /><Replying ws={ws} onWs={onWs} T={T} /></>}
       {tab === "app" && <PhoneApp ws={ws} T={T} />}
       {tab === "account" && <><MyProfile ws={ws} T={T} /><Account email={email} T={T} /></>}
     </div>
@@ -181,6 +181,43 @@ function Replying({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void
       </label>
       {err && <span className="err small">{err}</span>}
     </section>
+  );
+}
+
+/** The business's own wording that itaOS looks for in chats (no AI): which first messages come from an ad,
+ *  the location reply only ad customers get, and the message sent once a customer has paid. */
+function ChatRules({ ws, onWs, T }: { ws: Workspace; onWs: (w: Workspace) => void; T: Tr }) {
+  const lines = (a?: string[]) => (a ?? []).join("\n");
+  const [ad, setAd] = useState(lines(ws.rule_ad_texts));
+  const [locQ, setLocQ] = useState(lines(ws.rule_loc_question));
+  const [locR, setLocR] = useState(lines(ws.rule_loc_reply));
+  const [paid, setPaid] = useState(lines(ws.rule_paid_texts));
+  const { msg, busy, save } = useSave(ws, onWs);
+  const manager = canManage(ws);
+  const list = (v: string, max: number) => [...new Set(v.split("\n").map((x) => x.trim().slice(0, 200)).filter(Boolean))].slice(0, max);
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    await save({ rule_ad_texts: list(ad, 20), rule_loc_question: list(locQ, 10), rule_loc_reply: list(locR, 10), rule_paid_texts: list(paid, 10) },
+      e.currentTarget, T("Saved. New messages are read with these rules.", "Imehifadhiwa. Jumbe mpya zinasomwa kwa kanuni hizi."));
+  }
+  const area = { rows: 3, style: { width: "100%", maxWidth: 520, fontFamily: "inherit" }, disabled: !manager };
+  return (
+    <form className="card" onSubmit={submit}>
+      <div><h2>{T("How itaOS reads your chats", "Jinsi itaOS inavyosoma chat zako")}</h2><span className="small muted">{T("Your own wording, so itaOS can tell which chats came from an ad and which day a customer paid. One per line. Matched as written (capital letters don't matter), never guessed by AI. Applies to new messages.", "Maneno yako mwenyewe, ili itaOS ijue chat zipi zimetoka kwenye tangazo na siku gani mteja alilipa. Moja kwa kila mstari. Yanalinganishwa kama yalivyoandikwa (herufi kubwa hazijalishi), si kwa kubahatisha. Inatumika kwa jumbe mpya.")}</span></div>
+      <Field id="r-ad" label={T("Your ad's opening message", "Ujumbe wa kwanza wa tangazo lako")} hint={T("The ready-made text a customer sends when they tap your ad (e.g. \"Mnapatikana wapi?\"). Put * at the end to also catch messages that start with it.", "Maandishi tayari ambayo mteja anatuma akibonyeza tangazo lako (mf. \"Mnapatikana wapi?\"). Weka * mwishoni kukamata pia jumbe zinazoanza nayo.")}>
+        <textarea id="r-ad" {...area} rows={4} value={ad} placeholder={T("e.g. Hello! Can I get more info on this*", "mf. Habari, naomba maelezo zaidi*")} onChange={(e) => setAd(e.target.value)} />
+      </Field>
+      <Field id="r-lq" label={T("Your location reply: the customer asks", "Jibu lako la mahali: mteja anauliza")} hint={T("The question your location reply answers. Leave empty if any message counts.", "Swali ambalo jibu lako la mahali linajibu. Acha wazi kama ujumbe wowote unahesabika.")}>
+        <textarea id="r-lq" {...area} rows={2} value={locQ} placeholder={T("e.g. Mnapatikana wapi", "mf. Mnapatikana wapi")} onChange={(e) => setLocQ(e.target.value)} />
+      </Field>
+      <Field id="r-lr" label={T("…and your reply always contains", "…na jibu lako lina maneno haya yote")} hint={T("Words that only appear in the reply you give to people who saw your ad (all of them must be there). Leave empty to turn this off.", "Maneno yanayoonekana tu kwenye jibu unalowapa walioona tangazo lako (yote lazima yawepo). Acha wazi kuzima.")}>
+        <textarea id="r-lr" {...area} rows={2} value={locR} placeholder={T("e.g. Tunapatikana\nvideo hiyo", "mf. Tunapatikana\nvideo hiyo")} onChange={(e) => setLocR(e.target.value)} />
+      </Field>
+      <Field id="r-pd" label={T("The message you send after payment", "Ujumbe unaotuma baada ya malipo")} hint={T("A message you only send once the customer has paid (e.g. usage instructions). When itaOS sees it, that day becomes the payment day.", "Ujumbe unaoutuma tu baada ya mteja kulipa (mf. maelekezo ya matumizi). itaOS ikiuona, siku hiyo inakuwa siku ya malipo.")}>
+        <textarea id="r-pd" {...area} rows={2} value={paid} placeholder={T("e.g. Matumizi ya …", "mf. Matumizi ya …")} onChange={(e) => setPaid(e.target.value)} />
+      </Field>
+      {manager && <SaveRow busy={busy} msg={msg} T={T} />}
+    </form>
   );
 }
 

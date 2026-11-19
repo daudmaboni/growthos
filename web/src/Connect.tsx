@@ -8,7 +8,97 @@ type Health = { status: string; events: number; oldest: string | null; newest: s
 type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
 type Num = { phone_number_id: string; connection_id: string | null; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
 
+const PONDI_WA = "255745160572";
+const pondiLink = (ws: Workspace, what: string) =>
+  `https://wa.me/${PONDI_WA}?text=${encodeURIComponent(ws.language === "sw" ? `Habari Pondi, naomba msaada wa kuunganisha ${what} kwenye itaOS (${ws.name}).` : `Hi Pondi, please help me connect ${what} to itaOS (${ws.name}).`)}`;
+
+/** What an owner sees: is each thing connected, and who to call if not. All setup is done by Pondi. */
 export default function Connect({ ws }: { ws: Workspace }) {
+  const [setup, setSetup] = useState(() => location.hash.startsWith("#connect/setup"));
+  useEffect(() => {
+    const on = () => setSetup(location.hash.startsWith("#connect/setup"));
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  if (setup && canManage(ws)) return <ConnectSetup ws={ws} />;
+  return <ConnectSimple ws={ws} />;
+}
+
+function ConnectSimple({ ws }: { ws: Workspace }) {
+  const T = (en: string, sw: string) => (ws.language === "sw" ? sw : en);
+  const [conns, setConns] = useState<Conn[] | null>(null);
+  const [nums, setNums] = useState<Num[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id).then(({ data }) => setConns((data as Conn[]) ?? []));
+    supabase.from("wa_numbers").select("phone_number_id,connection_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id).then(({ data }) => setNums((data as Num[]) ?? []));
+  }, [ws.id, tick]);
+  const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card"), { stagger: 0.07 }); });
+  const ads = (conns ?? []).filter((c) => c.provider === "meta_ads" && c.status !== "revoked");
+  const syncNow = async () => {
+    setBusy(true); setMsg({});
+    try {
+      const r = await callFn<{ synced: any[] }>("ads-sync", { workspace_id: ws.id, days: 30 });
+      const e = r.synced.find((x) => x.error);
+      if (e) throw new Error(e.error);
+      setMsg({ ok: T("Ads updated.", "Matangazo yamesasishwa.") });
+    } catch (e) { setMsg({ err: (e as Error).message }); }
+    setBusy(false); setTick((t) => t + 1);
+  };
+  const Help = ({ what }: { what: string }) => (
+    <a className="btn small" href={pondiLink(ws, what)} target="_blank" rel="noopener">{T("Message Pondi on WhatsApp", "Tuma ujumbe kwa Pondi WhatsApp")}</a>
+  );
+  const Line = ({ ok, title, sub }: { ok: boolean; title: string; sub?: string }) => (
+    <div className="row between" style={{ gap: 10, flexWrap: "wrap" }}>
+      <span><span className={"status-dot " + (ok ? "on" : "err")} /> <b>{title}</b>{sub && <span className="small muted"> · {sub}</span>}</span>
+      <span className={"pill-s " + (ok ? "on" : "err")}>{ok ? T("Connected ✓", "Imeunganishwa ✓") : T("Needs attention", "Inahitaji kuangaliwa")}</span>
+    </div>
+  );
+  if (conns === null) return <div className="center muted">…</div>;
+  return (
+    <div className="shell-grid" ref={pageRef}>
+      {msg.ok && <p className="ok">{msg.ok}</p>}
+      {msg.err && <p className="err">{msg.err}</p>}
+      <section className="card">
+        <h2>WhatsApp Business</h2>
+        {nums.length === 0 ? (
+          <>
+            <p className="small muted" style={{ margin: 0 }}>{T("Not connected yet. Pondi connects your number for you: it keeps working on your phone exactly as before.", "Bado haijaunganishwa. Pondi wanaunganisha namba yako kwa ajili yako: inaendelea kufanya kazi kwenye simu yako kama kawaida.")}</p>
+            <div><Help what="WhatsApp" /></div>
+          </>
+        ) : nums.map((n) => {
+          const c = conns.find((x) => x.id === n.connection_id);
+          const ok = !c || (c.status === "active" && !c.last_error);
+          return (
+            <div key={n.phone_number_id} style={{ display: "grid", gap: 6 }}>
+              <Line ok={ok} title={prettyPhone(n.display_phone ?? n.phone_number_id)} sub={c?.last_sync_at ? T(`last message ${ago(c.last_sync_at)}`, `ujumbe wa mwisho ${ago(c.last_sync_at)}`) : undefined} />
+              {!ok && <div><span className="small err">{T("Messages may not be reaching itaOS.", "Huenda jumbe hazifiki itaOS.")} </span><Help what="WhatsApp" /></div>}
+            </div>
+          );
+        })}
+      </section>
+      <section className="card">
+        <div className="row between"><h2>{T("Facebook & Instagram ads", "Matangazo ya Facebook na Instagram")}</h2>
+          {ads.length > 0 && <button className="small" disabled={busy} onClick={syncNow}>{busy ? T("Updating…", "Inasasisha…") : T("Update now", "Sasisha sasa")}</button>}
+        </div>
+        <p className="small muted" style={{ margin: 0 }}>{T("Read-only: itaOS reads what your ads cost and the chats they bring. It never changes your ads.", "Kusoma tu: itaOS inasoma gharama za matangazo na chat yanazoleta. Haibadilishi matangazo yako.")}</p>
+        {ads.length === 0 ? <div><Help what={T("my ad account", "akaunti yangu ya matangazo")} /></div> : ads.map((c) => (
+          <div key={c.id} style={{ display: "grid", gap: 6 }}>
+            <Line ok={c.status === "active" && !c.last_error} title={c.label ?? c.external_id} sub={c.last_sync_at ? T(`updated ${ago(c.last_sync_at)}`, `imesasishwa ${ago(c.last_sync_at)}`) : T("waiting for the first update", "inasubiri usasishaji wa kwanza")} />
+            {c.last_error && <div><span className="small err">{T("itaOS can't read this ad account right now.", "itaOS haiwezi kusoma akaunti hii kwa sasa.")} </span><Help what={T("my ad account", "akaunti yangu ya matangazo")} /></div>}
+          </div>
+        ))}
+      </section>
+      <p className="small muted" style={{ margin: 0 }}>{T("Exchange rate, language and your password are in ", "Kiwango cha kubadilisha fedha, lugha na nenosiri viko kwenye ")}<a href="#settings">{T("Settings", "Mipangilio")}</a>.</p>
+    </div>
+  );
+}
+
+/** Full connection setup (Dualhook webhook, API key, Facebook login for ads, delivery health). For Pondi staff
+ *  setting a business up: reached at #connect/setup. Owners see the simple page below. */
+function ConnectSetup({ ws }: { ws: Workspace }) {
   const [conns, setConns] = useState<Conn[]>([]);
   const [nums, setNums] = useState<Num[]>([]);
   const [accounts, setAccounts] = useState<{ id: string; name: string; currency: string }[] | null>(null);
@@ -16,8 +106,6 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
   const [tick, setTick] = useState(0);
-  const [d360Key, setD360Key] = useState("");
-  const [showD360, setShowD360] = useState(false);
   const [dh, setDh] = useState<{ webhook_url: string; verify_token: string } | null>(null);
   const [health, setHealth] = useState<Health[]>([]);
   const manager = canManage(ws);
@@ -56,11 +144,6 @@ export default function Connect({ ws }: { ws: Workspace }) {
     setMsg({ ok: `WhatsApp ${r.display_phone ?? ""} connected. History: ${r.syncs.history}. Chats from the last 6 months will appear over the next few hours.` });
   });
 
-  const connect360 = () => run("d360", async () => {
-    await callFn("d360-connect", { workspace_id: ws.id, api_key: d360Key });
-    setD360Key(""); setShowD360(false);
-    setMsg({ ok: "Connected through 360dialog. The number appears here when its first message arrives; chat history (if you shared it during 360dialog signup) follows over the next few hours." });
-  });
 
   const connectDualhook = () => run("dh", async () => {
     if (dhLinked.length && prompt("This cuts off WhatsApp until you paste the new URL and token into Dualhook. Type REPLACE to continue.") !== "REPLACE") return;
@@ -95,7 +178,6 @@ export default function Connect({ ws }: { ws: Workspace }) {
   const queued = health.find((h) => h.status === "pending");
   const adsConns = conns.filter((c) => c.provider === "meta_ads");
   const waConns = conns.filter((c) => c.provider === "whatsapp");
-  const d360Conns = waConns.filter((c) => c.external_id.startsWith("360dialog:"));
   const dhConns = waConns.filter((c) => c.external_id.startsWith("dualhook:"));
   // A Dualhook row exists as soon as "Use Dualhook" is pressed; it is only linked once Meta's first message registers a number to it.
   const dhLinked = dhConns.filter((c) => nums.some((n) => n.connection_id === c.id));
@@ -103,7 +185,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
 
   return (
     <div className="shell-grid" ref={pageRef}>
-      <p className="small muted" style={{ margin: 0 }}>Exchange rate, language and your password have moved to <a href="#settings">Settings</a>.</p>
+      <div className="finding"><b>Pondi setup page</b><span className="small">Technical connection settings used by Pondi when setting a business up. <a href="#connect">Back to the simple view</a>.</span></div>
       {!metaConfigured() && <div className="finding warn"><b>Meta app not configured</b><span className="small">Add VITE_META_APP_ID and the two config IDs to the site's environment, then redeploy. See SETUP.md.</span></div>}
       {msg.ok && <p className="ok">{msg.ok}</p>}
       {msg.err && <p className="err">{msg.err}</p>}
@@ -139,7 +221,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
           <div className="wa-nums">
             {nums.map((n) => {
               const c = conns.find((x) => x.id === n.connection_id);
-              const via = c?.external_id.startsWith("dualhook:") ? "Dualhook" : c?.external_id.startsWith("360dialog:") ? "360dialog" : "Meta";
+              const via = c?.external_id.startsWith("dualhook:") ? "Dualhook" : "Meta";
               const ok = !c || (c.status === "active" && !c.last_error);
               const hist = n.history_status === "complete" ? ["on", "History imported"] : n.history_status === "receiving" ? ["warn", "Importing history…"] : n.history_status === "declined" ? ["err", "History not shared"] : ["", "History: waiting for Meta"];
               return (
@@ -217,30 +299,7 @@ export default function Connect({ ws }: { ws: Workspace }) {
             )}
           </details>
         )}
-        {d360Conns.map((c) => <StatusRow key={c.id} c={c} waitingText="Waiting for the first message from 360dialog" />)}
-        {manager && (d360Conns.length > 0 || dhConns.length === 0) && (
-          <div className="evidence">
-            <div className="row between"><b>Connect through 360dialog</b>
-              {!showD360 && <button className="small" disabled={!!busy} onClick={() => setShowD360(true)}>{d360Conns.length ? "Change API key" : "Use 360dialog"}</button>}
-            </div>
-            <span className="small muted">Use this while itaOS's own Meta approval is pending. 360dialog is a Meta partner: the number keeps working in the WhatsApp Business app, and itaOS receives the same chats and ad clicks.</span>
-            {showD360 && (
-              <>
-                <ol className="small" style={{ margin: "4px 0", paddingLeft: 18 }}>
-                  <li>Sign up at app.360dialog.com and add the number with <b>"Connect your existing WhatsApp Business app"</b> (Coexistence). Allow chat history sharing when the phone asks.</li>
-                  <li>In the 360dialog hub, generate an <b>API key</b> for that number.</li>
-                  <li>Paste it here. itaOS sets the webhook for you; don't point it anywhere else afterwards.</li>
-                </ol>
-                <div className="row">
-                  <input type="password" autoComplete="off" placeholder="360dialog API key" value={d360Key} onChange={(e) => setD360Key(e.target.value)} style={{ flex: 1 }} />
-                  <button className="primary" disabled={!!busy || d360Key.trim().length < 10} onClick={connect360}>{busy === "d360" ? "Connecting…" : "Connect"}</button>
-                  <button disabled={!!busy} onClick={() => { setShowD360(false); setD360Key(""); }}>Cancel</button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {nums.length === 0 && <p className="small muted" style={{ margin: 0 }}>Not connected. Until it is, upload chat exports below; the dashboard labels those chats' sources as unknown unless the first message came from an ad.</p>}
+        {nums.length === 0 && <p className="small muted" style={{ margin: 0 }}>Not connected yet.</p>}
         {(health.length > 0 || nums.length > 0) && (
           <details className="evidence wa-setup" open={!!failed?.events}>
             <summary className="row between"><b>Message delivery <span className="small muted" style={{ fontWeight: 500 }}>· {health.find((h) => h.status === "processed")?.events.toLocaleString("en-US") ?? 0} received{failed?.events ? <span className="err"> · {failed.events} failed</span> : ""}</span></b>{manager && (failed?.events || processing?.events) ? <button className="small" disabled={!!busy} onClick={(e) => { e.preventDefault(); replay(); }}>{busy === "replay" ? "Replaying…" : "Replay failed events"}</button> : null}</summary>

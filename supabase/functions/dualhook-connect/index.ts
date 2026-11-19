@@ -6,7 +6,7 @@
 // Dualhook's app secret (which we never get), so the URL carries a per-workspace secret instead:
 //   <SUPABASE_URL>/functions/v1/wa-webhook/dh/<token>
 // plus a separate verify token for Meta's GET challenge. Only SHA-256 hashes of both are stored;
-// the plain values are shown to the owner once. Calling this again rotates both.
+// the plain values are shown once (to Pondi staff in /app/admin, or to an owner). Calling this again rotates both.
 import { admin, userClient, json, cors, storeToken, reanalyze } from "../_shared/db.ts";
 import { backfillMedia } from "../_shared/media.ts";
 import { sha256Hex } from "../_shared/webhook.ts";
@@ -18,9 +18,17 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const ws = String(body.workspace_id ?? "");
   if (!ws) return json({ error: "workspace_id required" }, 400);
-  const { data: ok } = await userClient(req).rpc("can_manage", { ws });
-  if (!ok) return json({ error: "Only a workspace owner or admin can connect accounts." }, 403);
+  // Connection setup is done by Pondi staff from /app/admin (owners only see "Connected / contact Pondi").
+  // A workspace owner/admin is still allowed, so nothing that worked before stops working.
+  const uc = userClient(req);
+  const [{ data: ok }, { data: staff }] = await Promise.all([uc.rpc("can_manage", { ws }), uc.rpc("is_platform_admin")]);
+  if (!ok && staff !== true) return json({ error: "Only Pondi staff or a workspace owner can set up connections." }, 403);
   const db = admin();
+  const audit = async (action: string, details: Record<string, unknown>) => {
+    if (staff !== true) return;
+    const { data: u } = await uc.auth.getUser();
+    await db.from("admin_audit").insert({ actor: u.user?.id ?? null, action, workspace_id: ws, details });
+  };
 
   // Save the Dualhook Outbound API key (dh_live_…) so itaOS can download customer images, then
   // fetch the images from the last 7 days that could not be saved yet.
@@ -39,6 +47,7 @@ Deno.serve(async (req) => {
       }
       const r = await backfillMedia(db, ws);
       if (r.conversations.length) await reanalyze(db, r.conversations);
+      await audit(body.action === "set_api_key" ? "dualhook_set_key" : "dualhook_fetch_images", { images_saved: r.saved, images_failed: r.failed });
       return json({ ok: true, key_saved: body.action === "set_api_key", images_saved: r.saved, images_failed: r.failed, last_error: r.last_error });
     } catch (e) {
       return json({ error: String((e as Error).message).slice(0, 300) }, 500);
@@ -66,6 +75,7 @@ Deno.serve(async (req) => {
       ? await db.from("connections").update(row).eq("id", existing.id)
       : await db.from("connections").insert(row);
     if (error) throw new Error("could not save the connection");
+    await audit(existing ? "dualhook_rotate_webhook" : "dualhook_create_webhook", {});
     return json({ ok: true, webhook_url: url, verify_token: verify, rotated: !!existing });
   } catch (e) {
     return json({ error: String((e as Error).message).slice(0, 300) }, 500);

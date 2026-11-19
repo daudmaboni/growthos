@@ -11,7 +11,6 @@ import Connect from "./Connect";
 import Settings from "./Settings";
 import Report from "./Report";
 import Actions from "./Actions";
-import Content from "./Content";
 import Kito from "./Kito";
 import Attention from "./Attention";
 import Products from "./Products";
@@ -19,8 +18,8 @@ import Logo, { KitoLogo } from "./Logo";
 import { hidePreloader } from "./preloader";
 import { useIsPlatformAdmin } from "./adminAccess";
 
-type View = "dashboard" | "kito" | "attention" | "report" | "actions" | "chats" | "products" | "content" | "connect" | "settings";
-const VIEWS: View[] = ["dashboard", "kito", "attention", "report", "actions", "chats", "products", "content", "connect", "settings"];
+type View = "dashboard" | "kito" | "attention" | "report" | "actions" | "chats" | "products" | "connect" | "settings";
+const VIEWS: View[] = ["dashboard", "kito", "attention", "report", "actions", "chats", "products", "connect", "settings"];
 const viewFromHash = (): View => {
   const h = location.hash.replace("#", "").split("/")[0];
   return (VIEWS as string[]).includes(h) ? (h as View) : "dashboard";
@@ -131,7 +130,6 @@ export default function App() {
       {view === "actions" && <Actions ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
       {view === "products" && (PRODUCTS_PAGE_READY ? <Products ws={ws} /> : <ComingSoon sw={ws.language === "sw"} />)}
-      {view === "content" && <Content ws={ws} />}
       {view === "connect" && <Connect ws={ws} />}
       {view === "settings" && <Settings ws={ws} onWs={setWs} theme={theme} onTheme={setThemeFrom} />}
       </PageView>
@@ -296,13 +294,12 @@ function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
     ["report", L("Diagnosis", "Uchunguzi"), L("What is working this week", "Kinachofanya kazi wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
     ["actions", L("Actions", "Vitendo"), L("Follow-ups, tasks and Kito drafts", "Ufuatiliaji, kazi na rasimu za Kito"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
     ["products", L("My products", "Bidhaa zangu"), PRODUCTS_PAGE_READY ? L("Prices, costs and photos", "Bei, gharama na picha") : L("Coming soon", "Inakuja hivi karibuni"), <Ico d="M21 8 12 3 3 8v8l9 5 9-5V8ZM3 8l9 5 9-5M12 13v8" />],
-    ["content", L("Content", "Maudhui"), L("Posts and what they bring in", "Machapisho na matokeo yake"), <Ico d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5" />],
     ["connect", L("Connections", "Miunganisho"), L("Ad account and WhatsApp", "Akaunti ya matangazo na WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
     ["settings", L("Settings", "Mipangilio"), L("Business, appearance, rules", "Biashara, muonekano, kanuni"), <GearIcon />],
   ];
 }
 
-/** Computer top bar: "More" button with a drop-down for Diagnosis, Actions, Content and Connections.
+/** Computer top bar: "More" button with a drop-down for Diagnosis, Actions and Connections.
  *  While one of those pages is open the button shows its name. */
 function TopMore({ view, sw, badges }: { view: View; sw: boolean; badges: Badges }) {
   const [open, setOpen] = useState(false);

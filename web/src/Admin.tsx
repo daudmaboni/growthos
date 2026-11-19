@@ -285,7 +285,7 @@ function buildItems(rows: WsRow[], errors: ErrRow[], onb: Record<string, Onboard
     if (w.status !== 'suspended' && st < STEPS.length && days != null && days >= 14 && !(hoursSince(w.created_at) < 72))
       out.push({ tone: 'info', ws: w.id, title: `${w.name}: ${days} days on "${STEPS[st]!.label}"`, body: stepAction(st, days)!.text, at: null });
     if (w.wa_status === 'active' && w.wa_via === 'dualhook' && w.send_key === false && w.status !== 'suspended')
-      out.push({ tone: 'info', ws: w.id, title: `${w.name} can't reply from itaOS yet`, body: 'No Dualhook API key saved on their Connections page, so the Chats inbox is read-only for them.', at: w.wa_last_sync ?? w.created_at });
+      out.push({ tone: 'info', ws: w.id, title: `${w.name} can't reply from itaOS yet`, body: 'No Dualhook API key saved yet (add it in their details → WhatsApp setup), so the Chats inbox is read-only for them.', at: w.wa_last_sync ?? w.created_at });
   }
   for (const e of errors.filter((x) => hoursSince(x.at) < 24 * 7).slice(0, 4)) {
     out.push({ tone: 'bad', ws: e.workspace_id, title: SOURCE[e.source.split(':')[0]!] ?? e.source,
@@ -578,7 +578,7 @@ function Errors({ rows, loading, onOpen }: { rows: ErrRow[]; loading: boolean; o
 }
 
 const ACTION: Record<string, string> = {
-  set_state: 'Changed account settings', requeue_events: 'Retried failed WhatsApp events', set_send: 'Changed replying from itaOS',
+  set_state: 'Changed account settings', set_ai_limit: 'Changed a business AI limit', dualhook_create_webhook: 'Made a Dualhook webhook URL', dualhook_rotate_webhook: 'Replaced a Dualhook webhook URL', dualhook_set_key: 'Saved a Dualhook API key', dualhook_fetch_images: 'Fetched missed WhatsApp images', requeue_events: 'Retried failed WhatsApp events', set_send: 'Changed replying from itaOS',
   delete_workspace: 'Deleted a business', add_staff: 'Added a staff member', remove_staff: 'Removed a staff member',
   set_api_price: 'Changed an AI model price', set_api_budget: 'Changed the AI budget', add_task: 'Added a staff follow-up',
   task_done: 'Completed a staff follow-up', task_reopened: 'Reopened a staff follow-up',
@@ -774,7 +774,7 @@ function Drawer({ supabase, id, row, onb, onClose, onChanged, onDeleted }:
 
             <section className="ia-dsec">
               <h3>Connections</h3>
-              {!connected && <p className="ia-empty left">Nothing connected yet. The owner connects WhatsApp (Dualhook) and Meta Ads from their Connections page.</p>}
+              {!connected && <p className="ia-empty left">Nothing connected yet. Set WhatsApp up below (Dualhook). Owners only see Connected / Not connected.</p>}
               <ul className="ia-conns">
                 {d.connections.map((c, i) => (
                   <li key={i}>
@@ -803,6 +803,9 @@ function Drawer({ supabase, id, row, onb, onClose, onChanged, onDeleted }:
                   <button className="ia-btn" disabled={busy !== null || row?.send_enabled === undefined} onClick={toggleSend}>{busy === 'send' ? 'Saving…' : sendOn ? 'Switch off' : 'Switch on'}</button>
                 </div>
               )}
+              <DualhookSetup supabase={supabase} id={id} hasDualhook={!!d.connections.find((c) => c.provider === 'whatsapp' && c.via === 'dualhook')}
+                linked={d.wa_numbers.length > 0} keySaved={!!d.connections.find((c) => c.provider === 'whatsapp' && c.send_key)} onChanged={() => { setTick((t) => t + 1); onChanged(); }} />
+              <p className="ia-faint small">Meta Ads: connect from the business's own login at <code>itaos.app/app#connect/setup</code> (it needs their Facebook login).</p>
             </section>
 
             {d.sales && (
@@ -1182,3 +1185,69 @@ const CSS = `
   .ia-check,.ia-form{grid-template-columns:1fr}.ia-counts{grid-template-columns:repeat(2,1fr)}.ia-lanes::before{display:none}}
 @media (prefers-reduced-motion:reduce){.ia *{animation:none!important;transition:none!important}}
 `;
+
+/** Dualhook setup for one business, done by Pondi staff (owners only see Connected / Not connected).
+ *  Calls the dualhook-connect function with the staff session; every action is written to admin_audit. */
+function DualhookSetup({ supabase, id, hasDualhook, linked, keySaved, onChanged }: {
+  supabase: SupabaseClient; id: string; hasDualhook: boolean; linked: boolean; keySaved: boolean; onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [vals, setVals] = useState<{ webhook_url: string; verify_token: string } | null>(null);
+  const [key, setKey] = useState('');
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  async function call(k: string, body: Record<string, unknown>) {
+    setBusy(k); setMsg(null);
+    const { data, error } = await supabase.functions.invoke('dualhook-connect', { body: { workspace_id: id, ...body } });
+    setBusy(null);
+    let err = error?.message ?? (data as any)?.error ?? null;
+    if (error) { try { const j = await (error as any).context?.json?.(); if (j?.error) err = j.error; } catch { /* keep */ } }
+    if (err) { setMsg({ ok: false, text: String(err) }); return null; }
+    onChanged();
+    return data as any;
+  }
+  const copy = (v: string) => { void navigator.clipboard?.writeText(v).then(() => setMsg({ ok: true, text: 'Copied' }), () => setMsg({ ok: false, text: 'Copy failed: select the text and copy it by hand' })); };
+  return (
+    <div className="ia-row" style={{ display: 'grid', gap: 8 }}>
+      <div><strong>WhatsApp setup (Dualhook)</strong>
+        <small className="ia-faint">{!hasDualhook ? 'Not started.' : linked ? 'Linked: messages arrive.' : 'Webhook made, waiting for the first message.'} {keySaved ? 'API key saved (replies + photos).' : linked ? 'No API key yet.' : ''}</small></div>
+      {!hasDualhook && <button className="ia-btn primary" disabled={busy !== null} onClick={async () => { const r = await call('mk', {}); if (r) setVals(r); }}>{busy === 'mk' ? 'Creating…' : 'Create webhook URL and token'}</button>}
+      {hasDualhook && !linked && !vals && <button className="ia-btn" disabled={busy !== null} onClick={async () => { const r = await call('mk', {}); if (r) setVals(r); }}>{busy === 'mk' ? 'Creating…' : 'Lost them? Make a new URL and token'}</button>}
+      {vals && (
+        <div style={{ display: 'grid', gap: 6 }}>
+          <small>In Dualhook: new connection → <b>Webhook Override</b>. Paste both <b>before</b> opening Meta's signup, then choose "Connect your existing WhatsApp Business app", scan the QR on the owner's phone and allow history sharing.</small>
+          <label className="ia-field"><span>Webhook URL</span><div style={{ display: 'flex', gap: 6 }}><input readOnly value={vals.webhook_url} onFocus={(e) => e.target.select()} style={{ flex: 1 }} /><button className="ia-btn" onClick={() => copy(vals.webhook_url)}>Copy</button></div></label>
+          <label className="ia-field"><span>Verify token</span><div style={{ display: 'flex', gap: 6 }}><input readOnly value={vals.verify_token} onFocus={(e) => e.target.select()} style={{ flex: 1 }} /><button className="ia-btn" onClick={() => copy(vals.verify_token)}>Copy</button></div></label>
+          <small className="ia-bad">Save both now: itaOS keeps only a fingerprint and can't show them again.</small>
+          <button className="ia-btn" onClick={() => setVals(null)}>Done</button>
+        </div>
+      )}
+      {hasDualhook && linked && (
+        <>
+          <small className="ia-faint">Outbound API key (Dualhook → Connection → Overview → Outbound API key, starts with <code>dh_live_</code>). Lets the owner reply from itaOS and lets itaOS download payment screenshots.</small>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input type="password" autoComplete="off" placeholder="dh_live_…" value={key} onChange={(e) => setKey(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+            <button className="ia-btn primary" disabled={busy !== null || !key.trim().startsWith('dh_live_')} onClick={async () => {
+              const r = await call('key', { action: 'set_api_key', api_key: key.trim() });
+              if (r) { setKey(''); setMsg({ ok: !r.last_error, text: r.last_error ? `Key saved, but Dualhook didn't return the images: ${r.last_error}` : `Key saved. ${r.images_saved} images fetched.` }); }
+            }}>{busy === 'key' ? 'Saving…' : keySaved ? 'Replace key' : 'Save key'}</button>
+            {keySaved && <button className="ia-btn" disabled={busy !== null} onClick={async () => {
+              const r = await call('img', { action: 'backfill_media' });
+              if (r) setMsg({ ok: !r.last_error, text: r.last_error ? `Dualhook didn't return the images: ${r.last_error}` : `${r.images_saved} images fetched, ${r.images_failed} failed.` });
+            }}>{busy === 'img' ? 'Fetching…' : 'Fetch missed images'}</button>}
+          </div>
+          {!confirmRotate
+            ? <button className="ia-btn" style={{ justifySelf: 'start' }} disabled={busy !== null} onClick={() => setConfirmRotate(true)}>Replace webhook URL…</button>
+            : <div style={{ display: 'grid', gap: 6 }}>
+                <small className="ia-bad">Only if the URL leaked. The current URL stops working immediately: no messages reach itaOS until the new URL and token are pasted into Dualhook (Webhook Override → Change).</small>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="ia-btn danger" disabled={busy !== null} onClick={async () => { setConfirmRotate(false); const r = await call('mk', {}); if (r) setVals(r); }}>{busy === 'mk' ? 'Creating…' : 'Yes, replace it'}</button>
+                  <button className="ia-btn" onClick={() => setConfirmRotate(false)}>Cancel</button>
+                </div>
+              </div>}
+        </>
+      )}
+      {msg && <small className={msg.ok ? '' : 'ia-bad'}>{msg.text}</small>}
+    </div>
+  );
+}

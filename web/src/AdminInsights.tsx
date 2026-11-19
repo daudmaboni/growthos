@@ -187,6 +187,54 @@ export function DrawerPerformance({ supabase, id }: { supabase: SupabaseClient; 
   );
 }
 
+/* Per-business monthly AI limit: alert only, or pause Kito for that business until next month. */
+type LimitRow = { workspace_id: string; name: string; ai_monthly_usd: number | null; ai_limit_action: 'alert' | 'pause'; month_cost: number };
+function BusinessLimits({ supabase, tick }: { supabase: SupabaseClient; tick: number }) {
+  const [t, setT] = useState(0);
+  const { data: rows, error } = useRpc<LimitRow[]>(supabase, 'admin_ai_limits', {}, [tick, t]);
+  const [edit, setEdit] = useState<{ id: string; usd: string; action: 'alert' | 'pause' } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!edit) return;
+    const usd = edit.usd.trim() === '' ? null : Number(edit.usd.replace(/,/g, ''));
+    if (usd !== null && !(usd >= 0)) { setMsg({ ok: false, text: 'Type a number of dollars, or leave it empty for no limit.' }); return; }
+    setBusy(true); setMsg(null);
+    const { error: e } = await supabase.rpc('admin_set_ai_limit', { p_ws: edit.id, p_usd: usd, p_action: edit.action });
+    setBusy(false);
+    if (e) setMsg({ ok: false, text: e.message }); else { setMsg({ ok: true, text: 'Limit saved' }); setEdit(null); setT((x) => x + 1); }
+  }
+  const tone = (r: LimitRow) => r.ai_monthly_usd == null ? '' : r.month_cost >= r.ai_monthly_usd ? ' t-bad' : r.month_cost >= r.ai_monthly_usd * 0.8 ? ' t-warn' : '';
+  const over = (rows ?? []).filter((r) => r.ai_monthly_usd != null && r.month_cost >= r.ai_monthly_usd * 0.8);
+  return (
+    <section className="ia-panel">
+      <div className="ia-panel-h"><h2>Monthly AI limit per business</h2></div>
+      <p className="ia-faint small">This month's estimated cost per business. "Alert" only warns here at 80% and when passed. "Pause" also stops Kito (labelling, Ask Kito, drafts) for that business until next month or until you raise the limit. Empty = no limit.</p>
+      {over.map((r) => (
+        <p key={r.workspace_id} className={r.month_cost >= (r.ai_monthly_usd ?? 0) ? 'ia-bad small' : 'ia-warn small'}>
+          {r.name}: {usd(r.month_cost)} of {usd(r.ai_monthly_usd ?? 0)} this month{r.month_cost >= (r.ai_monthly_usd ?? 0) ? (r.ai_limit_action === 'pause' ? ' · Kito is paused for them' : ' · over the limit (alert only)') : ' · 80% used'}</p>
+      ))}
+      {error && <p className="ia-bad small">{error}</p>}
+      <table className="ix-tbl">
+        <thead><tr><th>Business</th><th className="r">This month</th><th className="r">Limit</th><th>When passed</th><th /></tr></thead>
+        <tbody>
+          {(rows ?? []).map((r) => edit?.id === r.workspace_id ? (
+            <tr key={r.workspace_id}><td><strong>{r.name}</strong></td><td className="r num">{usd(r.month_cost)}</td>
+              <td className="r"><input inputMode="decimal" style={{ width: 90 }} value={edit.usd} placeholder="none" onChange={(e) => setEdit({ ...edit, usd: e.target.value })} /></td>
+              <td><select value={edit.action} onChange={(e) => setEdit({ ...edit, action: e.target.value as 'alert' | 'pause' })}><option value="alert">Alert only</option><option value="pause">Pause Kito</option></select></td>
+              <td className="r"><button className="ia-btn primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button> <button className="ia-textbtn" onClick={() => setEdit(null)}>Cancel</button></td></tr>
+          ) : (
+            <tr key={r.workspace_id} className={tone(r)}><td><strong>{r.name}</strong></td><td className="r num">{usd(r.month_cost)}</td>
+              <td className="r num">{r.ai_monthly_usd == null ? '–' : usd(r.ai_monthly_usd)}</td><td>{r.ai_monthly_usd == null ? '' : r.ai_limit_action === 'pause' ? 'Pause Kito' : 'Alert only'}</td>
+              <td className="r"><button className="ia-textbtn" onClick={() => setEdit({ id: r.workspace_id, usd: r.ai_monthly_usd == null ? '' : String(r.ai_monthly_usd), action: r.ai_limit_action })}>Edit</button></td></tr>
+          ))}
+        </tbody>
+      </table>
+      {msg && <p className={msg.ok ? 'ia-faint small' : 'ia-bad small'}>{msg.text}</p>}
+    </section>
+  );
+}
+
 /* ================= AI usage & cost ================= */
 type PriceForm = { model: string; input: string; output: string; cache_read: string; cache_write: string; long_over: string; long_multiplier: string };
 export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: number }) {
@@ -267,6 +315,8 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
               </ol>
             </section>
           )}
+
+          <BusinessLimits supabase={supabase} tick={tick + t} />
 
           <div className="ix-two">
             <section className="ia-panel">
