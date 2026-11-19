@@ -841,7 +841,9 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
     }
     const { data: user } = await supabase.auth.getUser();
     const { error } = await supabase.from("orders").insert({
-      workspace_id: ws.id, conversation_id: r.id, amount: a, discount: 0, currency: ws.currency, status: "paid", fulfillment_status: "not_shipped",
+      workspace_id: ws.id, conversation_id: r.id, amount: a, discount: 0, currency: ws.currency, status: "paid",
+      // Products picked = the goods have left you (sent / handed over). None picked = paid, still to be sent (e.g. upcountry).
+      fulfillment_status: items.length ? "shipped" : "not_shipped",
       occurred_at: paidAt, paid_at: paidAt, provenance: "manual", inferred_from: inferredFrom(r), created_by: user.user?.id, cost: c,
       items, product: items.length ? itemsLabel(items) : null,
       external_ref: txn ? "txn:" + txn : null,
@@ -885,7 +887,8 @@ function ConfirmPayment({ r, ws, T, msgs, onDone }: { r: Outcome; ws: Workspace;
         <label className="small">{T("Transaction code", "Namba ya muamala")}<input value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} placeholder="QK41ABC9XY" /></label>
         <label className="small">{T("Paid on", "Alilipa lini")}<input type="datetime-local" value={paidOn} onChange={(e) => { setPaidOn(e.target.value); setDupOk(false); setDup(null); }} />
           {pm && <span className="muted">{T("From", "Kutoka")} {momentWhy(pm.kind, T)}{pm.snippet ? `: “${pm.snippet.slice(0, 60)}${pm.snippet.length > 60 ? "…" : ""}”` : ""}</span>}</label>
-        {products && products.some((p) => p.active) && <div style={{ gridColumn: "1 / -1" }}><ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} /></div>}
+        {products && products.some((p) => p.active) && <div style={{ gridColumn: "1 / -1" }}><ProductPicker ws={ws} products={products} items={items} onChange={setItems} T={T} />
+          <span className="small muted">{items.length ? T("Picking products marks this order as sent.", "Ukichagua bidhaa, oda inahesabiwa imetumwa.") : T("Still have to send it (e.g. upcountry)? Leave products empty — pick them later when you send.", "Bado hujatuma (mf. mkoani)? Acha bidhaa wazi — utazichagua ukizituma.")}</span></div>}
         <label className="small">{T("What this order cost you", "Oda hii imekugharimu")} ({ws.currency})<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={ws.unit_cost != null ? T(`empty = default ${amt(Number(ws.unit_cost), ws.currency)}`, `wazi = kawaida ${amt(Number(ws.unit_cost), ws.currency)}`) : T("product + delivery", "bidhaa + usafiri")} />
           {fromPhotos && items.length > 0 && <span className="muted">{T("Products picked from the customer's photos — check they're right.", "Bidhaa zimechaguliwa kutoka picha za mteja — hakikisha ni sahihi.")}</span>}
           <span className="muted">{items.length ? T("Filled in from the products picked. You can change it.", "Imejazwa kutoka bidhaa ulizochagua. Unaweza kuibadilisha.") : T("Used to work out your profit. You can add it later.", "Inatumika kukokotoa faida. Unaweza kuiongeza baadaye.")}</span></label>

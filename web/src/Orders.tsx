@@ -114,6 +114,14 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
   const editor = canEdit(ws);
+  const { products } = useProducts(ws.id);
+  const [sending, setSending] = useState<string | null>(null);   // order whose sent products are being picked
+  const [sendItems, setSendItems] = useState<Item[]>([]);
+  async function markSent(o: Order) {
+    const c = itemsCost(sendItems);
+    await update(o, { items: sendItems, product: itemsLabel(sendItems), fulfillment_status: "shipped", ...(o.cost == null && c != null ? { cost: c } : {}) } as Partial<Order>);
+    setSending(null); setSendItems([]);
+  }
   useEffect(() => {
     supabase.from("orders").select("*").eq("workspace_id", ws.id).eq("conversation_id", conversationId).order("occurred_at", { ascending: false })
       .then(({ data, error }) => { if (error) setErr(error.message); setOrders((data as Order[]) ?? []); });
@@ -146,6 +154,18 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
           {o.notes && <span className={"small" + (o.notes.includes("⚠") ? " warnt" : "")}>{o.notes.replace(/\s*\[(wamsg|phone):[^\]]*\]/g, "")}</span>}
           <span className="small muted">{T("last change", "badiliko la mwisho")} {when(o.updated_at)} · <button className="small" style={{ padding: 0, border: 0, background: "none", color: "var(--accent)" }} onClick={() => toggleHistory(o)}>{events[o.id] ? T("hide history", "ficha historia") : T("history", "historia")}</button></span>
           {events[o.id] && <div className="small muted" style={{ display: "grid", gap: 2 }}>{events[o.id].map((e) => <span key={e.id}>{when(e.at)} · {e.action}{e.action === "update" && e.before && e.after ? ": " + Object.keys(e.after).filter((k) => JSON.stringify(e.before[k]) !== JSON.stringify(e.after[k]) && !["updated_at", "updated_by"].includes(k)).map((k) => `${k} ${JSON.stringify(e.before[k])} → ${JSON.stringify(e.after[k])}`).join(", ") : ""}{e.actor ? "" : T(" (server)", " (mfumo)")}</span>)}</div>}
+          {editor && o.status === "paid" && o.fulfillment_status === "not_shipped" && (sending === o.id
+            ? <div style={{ display: "grid", gap: 6 }}>
+                <b className="small">{T("Which products did you send?", "Umetuma bidhaa zipi?")}</b>
+                {products && <ProductPicker ws={ws} products={products} items={sendItems} onChange={setSendItems} T={T} />}
+                <div className="row" style={{ gap: 6 }}>
+                  <button className="small primary" disabled={busy === o.id || !sendItems.length} onClick={() => markSent(o)}>{T("Save — sent", "Hifadhi — imetumwa")}</button>
+                  <button className="small" onClick={() => { setSending(null); setSendItems([]); }}>{T("Cancel", "Ghairi")}</button>
+                </div>
+              </div>
+            : <span className="small warnt">📦 {T("Paid, not sent yet.", "Amelipa, bado hajatumiwa.")} {products && products.some((p) => p.active)
+                ? <button className="small" disabled={busy === o.id} onClick={() => { setSending(o.id); setSendItems(((o as any).items as Item[] | null) ?? []); }}>{T("Pick products sent", "Chagua bidhaa zilizotumwa")}</button>
+                : <button className="small" disabled={busy === o.id} onClick={() => update(o, { fulfillment_status: "shipped" })}>{T("Mark sent", "Weka imetumwa")}</button>}</span>)}
           {editor && (
             <div className="row" style={{ gap: 6 }}>
               {o.status !== "paid" && <button className="small" disabled={busy === o.id} onClick={() => update(o, { status: "paid", paid_at: new Date().toISOString() })}>{T("Mark paid", "Weka imelipwa")}</button>}
