@@ -378,6 +378,8 @@ function TopMore({ view, sw, badges }: { view: View; sw: boolean; badges: Badges
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
         {!open && <NavBadge badge={actionsBadge(badges, sw)} />}
       </button>
+      {/* Blur everything behind the open menu; the bar and menu stay sharp above it (nav.tabs is z-index 30). */}
+      {open && createPortal(<div className="more-back" aria-hidden="true" onClick={() => setOpen(false)} />, document.body)}
       {open && (
         <div className="more-menu" role="menu">
           {items.map(([v, label, note, icon]) => (

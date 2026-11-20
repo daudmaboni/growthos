@@ -238,7 +238,7 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
   .bottomnav .on { color: var(--accent); }
   .bottomnav .on svg { transform: scale(1.08); }
   .bottomnav a:active svg, .bottomnav button:active svg { transform: scale(.88); }
-  .sheet-back { display: block; position: fixed; inset: 0; z-index: 38; background: rgba(0, 0, 0, .28); animation: sheet-fade .25s var(--ease); }
+  .sheet-back { display: block; position: fixed; inset: 0; z-index: 38; background: rgba(0, 0, 0, .22); -webkit-backdrop-filter: blur(12px) saturate(1.1); backdrop-filter: blur(12px) saturate(1.1); animation: sheet-fade .25s var(--ease); }
   .sheet { display: grid; gap: 2px; position: fixed; z-index: 39; left: 14px; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom));
     background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 28px; padding: 8px;
     -webkit-backdrop-filter: blur(28px) saturate(1.9); backdrop-filter: blur(28px) saturate(1.9);
@@ -688,7 +688,11 @@ nav.tabs.glass-tabs .more-menu a.more-item:hover, nav.tabs.glass-tabs .more-menu
 .more-item.on .more-ico { color: var(--accent); }
 .more-item .navbadge { position: static; margin-left: auto; align-self: center; box-shadow: none; }
 @keyframes more-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .more-menu { animation: none; } }
+/* Computer: blur the page behind the open More menu (the phone sheet has .sheet-back). */
+.more-back { position: fixed; inset: 0; z-index: 29; background: rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); animation: more-back-in .22s var(--ease); }
+@keyframes more-back-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 760px) { .more-back { display: none; } }
+@media (prefers-reduced-motion: reduce) { .more-menu, .more-back { animation: none; } }
 
 /* Phone page transitions: the page follows a horizontal swipe and slides between sections like iOS. */
 .page-view { min-width: 0; display: grid; gap: inherit; will-change: auto; }
