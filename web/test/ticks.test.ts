@@ -1,10 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { tickAmount, isPaidTick, phonesIn, priceIn, findTicks, evidence, lastPriceBefore, goodsPriceIn } from "../../supabase/functions/_shared/ticks";
+import { bareTick, sawCustomer, tickAmount, isPaidTick, phonesIn, priceIn, findTicks, evidence, lastPriceBefore, goodsPriceIn } from "../../supabase/functions/_shared/ticks";
 
 const out = (id: string, body: string, at = "2026-11-18T10:00:00Z") => ({ id, direction: "out" as const, sent_at: at, body, type: "text" });
 const inn = (id: string, body: string, at = "2026-11-18T09:00:00Z", media?: any) => ({ id, direction: "in" as const, sent_at: at, body, type: media ? "image" : "text", media });
 
 describe("owner ✅ messages", () => {
+  it("knows a bare price ✅ from a price quote", () => {
+    for (const b of ["TZS 205,000✅", "175,000✅", "Tsh 175,000 ✅", "175000/= ✅", " 205,000 ✅✅ "]) expect(bareTick(b), b).toBe(true);
+    for (const b of ["175,000✅ ndio bei yetu", "Bei ni 175,000✅", "Umelipiwa✅", "Hallo Kwema Ndugu", "✅"]) expect(bareTick(b), b).toBe(false);
+  });
+  it("checks whether the customer wrote in the 3 days before", () => {
+    expect(sawCustomer([], "2026-11-20T16:02:24Z")).toBe(false);
+    expect(sawCustomer([out("a", "Hallo Kwema Ndugu", "2026-11-20T16:02:13Z")], "2026-11-20T16:02:24Z")).toBe(false);
+    expect(sawCustomer([inn("a", "bei gani", "2026-11-19T10:00:00Z")], "2026-11-20T16:02:24Z")).toBe(true);
+    expect(sawCustomer([inn("a", "bei gani", "2026-11-10T10:00:00Z")], "2026-11-20T16:02:24Z")).toBe(false);
+  });
   it("reads a price followed by a tick", () => {
     expect(tickAmount("175,000✅")).toBe(175000);
     expect(tickAmount("Tsh 175,000 ✅")).toBe(175000);

@@ -9,6 +9,9 @@
 //      else the last price the business sent that customer in the last 30 days. No amount → no order.
 //   In the customer's own chat, either form counts only when the customer sent a payment message or
 //   screenshot in the 3 days before the ✅ (so "175,000✅ ndio bei yetu" is not recorded as a sale).
+//   Exception: a bare "price ✅" ("TZS 205,000✅", nothing else) when itaOS saw NO message from the
+//   customer in those 3 days — they paid by phone, in cash or in a chat from before the number was
+//   connected, so your ✅ is the only record. It counts, with a note saying so.
 //
 // Checks so the same money never counts twice:
 //   - one order per ✅ message (its id is kept in the order's notes);
@@ -64,6 +67,17 @@ export function findTicks(msgs: TickMsg[]): Tick[] {
 }
 
 const DAY = 864e5;
+
+/** Only a price and a tick, nothing else: "TZS 205,000✅", "175,000 ✅", "175000/= ✅". Pure, for tests. */
+export function bareTick(body: string | null | undefined): boolean {
+  const b = (body ?? "").trim();
+  return PRICE_TICK.test(b) && b.replace(PRICE_TICK, "").replace(/[\s.,!:=\-–✅✔️☑️🙏]+/gu, "") === "";
+}
+/** Did itaOS see any message from the customer in the 3 days before `at`? */
+export function sawCustomer(customerMsgs: TickMsg[], at: string): boolean {
+  const t = Date.parse(at);
+  return customerMsgs.some((x) => x.direction === "in" && Date.parse(x.sent_at) <= t && t - Date.parse(x.sent_at) <= 3 * DAY);
+}
 const PAID_WORDS = /(\[picha ya malipo\]|nimetuma|nimelipa|nimelipia|nimeshalipia|nimeshalipa|nimeweka (pesa|hela)|nimesend|nimeshatuma|nimekutumia|\bpaid\b|i have paid|i'?ve (sent|paid)|sent the money|muamala)/i;
 
 /** What the customer's own messages before the ✅ show. Pure, for tests. */
@@ -154,7 +168,11 @@ export async function confirmTicks(db: SupabaseClient, conversationId: string, m
     // A ✅ in the customer's own chat counts only if the customer sent a payment message or screenshot
     // in the 3 days before ("175,000✅ ndio bei yetu" is a price, not a payment). Forwarded dispatcher
     // messages that name the customer's number keep working without it (pay on delivery, cash).
-    if (!other && ev.note.startsWith("⚠ No payment")) continue;
+    if (!other && ev.note.startsWith("⚠ No payment")) {
+      // A bare "price ✅" with no customer messages at all to check it against: trust the owner.
+      if (t.kind !== "price" || !bareTick(t.body) || sawCustomer(targetMsgs, t.sentAt)) continue;
+      ev.note = "⚠ itaOS saw no messages from the customer before your ✅ (paid by phone, cash or an older chat?), so it was counted on your ✅ alone.";
+    }
     const amount = t.amount ?? ev.receiptAmount ?? (target ? lastPriceBefore(targetMsgs, t.sentAt) : null);
     if (amount == null) continue;   // nothing says how much: left for the owner to confirm
     // Same customer, same amount, within 3 days → already counted.
