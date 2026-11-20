@@ -95,7 +95,7 @@ export function hiddenNote(m: Msg): "media" | "other" | null {
 /** WhatsApp gives no text for some messages: show what they are instead of "[errors]". */
 export function special(m: Msg): string | null {
   const b = (m.body ?? "").trim();
-  if (m.type === "audio" || b === "[voice note]") return "🎤 Voice message";
+  if (m.type === "audio" || b === "[voice note]") return "🎤 Voice message · not saved, can't play here";
   if (m.type === "errors" || b === "[errors]" || m.type === "unsupported") return "⚠ Message WhatsApp didn't share (e.g. a poll, view-once or a newer message type)";
   if (m.type === "sticker" || b === "[sticker]") return "🙂 Sticker";
   if (m.type === "video" && b === "[video]") return "🎬 Video";

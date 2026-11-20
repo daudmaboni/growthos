@@ -71,6 +71,8 @@ async function saveMessage(ctx: Ctx, convId: string, m: any, direction: "in" | "
   if (error) throw new Error("could not save message");
   // Payment screenshots: WhatsApp's link expires in minutes, so save + read it now (never throws).
   if (direction === "in" && origin === "webhook" && (m.type === "image" || m.type === "document")) await captureMedia(ctx.db, ctx.ws, m.id, m);
+  // Voice notes (both ways): also only playable for a short while, so save them now to play in Chats.
+  if (m.type === "audio" && origin === "webhook") await captureMedia(ctx.db, ctx.ws, m.id, m, undefined, false);
   ctx.touched.push(convId);
 }
 
@@ -107,7 +109,7 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
       if (!to) { console.error("echo without recipient; skipped", m?.type); continue; }
       const conv = await conversationFor(ctx, to);
       await saveMessage(ctx, conv.id, m, "out", "app_echo");
-      if (m.type === "image" || m.type === "document") await captureMedia(ctx.db, ctx.ws, m.id, m, undefined, false);
+      if (m.type === "image" || m.type === "document" || m.type === "audio") await captureMedia(ctx.db, ctx.ws, m.id, m, undefined, false);
     }
   } else if (field === "history" && (value.messages || value.message_echoes)) {
     // Stage 2 of history media: the first pass sent photos, voice notes and files as type
@@ -135,7 +137,7 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
         if (insError) throw new Error("could not save message");
       }
       ctx.touched.push(convId!);
-      if (m.type === "image" || m.type === "document") {
+      if (m.type === "image" || m.type === "document" || m.type === "audio") {
         if (mediaKey === undefined) mediaKey = await dualhookKey(db, ctx.ws);
         // Customer files are read for receipts; the business's own photos are only stored to show in Chats.
         await captureMedia(db, ctx.ws, m.id, m, mediaKey, direction === "in");
@@ -164,10 +166,11 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
           if (error) throw new Error("could not save message");
         }
         if (rows.length) ctx.touched.push(conv.id);
-        // Payment screenshots in the backfill: Dualhook can still serve media from the last 7 days.
+        // Payment screenshots and voice notes in the backfill: Dualhook can still serve media from the last 7 days.
         const recent = Date.now() - 7 * 864e5 + 3600e3;
         for (const r of rows) {
-          if (r.direction !== "in" || (r.type !== "image" && r.type !== "document") || Date.parse(r.sent_at) < recent) continue;
+          const audio = r.type === "audio";   // voice notes both ways; images/PDFs from the customer
+          if ((!audio && (r.direction !== "in" || (r.type !== "image" && r.type !== "document"))) || Date.parse(r.sent_at) < recent) continue;
           if (mediaKey === undefined) mediaKey = await dualhookKey(db, ctx.ws);
           await captureMedia(db, ctx.ws, r.id, r.raw, mediaKey);
         }

@@ -16,6 +16,9 @@ const KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const MODEL = Deno.env.get("KITO_VISION_MODEL") ?? "claude-sonnet-5-5";
 const TOKEN = Deno.env.get("WA_MEDIA_TOKEN") ?? "";   // only needed for our own Meta app; Dualhook links download without it
 const OK_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+// Voice notes and audio files: only stored so they can be played in Chats (never read by Kito).
+const AUDIO_MIME = ["audio/ogg", "audio/opus", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "audio/webm"];
+const AUDIO_EXT: Record<string, string> = { "audio/ogg": "ogg", "audio/opus": "opus", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/amr": "amr", "audio/webm": "webm" };
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export type Receipt = {
@@ -125,6 +128,8 @@ export async function captureMedia(db: SupabaseClient, ws: string, msgId: string
   try {
     const media = m?.[m?.type];
     if (!media?.url && !media?.id) return "skipped";
+    const audio = m?.type === "audio";
+    if (audio) read = false;   // a voice note is stored to play, not read
     const { data: cur } = await db.from("messages").select("media,body").eq("id", msgId).maybeSingle();
     if (cur?.media?.path && (cur.media.receipt || !read)) return "skipped";   // already saved (and read): replayed event
     if (cur?.media?.path) {   // saved earlier but not read: read the stored copy
@@ -144,9 +149,11 @@ export async function captureMedia(db: SupabaseClient, ws: string, msgId: string
     if (key && media.id) got = await downloadDualhook(String(media.id), key);
     if ("error" in got && media.url) { const direct = await download(media.url); if (!("error" in direct)) got = direct; else if (!key) got = { error: direct.error + " — add your Dualhook API key on the Connect page" }; }
     if ("error" in got) { console.error("media download failed", got.error); await db.from("messages").update({ media: { error: got.error, mime: media.mime_type ?? null } }).eq("id", msgId); return "failed"; }
-    const mime = OK_MIME.includes(got.mime) ? got.mime : OK_MIME.includes(media.mime_type) ? media.mime_type : null;
+    const base = (x: unknown) => String(x ?? "").split(";")[0].trim().toLowerCase();
+    const allowed = audio ? AUDIO_MIME : OK_MIME;
+    const mime = allowed.includes(base(got.mime)) ? base(got.mime) : allowed.includes(base(media.mime_type)) ? base(media.mime_type) : audio ? "audio/ogg" : null;
     if (!mime) { await db.from("messages").update({ media: { error: "unsupported type", mime: got.mime } }).eq("id", msgId); return "failed"; }
-    const ext = mime === "application/pdf" ? "pdf" : mime.split("/")[1].replace("jpeg", "jpg");
+    const ext = audio ? AUDIO_EXT[mime] ?? "ogg" : mime === "application/pdf" ? "pdf" : mime.split("/")[1].replace("jpeg", "jpg");
     const path = `${ws}/${msgId.replace(/[^A-Za-z0-9_-]/g, "_").slice(-120)}.${ext}`;
     const { error: upErr } = await db.storage.from("wa-media").upload(path, got.bytes, { contentType: mime, upsert: true });
     if (upErr) { console.error("media store failed", upErr.message); await db.from("messages").update({ media: { error: "could not store", mime } }).eq("id", msgId); return "failed"; }
@@ -167,13 +174,14 @@ export async function captureMedia(db: SupabaseClient, ws: string, msgId: string
   }
 }
 
-/** Fetch images/PDFs that arrived in the last 7 days but were not saved (e.g. before the key was added). */
+/** Fetch images/PDFs and voice notes from the last 7 days that were not saved (e.g. before the key was added). */
 export async function backfillMedia(db: SupabaseClient, ws: string, limit = 40) {
   const key = await dualhookKey(db, ws);
   const since = new Date(Date.now() - 7 * 864e5 + 3600e3).toISOString();
-  const { data: rows } = await db.from("messages").select("id,conversation_id,raw,media")
-    .eq("workspace_id", ws).eq("direction", "in").in("type", ["image", "document"]).gte("sent_at", since).order("sent_at", { ascending: false }).limit(200);
-  const todo = (rows ?? []).filter((r: any) => !r.media?.path || !r.media?.receipt).slice(0, limit);
+  const { data: rows } = await db.from("messages").select("id,conversation_id,raw,media,type,direction")
+    .eq("workspace_id", ws).in("type", ["image", "document", "audio"]).gte("sent_at", since).order("sent_at", { ascending: false }).limit(200);
+  // Customer images/PDFs that were never read for a receipt, and voice notes (both ways) never saved.
+  const todo = (rows ?? []).filter((r: any) => r.type === "audio" ? !r.media?.path : (r.direction === "in" && (!r.media?.path || !r.media?.receipt))).slice(0, limit);
   const out = { saved: 0, failed: 0, last_error: null as string | null, conversations: [] as string[] };
   for (const r of todo as any[]) {
     const res = await captureMedia(db, ws, r.id, r.raw, key);
