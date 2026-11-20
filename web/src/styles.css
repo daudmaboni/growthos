@@ -1190,6 +1190,8 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
     background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 4px 0 0;
   }
   .chats .inbox.frame, .chats .inbox.frame > .cc-list { border: 0; box-shadow: none; background: transparent; }
-  .inbox.frame .cc-main, .inbox.frame .cc, .inbox.frame .cc + .cc, .inbox.frame .cc-list > div + div .cc { border: 0; }
-  .inbox.frame .cc-main { padding: 9px 2px 9px 0; }
+  /* Thin line above and below every chat, starting after the photo (like WhatsApp) */
+  .inbox.frame .cc, .inbox.frame .cc + .cc, .inbox.frame .cc-list > div + div .cc { border: 0; }
+  .inbox.frame .cc-main { padding: 11px 2px 11px 0; border-top: 1px solid var(--ib-edge, var(--line)); border-bottom: 0; }
+  .inbox.frame .cc-list > div:last-of-type .cc-main, .inbox.frame .cc-list > div:has(+ button.cc-more) .cc-main { border-bottom: 1px solid var(--ib-edge, var(--line)); }
 }
