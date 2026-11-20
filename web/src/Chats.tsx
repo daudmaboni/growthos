@@ -285,6 +285,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
         </button>
       </div>
 
+      <div className="chats-tools">
       <div className="chats-bar">
         <div className="chips-tabs" role="tablist" aria-label={T("Show", "Onyesha")}>
           {tabs.filter(([f]) => f !== "not" || count("not") > 0 || filter === "not").map(([f, label, hint]) => (
@@ -305,6 +306,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
           <DateRange value={range ?? { key: "all" }} onChange={(r) => setRange(r.key === "all" ? null : r)} today={todayChats} tz={tzChats} lang={lang} start={chatStart} />
         </div>
       )}
+      </div>
       {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
       {filter !== "ids" && <p className="small muted chats-hint" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
       {filter === "ids" && ids && <p className="small" style={{ margin: 0 }}>{T(`Showing ${ids.length} customers Kito picked`, `Inaonyesha wateja ${ids.length} aliowachagua Kito`)} · <a href="#chats" onClick={() => pick("all")}>{T("show everyone", "onyesha wote")}</a></p>}
