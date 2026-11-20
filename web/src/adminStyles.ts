@@ -85,7 +85,7 @@ export const CSS = `
 .k-msg{background:var(--navy)}.k-sign{background:var(--yellow);border-radius:50%!important}.k-in{background:var(--navy)}.k-out{background:#A9B3D6}
 .ia-chart svg{width:100%;height:auto;display:block}
 .ia-chart .grid{stroke:var(--line);stroke-dasharray:3 4}.ia-chart .ax{font:11px var(--ui);fill:var(--faint)}
-.ia-chart .bar{fill:var(--navy)}.ia-chart .bar.hi{fill:var(--navy2)}
+.ia-chart .ia-bar{fill:var(--navy)}.ia-chart .ia-bar.hi{fill:var(--navy2)}
 .ia-chart .sign{fill:var(--yellow);stroke:var(--navy);stroke-width:1.5}
 .ia-tip{font-size:12.5px;color:var(--muted);min-height:20px;margin-top:4px}
 .ia-textbtn{background:none;border:0;padding:0;color:var(--info)!important;font-weight:600}.ia-textbtn:hover{text-decoration:underline}
@@ -250,7 +250,7 @@ export const CSS = `
   .ia-sheet-foot span{flex:1}.ia-sheet-foot a,.ia-sheet-foot button{color:var(--navy)!important;font-weight:600;text-decoration:none;border:0;background:none;padding:6px 0}
   .ia-sheet-foot button{color:var(--bad)!important}
   .ia-pagehead h1{font-size:28px}
-  .ia-tools{display:grid;gap:10px}
+  .ia-tools{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);justify-content:stretch}
   .ia-search{min-width:0;width:100%}
   .ia-tools .ia-seg{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:none;box-shadow:none;padding:0;gap:6px;margin:0 -14px;padding:0 14px;border-radius:0}
   .ia-tools .ia-seg::-webkit-scrollbar{display:none}
@@ -342,5 +342,39 @@ export const CSS = `
   .ia-timeline time{font-size:12px}
   .ia-timeline li span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
   .ia-timeline li.ia-open span{display:block;-webkit-line-clamp:unset}
+}
+/* ---- Phone audit (20 Nov): everything on every admin page fits a phone ---- */
+@media (max-width:820px){
+  /* Charts: bigger axis labels (they're drawn in a wide box, then shrunk to the phone) */
+  .ia-chart svg[viewBox^="0 0 640"] .ax{font-size:20px}
+  .ia-chart svg[viewBox^="0 0 1000"] .ax{font-size:24px}
+  .ia-chart text[text-anchor="end"]{display:none}   /* side scale would be cut off; the totals line under the chart says it */
+  /* Period / view toggles with a few choices: share the width instead of sliding off the edge */
+  .ia-main .ia-seg:not(:has(>button:nth-child(5))){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:auto!important;justify-self:stretch;flex:1 1 100%;overflow:visible!important;margin:0!important;padding:3px!important;gap:3px;border-radius:999px;background:rgba(20,27,52,.07)!important}
+  .ia-main .ia-seg:not(:has(>button:nth-child(5)))>button{flex:none!important;width:100%;min-width:0;height:34px;justify-content:center;padding:0 6px!important;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:none!important;box-shadow:none!important;color:var(--muted)!important}
+  .ia-main .ia-seg:not(:has(>button:nth-child(5)))>button.on{background:var(--card)!important;color:var(--ink)!important;box-shadow:0 1px 3px rgba(20,27,52,.18)!important}
+  .ia-pagehead{margin-bottom:14px}.ia-pagehead p{font-size:13.5px}
+  /* Stat boxes: an odd one out spans the row */
+  .ia-strip>.ia-stat:last-child:nth-child(odd){grid-column:1/-1}
+  /* Panels stacked one after another need breathing room */
+  .ia-main section.ia-panel+section.ia-panel{margin-top:16px}
+  /* Today: empty setup steps stay short */
+  .ia-lane:not(.has) .ia-chips{display:none}
+  .ia-lane:not(.has):not(.done){opacity:.55}
+  .ia-feedtxt span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  /* Errors: each one is a short card; tap to see the full message and what to do */
+  .ia-errlist>li{cursor:pointer;padding:14px 16px}
+  .ia-errlist>li:not([data-open]) pre{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;background:none;padding:0;border:0;margin:6px 0 0;font:13px/1.45 var(--ui);color:var(--muted)}
+  .ia-errlist>li[data-open] pre{white-space:pre-wrap;overflow-wrap:anywhere}
+  .ia-errlist>li:not([data-open]) .ia-src,.ia-errlist>li:not([data-open]) .ix-recovery{display:none}
+  .ia-errlist>li:not([data-open])::after{content:"Tap for details";display:block;margin-top:6px;font-size:12px;color:var(--faint)}
+  .ia-err-h{flex-wrap:wrap;row-gap:2px}
+  /* Business panel (drawer) */
+  .ia-drawer .ix-dfunnel{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ia-conns li{flex-wrap:wrap;align-items:flex-start}
+  .ia-conns li>.ia-faint{flex-basis:100%;padding-left:20px}
+  .ia-people li{flex-wrap:wrap}.ia-people li .ia-trunc{flex:1 1 100%;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .ia-mini li{flex-direction:column;gap:2px}.ia-mini li b{text-align:left}
+  .ia-row{flex-wrap:wrap}
 }
 `;

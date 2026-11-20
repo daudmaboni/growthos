@@ -375,7 +375,7 @@ function CostChart({ u }: { u: ApiUsage }) {
         {d.cost.map((c, i) => (
           <g key={i} onMouseEnter={() => setHover(i)}>
             <rect x={P.l + i * bw} y={P.t} width={bw} height={H - P.t - P.b} fill="transparent" />
-            <rect className={`bar${hover === i ? ' hi' : ''}`} x={P.l + i * bw + bw * 0.15} y={y(c)} width={bw * 0.7} height={Math.max(c ? 1.5 : 0, H - P.b - y(c))} rx={2} />
+            <rect className={`ia-bar${hover === i ? ' hi' : ''}`} x={P.l + i * bw + bw * 0.15} y={y(c)} width={bw * 0.7} height={Math.max(c ? 1.5 : 0, H - P.b - y(c))} rx={2} />
             {d.errors[i]! > 0 && <circle cx={P.l + i * bw + bw / 2} cy={H - P.b + 8} r={2.5} fill="var(--bad)" />}
           </g>
         ))}

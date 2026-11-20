@@ -261,7 +261,7 @@ export function Drawer({ supabase, id, row, onb, onClose, onChanged, onDeleted }
               <section className="ia-dsec">
                 <h3>Admin changes</h3>
                 <ol className="ia-timeline compact">
-                  {d.audit.map((a, i) => <li key={i}><time title={stamp(a.at)}>{ago(a.at)}</time><div><strong>{ACTION[a.action] ?? a.action}</strong><span>{describe(a.action, a.details)} · {a.actor}</span></div></li>)}
+                  {d.audit.map((a, i) => <li key={i}><time title={stamp(a.at)}>{ago(a.at)}</time><div><strong>{ACTION[a.action] ?? a.action}</strong><span>{[describe(a.action, a.details), a.actor].filter(Boolean).join(' · ')}</span></div></li>)}
                 </ol>
               </section>
             )}
