@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { zonedToUtc, localStamp, findSource, planPromise } from "../../supabase/functions/_shared/promise";
+import { zonedToUtc, localStamp, findSource, planPromise, ruleDate } from "../../supabase/functions/_shared/promise";
 
 const inn = (id: string, body: string, at: string) => ({ id, direction: "in", sent_at: at, body, type: "text" });
 const out = (id: string, body: string, at: string) => ({ id, direction: "out", sent_at: at, body, type: "text" });
@@ -63,5 +63,33 @@ describe("planning a promise", () => {
     const p = planPromise({ kind: "weird", quote: "something paraphrased by the model", due_date: null }, msgs, { now: NOW });
     expect(p?.kind).toBe("other");
     expect(p?.promise_key.startsWith("q:")).toBe(true);
+  });
+});
+
+describe("fixed date rules", () => {
+  // Fri 2026-10-30
+  it("reads relative days", () => {
+    expect(ruleDate("kesho", "2026-10-30")).toBe("2026-10-31");
+    expect(ruleDate("keshokutwa", "2026-10-30")).toBe("2026-11-01");
+    expect(ruleDate("wiki ijayo", "2026-10-30")).toBe("2026-11-06");
+    expect(ruleDate("leo jioni", "2026-10-30")).toBe("2026-10-30");
+  });
+  it("reads weekdays as the next such day", () => {
+    expect(ruleDate("juma pili", "2026-10-30")).toBe("2026-11-01");
+    expect(ruleDate("Jumamosi", "2026-10-22")).toBe("2026-10-24");
+    expect(ruleDate("Ijumaa", "2026-10-30")).toBe("2026-11-06"); // said on a Friday: next Friday
+  });
+  it("reads month end", () => {
+    expect(ruleDate("Mwisho wa mwezi", "2026-07-10")).toBe("2026-07-31");
+    expect(ruleDate("MWISHO WA mwezi", "2026-09-30")).toBe("2026-10-31");
+  });
+  it("leaves unknown phrases to Kito", () => {
+    expect(ruleDate("nikipata mshahara", "2026-07-10")).toBeNull();
+    expect(ruleDate("", "2026-07-10")).toBeNull();
+  });
+  it("overrides a wrong AI date", () => {
+    const m = [inn("b", "Mwisho wa mwezi nitakuja Biafra", "2026-07-10T10:25:00Z")];
+    const p = planPromise({ kind: "collect", quote: "Mwisho wa mwezi nitakuja Biafra", when_text: "Mwisho wa mwezi", due_date: "2026-06-30", due_time: null }, m, { now: Date.parse("2026-07-12T00:00:00Z") });
+    expect(p?.due_at).toBe("2026-07-31T06:00:00.000Z");
   });
 });

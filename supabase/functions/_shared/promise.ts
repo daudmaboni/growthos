@@ -59,6 +59,41 @@ export function localStamp(iso: string | number | Date, tz = "Africa/Dar_es_Sala
   }
 }
 
+const WEEKDAYS: [RegExp, number][] = [
+  [/\bjumapili\b|\bjuma\s*pili\b|\bsunday\b/, 0], [/\bjumatatu\b|\bjuma\s*tatu\b|\bmonday\b/, 1],
+  [/\bjumanne\b|\bjuma\s*nne\b|\btuesday\b/, 2], [/\bjumatano\b|\bjuma\s*tano\b|\bwednesday\b/, 3],
+  [/\balhamisi\b|\bthursday\b/, 4], [/\bijumaa\b|\bfriday\b/, 5], [/\bjumamosi\b|\bjuma\s*mosi\b|\bsaturday\b/, 6],
+];
+const ymd = (t: number) => new Date(t).toISOString().slice(0, 10);
+
+/**
+ * The day a time phrase points to, counted from the local day the customer said it ("YYYY-MM-DD").
+ * Fixed rules beat the AI's date arithmetic for the common phrases; null = leave it to Kito.
+ */
+export function ruleDate(whenText: string, saidDay: string): string | null {
+  const w = whenText.toLowerCase().normalize("NFKC");
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(saidDay);
+  if (!m || !w.trim()) return null;
+  const base = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  const plus = (n: number) => ymd(base + n * 864e5);
+  if (/mwisho\s+wa\s+mwezi|end of (the )?month/.test(w)) {
+    let last = Date.UTC(+m[1], +m[2], 0);
+    if (last === base) last = Date.UTC(+m[1], +m[2] + 1, 0); // said on the last day: next month's end
+    return ymd(last);
+  }
+  if (/wiki\s+ijayo|next week/.test(w)) return plus(7);
+  if (/keshokutwa|kesho\s*kutwa|day after tomorrow/.test(w)) return plus(2);
+  if (/\bkesho\b|\btomorrow\b/.test(w)) return plus(1);
+  const hits = WEEKDAYS.filter(([re]) => re.test(w));
+  if (hits.length === 1) {
+    const today = new Date(base).getUTCDay();
+    const diff = (hits[0][1] - today + 7) % 7 || 7; // the next such day, never the same day
+    return plus(diff);
+  }
+  if (/\bleo\b|\btoday\b/.test(w)) return plus(0);
+  return null;
+}
+
 /** The customer message the quote came from: the latest one that contains it. */
 export function findSource(msgs: Msg[], quote: string): Msg | null {
   const q = norm(quote);
@@ -97,7 +132,9 @@ export function planPromise(raw: RawPromise, msgs: Msg[], opts: { tz?: string; n
   if (!Number.isFinite(promiseAt) || now - promiseAt > MAX_PROMISE_AGE_DAYS * 864e5) return null;
 
   let due: string | null = null;
-  const date = typeof raw.due_date === "string" ? raw.due_date.trim() : "";
+  const whenText = String(raw.when_text ?? "");
+  const saidDay = localStamp(promiseAt, tz).slice(4, 14);
+  const date = ruleDate(whenText, saidDay) ?? (typeof raw.due_date === "string" ? raw.due_date.trim() : "");
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const tm = typeof raw.due_time === "string" && /^\d{1,2}:\d{2}$/.test(raw.due_time.trim()) ? raw.due_time.trim() : (kind === "call" ? "10:00" : "09:00");
     due = zonedToUtc(date, tm, tz);
