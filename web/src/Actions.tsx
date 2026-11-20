@@ -58,7 +58,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
   const queue = useMemo(() => {
     const H = ws.follow_up_hours * 3600e3;
     const now = Date.now();
-    const items = rows.filter((r) => r.outcome !== "sold" && Number(r.paid_orders) === 0 && r.outcome_override !== "lost" && !handled.has(r.id))
+    const items = rows.filter((r) => !r.not_customer && r.outcome !== "sold" && Number(r.paid_orders) === 0 && r.outcome_override !== "lost" && !handled.has(r.id))
       .map((r) => {
         const temp = tempOf(r);
         const waiting = r.last_dir === "in" && r.last_message_at && now - Date.parse(r.last_message_at) > 30 * 60e3;

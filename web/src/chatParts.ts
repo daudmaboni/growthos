@@ -44,6 +44,8 @@ export function agoT(iso: string | null, T: Tr) {
 export type Status = { key: string; text: string; tone: "good" | "warn" | "bad" | "info" | "muted"; icon: string };
 /** Where this customer stands, in one plain sentence. Order matters: the most useful truth wins. */
 export function statusOf(r: Outcome, T: Tr, currency: string): Status {
+  // Marked "not a customer" (you, staff, delivery, supplier…): out of labelling for good, whatever the chat says.
+  if (r.not_customer) return { key: "not_customer", icon: "⊘", tone: "muted", text: T("Not a customer", "Si mteja") };
   if (Number(r.paid_orders) > 0) return { key: "bought", icon: "✓", tone: "good", text: T("Bought", "Amenunua") + (r.sale_amount != null ? ` · ${money(Number(r.sale_amount), currency)}` : "") };
   if (inferredFrom(r)) return { key: "check", icon: "!", tone: "warn", text: T("Says they paid — check your money came in", "Anasema amelipa — hakikisha pesa imeingia") };
   if (kitoChecking(r)) return { key: "kito_check", icon: "…", tone: "info", text: T("Kito is reading this chat for a payment", "Kito anasoma chat hii kuona malipo") };

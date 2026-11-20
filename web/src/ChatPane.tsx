@@ -199,8 +199,9 @@ export function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, sta
           </div>
           <div className="wa-card">
             <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
-            <span className="small muted">{fromOf(r, T, adName)}</span>
-            {editor && (
+            {!r.not_customer && <span className="small muted">{fromOf(r, T, adName)}</span>}
+            {editor && !confirmed && <NotCustomer r={r} T={T} busy={busy} setBusy={setBusy} onChange={onChange} />}
+            {editor && !r.not_customer && (
               <div className="cc-fromad">
                 <span className="small">{T("Came from an ad?", "Ametoka kwenye tangazo?")}</span>
                 <div className="seg" role="group" aria-label={T("Came from an ad?", "Ametoka kwenye tangazo?")}>
@@ -209,13 +210,13 @@ export function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, sta
                 </div>
               </div>
             )}
-            {kitoStale(r) && <p className="wa-sum cc-reading">✦ {T("New messages since Kito's last read. Kito is reading them now; this updates by itself.", "Kuna ujumbe mpya tangu Kito asome. Kito anausoma sasa; hii itajisasisha yenyewe.")}</p>}
-            {r.kito_summary && <p className={"wa-sum" + (kitoStale(r) ? " stale" : "")}>{r.kito_summary}</p>}
-            {r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
+            {!r.not_customer && kitoStale(r) && <p className="wa-sum cc-reading">✦ {T("New messages since Kito's last read. Kito is reading them now; this updates by itself.", "Kuna ujumbe mpya tangu Kito asome. Kito anausoma sasa; hii itajisasisha yenyewe.")}</p>}
+            {!r.not_customer && r.kito_summary && <p className={"wa-sum" + (kitoStale(r) ? " stale" : "")}>{r.kito_summary}</p>}
+            {!r.not_customer && r.kito_next && st.key !== "bought" && <p className={"cc-next" + (kitoStale(r) ? " stale" : "")}><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</p>}
             <AssignChat ws={ws} conversationId={r.id} />
           </div>
           {editor && st.key === "check" && (confirming || !recording) && <ConfirmPayment r={r} ws={ws} T={T} msgs={msgs} onDone={() => { setConfirming(false); setSide(false); setSalesKey((k) => k + 1); onChange(); }} onLater={() => { setConfirming(false); setSide(false); }} />}
-          {editor && !confirmed && st.key !== "check" && !recording && (
+          {editor && !confirmed && !r.not_customer && st.key !== "check" && !recording && (
             <div className="cc-ask">
               <b>{T("Did they buy?", "Amenunua?")}</b>
               <div className="cc-ask-btns">
@@ -231,14 +232,9 @@ export function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, sta
             <b className="small">{T("Sales from this customer", "Mauzo kwa mteja huyu")}</b>
             <OrderList key={`${salesKey}-${r.paid_orders ?? 0}`} ws={ws} conversationId={r.id} onChange={onChange} />
           </div>
-          {editor && !task && !confirmed && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
+          {editor && !task && !confirmed && !r.not_customer && st.key !== "lost" && <button className="small" style={{ justifySelf: "start" }} disabled={busy} onClick={remind}>⏰ {T("Remind me to follow up", "Nikumbushe kumfuatilia")}</button>}
           {task && <span className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")} · <a href="#actions">{T("see reminders", "ona vikumbusho")}</a></span>}
-          {editor && !confirmed && (r.not_customer
-            ? <div className="cc-party small"><span>{T("Marked as not a customer", "Umeweka si mteja")}{r.not_customer_note && PARTY[r.not_customer_note] ? ` · ${T(PARTY[r.not_customer_note][0], PARTY[r.not_customer_note][1])}` : ""}. {T("Kept out of your customer lists, numbers and Kito.", "Haonekani kwenye orodha ya wateja, takwimu wala Kito.")}</span>
-                <button className="small" disabled={busy} onClick={async () => { setBusy(true); await markNotCustomer(r, false); setBusy(false); onChange(); }}>{T("Undo: they're a customer", "Rudisha: ni mteja")}</button></div>
-            : <>{<PartyHint r={r} T={T} onChange={onChange} />}
-                <button className="small linkish" style={{ justifySelf: "start" }} disabled={busy} title={T("For delivery people, suppliers, staff or family you talk money with. They leave your customer lists and numbers.", "Kwa wasafirishaji, wasambazaji, wafanyakazi au familia mnaoongea pesa. Wanatoka kwenye orodha na takwimu za wateja.")}
-                  onClick={async () => { setBusy(true); await markNotCustomer(r, true, r.kito_party && r.kito_party !== "customer" ? r.kito_party : "other"); setBusy(false); onChange(); }}>{T("Not a customer (delivery, supplier, staff…)", "Si mteja (msafirishaji, msambazaji, mfanyakazi…)")}</button></>)}
+          {editor && !confirmed && !r.not_customer && <PartyHint r={r} T={T} onChange={onChange} />}
           <details className="cc-why">
             <summary className="small muted">{T("How itaOS decided this", "itaOS imeamuaje hili")}</summary>
             <div className="small muted" style={{ display: "grid", gap: 4, marginTop: 6 }}>
@@ -524,3 +520,20 @@ export function MediaView({ m, ws, T }: { m: Msg; ws: Workspace; T: Tr }) {
     </span>
   );
 }
+
+/** "Not a customer": you on another phone, staff, delivery, a supplier, family… Takes the chat out of labelling
+ *  for good — Kito stops reading it, no sale labels, no follow-ups, not counted — until you undo it. */
+function NotCustomer({ r, T, busy, setBusy, onChange }: { r: Outcome; T: Tr; busy: boolean; setBusy: (b: boolean) => void; onChange: () => void }) {
+  const set = async (v: boolean) => { setBusy(true); await markNotCustomer(r, v, v ? (r.kito_party && r.kito_party !== "customer" ? r.kito_party : "other") : undefined); setBusy(false); onChange(); };
+  if (r.not_customer) return (
+    <div className="cc-party small">
+      <span>{r.not_customer_note && PARTY[r.not_customer_note] ? `${T(PARTY[r.not_customer_note][0], PARTY[r.not_customer_note][1])}. ` : ""}{T("No labels, no follow-ups, not in your numbers. Kito doesn't read this chat.", "Hakuna lebo, hakuna ufuatiliaji, hayumo kwenye takwimu. Kito hasomi chat hii.")}</span>
+      <button className="small" disabled={busy} onClick={() => set(false)}>{T("Undo: they're a customer", "Rudisha: ni mteja")}</button>
+    </div>
+  );
+  return (
+    <button className="small cc-notcust" disabled={busy} title={T("You on another phone, staff, delivery, a supplier or family. The chat stops being labelled for good.", "Wewe kwa simu nyingine, mfanyakazi, msafirishaji, msambazaji au familia. Chat haitawekewa lebo tena.")}
+      onClick={() => set(true)}>⊘ {T("Not a customer — stop labelling", "Si mteja — acha kuweka lebo")}</button>
+  );
+}
+

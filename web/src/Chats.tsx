@@ -407,10 +407,10 @@ function Card({ r, ws, T, adName, phone, task, selected, onOpen, onChange }: { r
           </div>
           <div className="small muted cc-from">{fromOf(r, T, adName)}</div>
           <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}<span className="cc-st-text">{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</span>
-            {!confirmed && st.key !== "lost" && temp && <span className={"cc-heat " + temp}>{temp === "hot" ? T("Very interested", "Ana hamu sana") : temp === "warm" ? T("Interested", "Ana hamu") : T("Not very interested", "Hana hamu sana")}</span>}</div>
-          {kitoStale(r) ? <div className="cc-sum cc-reading">✦ {T("Kito is reading the new messages…", "Kito anasoma ujumbe mpya…")}</div>
-            : r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>}
-          {!kitoStale(r) && r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
+            {!confirmed && st.key !== "lost" && st.key !== "not_customer" && temp && <span className={"cc-heat " + temp}>{temp === "hot" ? T("Very interested", "Ana hamu sana") : temp === "warm" ? T("Interested", "Ana hamu") : T("Not very interested", "Hana hamu sana")}</span>}</div>
+          {st.key !== "not_customer" && (kitoStale(r) ? <div className="cc-sum cc-reading">✦ {T("Kito is reading the new messages…", "Kito anasoma ujumbe mpya…")}</div>
+            : r.kito_summary && <div className="cc-sum">{r.kito_summary}</div>)}
+          {st.key !== "not_customer" && !kitoStale(r) && r.kito_next && st.key !== "bought" && <div className="cc-next"><b>{T("Next:", "Fanya:")}</b> {r.kito_next}</div>}
           {task && <div className="small cc-task">⏰ {T("Reminder set", "Kikumbusho kipo")}</div>}
           {editor && <PartyHint r={r} T={T} onChange={onChange} />}
         </div>
