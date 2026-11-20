@@ -142,10 +142,11 @@ export function useRpc<T>(supabase: SupabaseClient, fn: string, args: Record<str
 }
 
 export const ACTION: Record<string, string> = {
-  set_state: 'Changed account settings', set_ai_limit: 'Changed a business AI limit', dualhook_create_webhook: 'Made a Dualhook webhook URL', dualhook_rotate_webhook: 'Replaced a Dualhook webhook URL', dualhook_set_key: 'Saved a Dualhook API key', dualhook_fetch_images: 'Fetched missed WhatsApp images', requeue_events: 'Retried failed WhatsApp events', set_send: 'Changed replying from itaOS',
+  set_state: 'Changed account settings', set_ai_limit: 'Changed a business AI limit', dualhook_create_webhook: 'Made a Dualhook webhook URL', dualhook_rotate_webhook: 'Replaced a Dualhook webhook URL', dualhook_set_key: 'Saved a Dualhook API key', dualhook_fetch_images: 'Fetched missed images and voice notes', requeue_events: 'Retried failed WhatsApp events', set_send: 'Changed replying from itaOS',
   delete_workspace: 'Deleted a business', add_staff: 'Added a staff member', remove_staff: 'Removed a staff member',
   set_api_price: 'Changed an AI model price', set_api_budget: 'Changed the AI budget', add_task: 'Added a staff follow-up',
   task_done: 'Completed a staff follow-up', task_reopened: 'Reopened a staff follow-up',
+  staff_access_changed: 'Changed staff access',
 };
 export function describe(action: string, d: any): string {
   if (action === 'set_state' && d?.after) {
@@ -163,7 +164,11 @@ export function describe(action: string, d: any): string {
   if (action === 'set_api_price') return `${d?.model}: $${d?.after?.input} in / $${d?.after?.output} out per million tokens`;
   if (action === 'set_api_budget') return `monthly ${d?.after?.monthly_usd != null ? '$' + d.after.monthly_usd : 'none'}, daily alert ${d?.after?.daily_usd != null ? '$' + d.after.daily_usd : 'none'}`;
   if (action === 'add_task' || action === 'task_done' || action === 'task_reopened') return d?.title ?? '';
-  return JSON.stringify(d);
+  if (action === 'staff_access_changed') return [d?.added && `added ${d.added}`, d?.removed && `removed ${d.removed}`, d?.by && `by ${d.by}`].filter(Boolean).join(', ');
+  if (action === 'dualhook_fetch_images' || action === 'dualhook_set_key') return d?.images_saved != null ? `${fmt(d.images_saved)} saved${d.images_failed ? `, ${fmt(d.images_failed)} failed` : ''}` : '';
+  // Anything else: plain "key: value" words instead of raw JSON.
+  if (!d || typeof d !== 'object') return d == null ? '' : String(d);
+  return Object.entries(d).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ');
 }
 
 export const ORIGIN: Record<string, string> = {
