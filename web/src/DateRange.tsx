@@ -108,7 +108,8 @@ export default function DateRange({ value, onChange, today, tz, lang, start }: {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .2s" }}><path d="M5 9l7 7 7-7z" /></svg>
       </button>
       {open && sheet(
-        <div className={"dr-pop dr-modal" + (closing ? " closing" : "")} ref={pop} role="dialog" aria-modal="true" aria-label={T("Choose dates", "Chagua tarehe")} data-noswipe>
+        <div className={"dr-pop dr-modal" + (draft.key === "custom" || anchor ? " is-custom" : "") + (closing ? " closing" : "")} ref={pop} role="dialog" aria-modal="true" aria-label={T("Choose dates", "Chagua tarehe")} data-noswipe>
+          <div className="dr-sheet-h"><b>{T("Choose dates", "Chagua tarehe")}</b></div>
           <div className="dr-list">
             {recent.length > 0 && <><div className="dr-h">{T("Recently used", "Ulizotumia karibuni")}</div>{recent.map(radio)}<hr /></>}
             {PRESETS.filter((p) => allowAll || p.key !== "all").map((p) => radio(p.key))}

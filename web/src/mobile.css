@@ -153,6 +153,33 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   button.small, .btn.small { min-height: 34px; }
   .dr-day, button.dr-day, .seg button, .linkish, .link-btn, .bottomnav a, .bottomnav button { min-height: 0; }
 
+
+  /* ---- Date picker: a short bottom sheet, not a full-screen card ----
+     Presets are chips (3 across), "Recently used" goes (it repeated the list), and the calendar
+     only opens when Custom is picked. Cancel / Update stay at the bottom. */
+  .dr-layer { place-items: end stretch; padding: 0; }
+  .dr-layer .dr-pop.dr-modal { max-width: none; width: 100%; max-height: 86dvh; border-radius: 24px 24px 0 0; border-bottom: 0;
+    animation: dr-sheet-up .3s cubic-bezier(.2, .8, .2, 1) both; }
+  .dr-layer.closing .dr-pop.dr-modal { animation: dr-sheet-down .18s ease-in both; }
+  .dr-layer .dr-modal::before { content: ""; display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 8px auto 0; }
+  .dr-layer .dr-modal .dr-sheet-h { display: block; padding: 10px 16px 2px; font-size: 16px; }
+  .dr-layer .dr-modal .dr-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 16px 14px; }
+  .dr-layer .dr-modal .dr-h, .dr-layer .dr-modal .dr-list hr, .dr-layer .dr-modal .dr-list > hr ~ .dr-h { display: none; }
+  /* the recently-used copies sit before the <hr>; hide them so each choice shows once */
+  .dr-layer .dr-modal .dr-list > .dr-opt:has(~ hr) { display: none; }
+  .dr-layer .dr-modal .dr-opt { position: relative; justify-content: center; text-align: center; min-height: 40px; padding: 6px 6px; gap: 0;
+    border-radius: 12px; background: var(--raised); border: 1px solid transparent; font-size: 13px; font-weight: 550; line-height: 1.2; color: var(--ink-2); }
+  .dr-layer .dr-modal .dr-opt input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+  .dr-layer .dr-modal .dr-opt.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text, var(--accent)); font-weight: 700; }
+  .dr-layer .dr-modal:not(.is-custom) .dr-months, .dr-layer .dr-modal:not(.is-custom) .dr-nav { display: none; }
+  .dr-layer .dr-modal .dr-cal { padding: 0 16px 12px; gap: 10px; }
+  .dr-layer .dr-modal:not(.is-custom) .dr-picked { border-top: 0; padding-top: 0; }
+  .dr-layer .dr-modal .dr-months { grid-template-columns: 1fr; }
+  .dr-layer .dr-modal .dr-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .dr-layer .dr-modal button.dr-day { width: 100%; height: 38px; }
+  .dr-layer .dr-modal .dr-nav { top: 2px; left: 8px; right: 8px; }
+  .dr-layer .dr-modal .dr-foot { gap: 6px; padding-top: 10px; }
+  .dr-layer .dr-modal .dr-foot .row button { min-height: 44px; }
 }
 
 /* Very small phones (iPhone SE and narrower) */
@@ -164,3 +191,7 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   .kpi .v, .dash-ia .kpi .v { font-size: 18px; }
   .ads-m-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; }
 }
+
+@keyframes dr-sheet-up { from { transform: translateY(100%); } }
+@keyframes dr-sheet-down { to { transform: translateY(100%); } }
+.dr-sheet-h { display: none; }
