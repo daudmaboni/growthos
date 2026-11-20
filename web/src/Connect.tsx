@@ -8,7 +8,7 @@ type Health = { status: string; events: number; oldest: string | null; newest: s
 type Conn = { id: string; provider: string; external_id: string; label: string | null; status: string; last_sync_at: string | null; last_error: string | null };
 type Num = { phone_number_id: string; connection_id: string | null; display_phone: string | null; history_status: string | null; history_requested_at: string | null };
 
-const PONDI_WA = "255745160572";
+const PONDI_WA = "255626277027";
 const pondiLink = (ws: Workspace, what: string) =>
   `https://wa.me/${PONDI_WA}?text=${encodeURIComponent(ws.language === "sw" ? `Habari Pondi, naomba msaada wa kuunganisha ${what} kwenye itaOS (${ws.name}).` : `Hi Pondi, please help me connect ${what} to itaOS (${ws.name}).`)}`;
 

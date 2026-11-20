@@ -8,7 +8,7 @@ const APP = "/app";
 // Same key as the sign-in page, so the language picked here carries on into the app.
 const LANG_KEY = "itaos-lang";
 type Lang = "sw" | "en";
-const PONDI_WA = "255745160572";
+const PONDI_WA = "255626277027";
 const PONDI_SITE = "https://ponditech.com";
 
 /** Pilot: setup is done by Pondi, so the main button opens WhatsApp with Pondi.
@@ -412,7 +412,7 @@ export default function Home() {
           <div className="hp-foot-mark" aria-hidden="true">itaOS<i>.</i></div>
           <div className="hp-foot-bot">
             <p>© {new Date().getFullYear()} {T("itaOS by ", "itaOS na ")}<a href={PONDI_SITE} target="_blank" rel="noopener">Pondi Technologies</a>. {T("All rights reserved.", "Haki zote zimehifadhiwa.")}</p>
-            <p>BRELA Reg. No. 723134 · Kinondoni, Dar es Salaam 14110, Tanzania · <a href={`https://wa.me/${PONDI_WA}`} target="_blank" rel="noopener">+255 745 160 572</a></p>
+            <p>BRELA Reg. No. 723134 · Kinondoni, Dar es Salaam 14110, Tanzania · <a href={`https://wa.me/${PONDI_WA}`} target="_blank" rel="noopener">+255 626 277 027</a></p>
           </div>
         </div>
       </footer>
