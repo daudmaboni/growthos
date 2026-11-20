@@ -20,9 +20,14 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   .brand-text h1 { font: 700 17px/1.1 var(--display); letter-spacing: -0.02em; }
   .brand-text .ws { font-size: 12px; font-weight: 500; }
   .actions { gap: 6px; }
-  .actions .seg { padding: 2px; }
-  .actions .seg button { padding: 4px 9px; font-size: 11.5px; letter-spacing: .02em; }
-  .actions button.icon, .actions a.icon { width: 34px; height: 34px; font-size: 15px; }
+  /* Language pill and round buttons share one height so the right side reads as one group */
+  .actions { align-items: center; }
+  .actions .lang-seg { display: none; } /* phones: language lives in Settings → Language */
+  .actions .seg { height: 36px; padding: 3px; align-items: stretch; }
+  .actions .seg button { min-height: 0; padding: 0 11px; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+  .actions button.icon, .actions a.icon { width: 36px; height: 36px; min-height: 36px; font-size: 15px; display: inline-grid; place-items: center; padding: 0; }
+  .brand-text { min-width: 0; }
+  .brand-text .ws { display: block; max-width: 38vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ---- Page head: title and the date button on one line ---- */
   .hero { flex-wrap: nowrap; align-items: center; gap: 10px; padding-top: 4px; }
@@ -37,8 +42,18 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   .hero > .seg { flex: 1 1 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
   .hero > .seg button { white-space: nowrap; padding-left: 6px; padding-right: 6px; font-size: 13px; }
   .hero > .row > .small.muted { display: none; } /* "Updating…" — the spinner on the KPIs is enough */
-  .dr-trigger { padding: 9px 12px; gap: 6px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); font-size: 13.5px; min-height: 40px; }
+  .dr-trigger { height: 40px; min-height: 40px; padding: 0 12px 0 13px; gap: 6px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); box-shadow: none; font-size: 13.5px; }
   .dr-trigger b { font-weight: 650; white-space: nowrap; }
+
+  /* ---- Filters: one full-width pill matching the date button, never loose grey text ---- */
+  .dash-ia .filterbar { margin-top: -4px; }
+  button.fb-toggle { height: 40px; min-height: 40px; border-radius: 999px; padding: 0 14px; box-shadow: none; }
+  button.fb-toggle.all { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
+  .fb-sum { min-width: 0; font-weight: 500; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fb-sum::before { content: "·"; margin: 0 6px 0 1px; opacity: .7; }
+  .fb-chev { flex: none; margin-left: auto; color: var(--muted); }
+  .fb-chips { flex: 1 1 auto; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); }
+  button.fb-chip { height: 34px; }
 
   /* ---- Cards ---- */
   .card, .dash-ia .card { padding: 16px; border-radius: 20px; gap: 12px; }

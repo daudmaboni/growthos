@@ -31,18 +31,19 @@ export function FilterBar({ value, onChange, options, lang }: { value: Filters; 
   return (
     <div className={"filterbar" + (open ? " open" : "")} role="group" aria-label={T("Filters", "Vichujio")}>
       <div className="fb-phone">
-        <button type="button" className={"fb-toggle" + (chips.length ? " on" : "")} onClick={() => setOpen(true)} aria-expanded={open}>
+        <button type="button" className={"fb-toggle" + (chips.length ? " on" : " all")} onClick={() => setOpen(true)} aria-expanded={open}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 6h16M7 12h10M10 18h4" /></svg>
           {T("Filters", "Vichujio")}{chips.length > 0 && <span className="fb-count">{chips.length}</span>}
+          {chips.length === 0 && <><span className="fb-sum">{T("Showing everything", "Inaonyesha vyote")}</span>
+            <svg className="fb-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m9 6 6 6-6 6" /></svg></>}
         </button>
-        <div className="fb-chips">
-          {chips.length === 0 ? <span className="fb-none">{T("Everything: all sources, ads and products", "Vyote: vyanzo, matangazo na bidhaa zote")}</span>
-            : chips.map(([k, label, next]) => (
+        {chips.length > 0 && <div className="fb-chips">
+          {chips.map(([k, label, next]) => (
               <button type="button" key={k} className="fb-chip" onClick={() => onChange(next)} aria-label={T(`Remove ${label}`, `Ondoa ${label}`)}>
                 <span>{label}</span><span aria-hidden>✕</span>
               </button>
             ))}
-        </div>
+        </div>}
       </div>
       {open && <div className="fb-scrim" onClick={() => setOpen(false)} aria-hidden />}
       <div className="fb-fields">
