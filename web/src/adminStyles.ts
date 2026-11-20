@@ -280,11 +280,30 @@ export const CSS = `
   .ia-strip,.ia-strip.ix-strip5{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ia-stat{min-width:0;overflow-wrap:anywhere}
   .ia-panel{padding:16px}
-  .ia-main table:not(.ia-table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .ia-main table:not(.ia-table) td:first-child{min-width:150px}
   .ia-panel-h{flex-wrap:wrap;gap:8px}
   .ia-main .ia-seg{max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ia-main .ia-seg::-webkit-scrollbar{display:none}
   .ia-main .ia-seg button{flex:none;white-space:nowrap}
   .ia-timeline li{grid-template-columns:minmax(0,80px) minmax(0,1fr)}
+}
+/* ---- Phone (20 Nov, 3): every table becomes a stack of cards. The first cell is the card's title;
+   the others sit two per line under it, each with its column name as a small label (set by Frame). ---- */
+@media (max-width:820px){
+  .ia table{display:block;width:100%;min-width:0!important;border-collapse:separate}
+  .ia thead{display:none}
+  .ia tbody{display:grid}
+  .ia tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .ia tbody tr:last-child{border-bottom:0}
+  .ia-tablecard{overflow:visible}.ia-tablecard tbody tr{padding:14px 16px}
+  .ia tbody tr:hover{background:none}
+  .ia td{display:block;padding:0!important;border:0!important;text-align:left!important;min-width:0!important;white-space:normal!important;overflow-wrap:anywhere}
+  .ia td:first-child,.ia td[colspan]{grid-column:1/-1}
+  .ia td:first-child{font-size:14.5px}
+  .ia td[data-label]:not(:first-child):not([data-label=""])::before{content:attr(data-label);display:block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+  .ia td:empty{display:none}
+  .ia td .nowrap,.ia td.nowrap{white-space:normal}
+  .ia td .ia-trunc{max-width:100%}
+  .ia td:last-child:has(button),.ia td:last-child:has(.ia-btn){grid-column:1/-1}
+  /* Today: the setup steps stack one under another instead of sliding sideways */
+  .ia-lanes{grid-template-columns:minmax(0,1fr)!important;overflow:visible!important;padding-bottom:0}
 }
 `;
