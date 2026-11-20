@@ -15,6 +15,7 @@ import Report from "./Report";
 import Actions from "./Actions";
 import Kito from "./Kito";
 import Attention from "./Attention";
+import Island from "./Island";
 import Products from "./Products";
 import Logo, { KitoLogo } from "./Logo";
 import { hidePreloader } from "./preloader";
@@ -174,6 +175,7 @@ export default function App() {
           <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
       </header>
+      <Island ws={ws} />
       <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
       <PageView view={view}>
       {view === "dashboard" && <><AppTip sw={ws.language === "sw"} /><Dashboard ws={ws} onWs={setWs} /></>}

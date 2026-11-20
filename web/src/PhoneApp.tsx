@@ -1,12 +1,13 @@
 // Settings → Phone app: put itaOS on the home screen and turn on notifications for new WhatsApp messages.
 import { useEffect, useState } from "react";
 import type { Workspace } from "./lib";
+import { islandOn, setIslandOn, islandPreview } from "./Island";
 import { canPromptInstall, isInstalled, isIOS, onPwaChange, promptInstall, pushState, turnOnPush, turnOffPush, sendTestPush, type PushState } from "./pwa";
 
 type Tr = (en: string, sw: string) => string;
 
 export default function PhoneApp({ ws, T }: { ws: Workspace; T: Tr }) {
-  return <><Install T={T} /><Notifications ws={ws} T={T} /></>;
+  return <><Install T={T} /><Notifications ws={ws} T={T} /><InAppPopup ws={ws} T={T} /></>;
 }
 
 function Install({ T }: { T: Tr }) {
@@ -88,6 +89,22 @@ function Notifications({ ws, T }: { ws: Workspace; T: Tr }) {
         )}
       {msg.ok && <span className="small savemsg">{msg.ok}</span>}
       {msg.err && <span className="small err">{msg.err}</span>}
+    </section>
+  );
+}
+
+function InAppPopup({ ws, T }: { ws: Workspace; T: Tr }) {
+  const [on, setOn] = useState(islandOn());
+  const flip = () => { setIslandOn(!on); setOn(!on); };
+  return (
+    <section className="card">
+      <div><h2>{T("Pop-up inside the app", "Arifa ndani ya app")}</h2>
+        <span className="small muted">{T("While itaOS is open, a black pop-up drops from the top when a customer writes. Tap it to open the chat. Swipe up or tap × to close it.", "itaOS ikiwa wazi, kidirisha cheusi kinashuka juu mteja akiandika. Kibonyeze kufungua chat. Telezesha juu au bonyeza × kukifunga.")}</span></div>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <span className="small">{on ? "✅ " + T("On for this device", "Imewashwa kwa kifaa hiki") : T("Off for this device", "Imezimwa kwa kifaa hiki")}</span>
+        <button type="button" className="small" onClick={() => islandPreview(ws.language === "sw")}>{T("Show me", "Nionyeshe")}</button>
+        <button type="button" className="small" onClick={flip}>{on ? T("Turn off", "Zima") : T("Turn on", "Washa")}</button>
+      </div>
     </section>
   );
 }
