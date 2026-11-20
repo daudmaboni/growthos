@@ -132,9 +132,6 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   button.small, .btn.small { min-height: 34px; }
   .dr-day, button.dr-day, .seg button, .linkish, .link-btn, .bottomnav a, .bottomnav button { min-height: 0; }
 
-  /* ---- Bottom nav: a touch taller, labels a touch bigger ---- */
-  .bottomnav { width: min(340px, calc(100% - 28px)); }
-  .bottomnav a, .bottomnav button { font-size: 11px; padding: 8px 2px 7px; }
 }
 
 /* Very small phones (iPhone SE and narrower) */

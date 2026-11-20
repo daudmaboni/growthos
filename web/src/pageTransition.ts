@@ -15,7 +15,7 @@ import { prefersReduced } from "./motion";
 export type Area = { top: number; left: number; right: number; bottom: number };
 
 /** Set by the phone swipe gesture: that navigation already animates with the finger. */
-export const navFlags = { swipe: false };
+export const navFlags: { swipe: boolean; fade: number | null } = { swipe: false, fade: null };
 
 function css() {
   if (document.getElementById("pt-style")) return;

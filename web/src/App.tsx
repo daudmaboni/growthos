@@ -33,6 +33,7 @@ export default function App() {
   const [ws, setWs] = useState<Workspace | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
+  setViewRef.current = setView;
   const viewRef = useRef<View>(view);
   const hadSession = useRef<boolean | null>(null); // null until the first check: a reload never plays the curtain
   const curtainPending = useRef(false);
@@ -89,7 +90,9 @@ export default function App() {
       if (next === viewRef.current) return;
       // Phone swipe already slides the page with the finger; everything else gets the light page change.
       if (navFlags.swipe || !document.querySelector(".page-view")) { viewRef.current = next; setView(next); return; }
+      const from = viewRef.current;
       viewRef.current = next;
+      if (window.matchMedia(PHONE_NAV).matches && phoneSwitch(from, next)) return;
       pageTransition({
         swap: () => flushSync(() => setView(next)),
         area: () => { // the yellow line runs along the bottom edge of the top bar
@@ -399,6 +402,23 @@ const PHONE_NAV = "(max-width: 760px)";
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pageEl = () => document.querySelector<HTMLElement>(".page-view");
 
+/** Phone tab change, Facebook-style: a quick crossfade where the new page drifts in from the side of its tab
+ *  (bars stay still). Returns false when it didn't handle it (the caller then does the ordinary page change). */
+function phoneSwitch(from: View, next: View): boolean {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+  const html = document.documentElement;
+  const a = ORDER.indexOf(from), b = ORDER.indexOf(next);
+  const dir = a >= 0 && b >= 0 ? Math.sign(b - a) : b >= 0 ? -1 : 1; // More-menu pages sit to the right of the bar
+  const swap = () => { window.scrollTo({ top: 0 }); flushSync(() => setViewRef.current?.(next)); };
+  if (reducedMotion()) { swap(); return true; }
+  if (!doc.startViewTransition) { navFlags.fade = dir; swap(); return true; } // PageView fades it in
+  html.style.setProperty("--vt-dir", String(dir));
+  html.classList.add("vt-phone");
+  doc.startViewTransition(swap).finished.finally(() => { html.classList.remove("vt-phone"); html.style.removeProperty("--vt-dir"); });
+  return true;
+}
+const setViewRef: { current: ((v: View) => void) | null } = { current: null };
+
 /** Wraps the current page. On phones, a new section slides in from the side it lives on
  *  (iOS-style), or rises in gently when it isn't one of the bottom-nav sections. */
 export function PageView({ view, children }: { view: View; children: React.ReactNode }) {
@@ -408,6 +428,11 @@ export function PageView({ view, children }: { view: View; children: React.React
     const el = ref.current, from = prev.current; prev.current = view;
     if (!el || from === view) return;
     el.style.transition = ""; el.style.transform = ""; el.style.opacity = ""; el.classList.remove("swiping");
+    const fade = navFlags.fade; navFlags.fade = null;
+    if (fade !== null && !reducedMotion()) { // phone tap without View Transitions: quick fade in from the tab's side
+      el.animate([{ transform: `translateX(${fade * 22}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 220, easing: "cubic-bezier(.2, .8, .3, 1)" });
+      return;
+    }
     const swiped = navFlags.swipe; navFlags.swipe = false;
     if (!swiped || !window.matchMedia(PHONE_NAV).matches || reducedMotion()) return; // taps/clicks use the panel wipe instead
     const a = ORDER.indexOf(from), b = ORDER.indexOf(view);
@@ -555,10 +580,10 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
         <span className="lens" aria-hidden="true" />
         {main.map(([v, label, icon]) => (
           <a key={v} href={"#" + v} className={view === v && !open ? "on" : ""} aria-current={view === v ? "page" : undefined}
-            onClick={(e) => { e.preventDefault(); go(ORDER.indexOf(v)); }}>{icon}<span>{label}</span>{v === "chats" && badges && <NavBadge badge={chatsBadge(badges, sw)} />}</a>
+            aria-label={label} onClick={(e) => { e.preventDefault(); go(ORDER.indexOf(v)); }}>{icon}<span className="bn-label">{label}</span>{v === "chats" && badges && <NavBadge badge={chatsBadge(badges, sw)} />}</a>
         ))}
         <button type="button" className={moreOn || open ? "on" : ""} aria-expanded={open} onClick={() => (open ? (setOpen(false), setLens(Math.max(0, ORDER.indexOf(view)), false)) : setOpen(true))}>
-          <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span>{L("More", "Zaidi")}</span>{badges && <NavBadge badge={actionsBadge(badges, sw)} />}
+          <Ico d="M5 12h.01M12 12h.01M19 12h.01" w={3} /><span className="bn-label">{L("More", "Zaidi")}</span>{badges && <NavBadge badge={actionsBadge(badges, sw)} />}
         </button>
       </nav>
     </>
@@ -566,5 +591,5 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
 }
 
 function Ico({ d, w = 2 }: { d: string; w?: number }) {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  return <svg className="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
 }
