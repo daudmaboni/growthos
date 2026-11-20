@@ -35,6 +35,25 @@ function ConnectSimple({ ws }: { ws: Workspace }) {
     supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id).then(({ data }) => setConns((data as Conn[]) ?? []));
     supabase.from("wa_numbers").select("phone_number_id,connection_id,display_phone,history_status,history_requested_at").eq("workspace_id", ws.id).then(({ data }) => setNums((data as Num[]) ?? []));
   }, [ws.id, tick]);
+  // Images and voice notes from the last 7 days that weren't saved yet (needs the Dualhook key, set by Pondi).
+  const [hasKey, setHasKey] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  useEffect(() => {
+    supabase.from("connections").select("meta").eq("workspace_id", ws.id).eq("provider", "whatsapp").eq("meta->>via", "dualhook").maybeSingle()
+      .then(({ data }) => setHasKey(!!(data as any)?.meta?.api_key_last4));
+  }, [ws.id]);
+  const fetchMedia = async () => {
+    setFetching(true); setMsg({});
+    try {
+      const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "backfill_media" });
+      setMsg(r.images_failed && !r.images_saved
+        ? { err: T(`Could not fetch images and voice notes: ${r.last_error ?? "unknown error"}`, `Imeshindwa kuleta picha na sauti: ${r.last_error ?? "hitilafu"}`) }
+        : { ok: r.images_saved
+            ? T(`${r.images_saved} images and voice notes fetched${r.images_failed ? `, ${r.images_failed} failed` : ""}.${r.images_saved >= 40 ? " Press again for more." : ""}`, `Picha na sauti ${r.images_saved} zimeletwa${r.images_failed ? `, ${r.images_failed} zimeshindwa` : ""}.${r.images_saved >= 40 ? " Bonyeza tena kwa zaidi." : ""}`)
+            : T("Nothing missing: all images and voice notes from the last 7 days are saved.", "Hakuna kilichokosekana: picha na sauti zote za siku 7 zimehifadhiwa.") });
+    } catch (e) { setMsg({ err: (e as Error).message }); }
+    setFetching(false);
+  };
   const pageRef = usePageEnter<HTMLDivElement>((root) => { enterCards(select(root, ":scope > .card"), { stagger: 0.07 }); });
   const ads = (conns ?? []).filter((c) => c.provider === "meta_ads" && c.status !== "revoked");
   const syncNow = async () => {
@@ -78,6 +97,12 @@ function ConnectSimple({ ws }: { ws: Workspace }) {
             </div>
           );
         })}
+        {nums.length > 0 && hasKey && canManage(ws) && (
+          <div className="row between" style={{ gap: 10, flexWrap: "wrap", paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+            <span className="small muted">{T("Missing a photo or voice note from the last 7 days?", "Picha au sauti ya siku 7 zilizopita haipo?")}</span>
+            <button className="small" disabled={fetching} onClick={fetchMedia}>{fetching ? T("Fetching…", "Inaleta…") : T("Fetch images and voice notes", "Leta picha na sauti")}</button>
+          </div>
+        )}
       </section>
       <section className="card">
         <div className="row between"><h2>{T("Facebook & Instagram ads", "Matangazo ya Facebook na Instagram")}</h2>
