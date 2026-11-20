@@ -78,6 +78,10 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
     <Frame>
       <aside className="ia-side">
         <div className="ia-brand"><span className="ia-mark">ita.</span><span>Admin</span></div>
+        {/* Phone: refresh lives in the top bar, with when it last updated */}
+        <button className={'ia-mrefresh' + (loading ? ' busy' : '')} onClick={refresh} disabled={loading} aria-label="Refresh">
+          <span className="ia-mrefresh-t">{loading ? 'Updating…' : `Updated ${ov.data ? ago(ov.data.generated_at) : '…'}`}</span>{ICON.refresh}
+        </button>
         <nav className="ia-nav" aria-label="Admin sections">
           <NavBtn on={view === 'today'} onClick={() => setView('today')} icon={ICON.today}>Today</NavBtn>
           <NavBtn on={view === 'workspaces'} onClick={() => setView('workspaces')} icon={ICON.ws} count={rows.length}>Businesses</NavBtn>
@@ -98,7 +102,6 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
       </aside>
 
       {/* Phone only: refresh button in the slim top bar, and a bottom menu like the business app */}
-      <button className="ia-mrefresh" onClick={refresh} disabled={loading} aria-label="Refresh">{ICON.refresh}</button>
       <nav className="ia-bnav" aria-label="Admin sections">
         <BBtn on={view === 'today'} onClick={() => { setMore(false); setView('today'); }} icon={ICON.today}>Today</BBtn>
         <BBtn on={view === 'workspaces'} onClick={() => { setMore(false); setView('workspaces'); }} icon={ICON.ws}>Businesses</BBtn>

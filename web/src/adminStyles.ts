@@ -229,8 +229,14 @@ export const CSS = `
 @media (max-width:820px){
   .ia-side{flex-wrap:nowrap;padding:max(10px,env(safe-area-inset-top)) 14px 10px;gap:8px}
   .ia-nav,.ia-side-foot{display:none!important}
-  .ia-mrefresh{display:grid;place-items:center;position:fixed;z-index:21;top:max(10px,env(safe-area-inset-top));right:12px;width:36px;height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);color:#fff!important}
-  .ia-mrefresh:disabled svg{animation:ia-spin 1s linear infinite}
+  .ia-mrefresh{display:flex;align-items:center;gap:8px;flex:none;height:38px;padding:0 6px 0 14px;border-radius:999px;border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.1) linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 60%);color:#fff!important;font-size:12.5px;font-weight:600;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.2);transition:transform .3s var(--lg-spring),background-color .2s}
+  .ia-mrefresh svg{width:26px;height:26px;padding:4px;border-radius:999px;background:rgba(255,255,255,.14);color:var(--yellow)}
+  .ia-mrefresh:active:not(:disabled){transform:scale(.95);background-color:rgba(255,255,255,.18)}
+  .ia-mrefresh:disabled{opacity:1}
+  .ia-mrefresh-t{color:#C9D0E6;white-space:nowrap}
+  .ia-mrefresh.busy svg{animation:ia-spin .9s linear infinite}
   @keyframes ia-spin{to{transform:rotate(360deg)}}
   .ia-main{padding:18px 14px calc(100px + env(safe-area-inset-bottom))}
   .ia-bnav{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));width:min(340px,calc(100% - 24px));padding:6px;border-radius:999px;
