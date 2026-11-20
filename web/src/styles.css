@@ -19,6 +19,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; } /* stop iPhone Safari blowing up some lines of text */
 body { background: var(--paper); color: var(--ink); font: 14.5px/1.5 var(--font); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 a { color: var(--accent); }
 h1, h2, h3 { font-family: var(--font); margin: 0; font-weight: 600; text-wrap: balance; }
@@ -1141,3 +1142,42 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
 .app-tip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; }
 .app-tip > span { flex: 1; font-size: 14px; }
 .app-tip > button { min-width: 32px; }
+
+/* ===== Chats on a phone (20 Nov): look like WhatsApp's chat list =====
+   No panel or borders around the list, rows sit straight on the page, a thin line under the text only
+   (starting after the photo), plain section labels, and every line ends in "…" instead of running off the
+   screen. The list is locked to the screen width so the time on the right is always visible. */
+@media (max-width: 899px) {
+  .inbox.frame { grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
+  .inbox.frame > .cc-list { grid-template-columns: minmax(0, 1fr); min-width: 0; background: transparent; border: 0; border-radius: 0; overflow: visible; padding: 0; }
+  .inbox.frame .cc, .inbox.frame .cc-top, .inbox.frame .cc-main, .inbox.frame .cc-line1, .inbox.frame .cc-status { min-width: 0; max-width: 100%; }
+  .inbox.frame .cc { background: transparent; overflow: hidden; }
+  .inbox.frame .cc + .cc, .inbox.frame .cc-list > div + div .cc, .inbox.frame .cc-group + .cc { border-top: 0; }
+
+  /* Row: big round photo, text with a hairline under it */
+  .inbox.frame .cc-top { grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 0 2px; align-items: center; border-radius: 0; }
+  .inbox.frame .cc-top:active { background: var(--raised); }
+  .inbox.frame .cc-avatar { width: 52px; height: 52px; font-size: 20px; }
+  .inbox.frame .cc-main { align-self: stretch; align-content: center; gap: 2px; padding: 11px 2px 11px 0; border-bottom: 1px solid var(--ib-edge, var(--line)); }
+  .inbox.frame .cc-list > div:last-of-type .cc-main { border-bottom: 0; }
+
+  /* Line 1: name … time */
+  .inbox.frame .cc-line1 { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 10px; }
+  .inbox.frame .cc-name { flex: 1 1 auto; min-width: 0; font-size: 16.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox.frame .cc-time { flex: none; margin-left: 0; font-size: 13px; }
+
+  /* Line 2: what to do (coloured), Line 3: Kito's note (grey) — both one line with "…" */
+  .inbox.frame .cc-status { display: flex; flex-wrap: nowrap; font-size: 14.5px; font-weight: 600; margin-top: 1px; gap: 6px; }
+  .inbox.frame .cc-status .cc-st-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox.frame .cc-status .cc-ico { width: 16px; height: 16px; font-size: 10px; flex: none; }
+  .inbox.frame .cc-heat { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox.frame .cc-sum { display: block; font-size: 14.5px; line-height: 1.35; color: var(--muted); opacity: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-line-clamp: unset; }
+
+  /* Section labels ("Today", "Older"): plain grey text, no band, no lines */
+  .inbox.frame .cc-group { margin: 14px 0 2px; padding: 0 4px; font-size: 12px; background: transparent; border: 0; }
+  .inbox.frame .cc-list > div:first-child > .cc-group { margin-top: 4px; }
+
+  /* Selected row: soft fill only */
+  .inbox.frame .cc.sel { background: var(--ib-soft, var(--raised)); border-radius: 12px; }
+  .inbox.frame .cc.sel .cc-main { border-bottom-color: transparent; }
+}
