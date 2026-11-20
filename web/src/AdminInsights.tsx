@@ -136,7 +136,7 @@ export function PerformancePage({ supabase, tick, onOpen }: { supabase: Supabase
                 {ranked.map(({ w, f, next }) => {
                   const cv = coverage(w), gaps = dataGaps(w);
                   return (
-                    <tr key={w.id} tabIndex={0} onClick={() => onOpen(w.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(w.id); }}>
+                    <tr key={w.id} data-opens tabIndex={0} onClick={() => onOpen(w.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(w.id); }}>
                       <td><strong>{w.name}</strong>
                         {f.filter((x) => x.severity !== 'good' && x.kind !== 'data_gap').slice(0, 2).map((x) => <span key={x.kind} className={`ia-health t-${x.severity === 'info' ? 'idle' : x.severity}`}><i />{x.title}</span>)}
                         {f[0]?.kind === 'healthy' && <span className="ia-health t-ok"><i />No major leak</span>}</td>
@@ -440,7 +440,7 @@ export function QualityPage({ supabase, tick, onOpen }: { supabase: SupabaseClie
                 <thead><tr><th>When</th><th>Business</th><th>Kind</th><th className="r">Rows</th><th className="r">Added</th><th className="r">Duplicates</th><th className="r">Rejected</th><th className="r">Unmatched</th><th>By</th></tr></thead>
                 <tbody>
                   {data.imports.map((b, i) => (
-                    <tr key={i} onClick={() => onOpen(b.workspace_id)} style={{ cursor: 'pointer' }}>
+                    <tr key={i} data-opens onClick={() => onOpen(b.workspace_id)} style={{ cursor: 'pointer' }}>
                       <td className="nowrap">{ago(b.at)}</td><td>{b.workspace_name}</td><td>{b.kind}</td>
                       <td className="r num">{fmt(b.total)}</td><td className="r num">{fmt(b.created)}</td>
                       <td className={`r num${b.duplicates ? ' ia-warn' : ''}`}>{fmt(b.duplicates)}</td>

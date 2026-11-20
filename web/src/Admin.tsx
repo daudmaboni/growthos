@@ -150,21 +150,26 @@ function Frame({ children }: { children: React.ReactNode }) {
     const label = () => {
       root.querySelectorAll('table').forEach((t) => {
         const heads = [...t.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
-        t.querySelectorAll('tbody tr').forEach((tr) => {
+        t.querySelectorAll<HTMLElement>('tbody tr').forEach((tr) => {
           const cells = [...tr.children].filter((td) => !td.classList.contains('ia-fold'));
           cells.forEach((td, i) => {
             const want = (td as HTMLElement).hasAttribute('colspan') ? '' : heads[i] ?? '';
             if ((td as HTMLElement).dataset.label !== want) (td as HTMLElement).dataset.label = want;
           });
-          // Phone: a card shows its title and two numbers; "Show all" unfolds the rest.
+          // (State lives in data-* attributes: React rewrites className on updates but leaves these alone.)
+          // Phone: a card shows its title and two numbers. Rows that open a business already go to its page;
+          // any other row with more to show opens as its own full page (tap the card, "Back" to return).
+          const opens = tr.hasAttribute('data-opens');
+          if (opens) tr.dataset.link = ''; else delete tr.dataset.link;
           const filled = cells.filter((td) => !(td as HTMLElement).hasAttribute('colspan') && (td.textContent ?? '').trim() !== '').length;
-          let fold = tr.querySelector(':scope > td.ia-fold');
-          if (filled > 3 && !fold) {
-            fold = document.createElement('td');
-            fold.className = 'ia-fold';
-            fold.innerHTML = '<button type="button" aria-expanded="false"><span>Show all</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>';
-            tr.appendChild(fold);
-          } else if (filled <= 3 && fold) fold.remove();
+          let bar = tr.querySelector(':scope > td.ia-fold');
+          if (!opens && filled > 3 && !bar) {
+            bar = document.createElement('td');
+            bar.className = 'ia-fold';
+            bar.innerHTML = '<button type="button" class="ia-page-back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back</span></button>';
+            tr.appendChild(bar);
+            tr.dataset.more = '';
+          } else if ((opens || filled <= 3) && bar) { bar.remove(); delete tr.dataset.more; }
         });
       });
     };
@@ -173,36 +178,40 @@ function Frame({ children }: { children: React.ReactNode }) {
     const onClick = (e: MouseEvent) => {
       const note = (e.target as HTMLElement).closest('.ia-timeline li span');
       if (note && !(e.target as HTMLElement).closest('a,button')) { note.closest('li')!.classList.toggle('ia-open'); return; }
-      const btn = (e.target as HTMLElement).closest('td.ia-fold > button');
-      if (!btn) return;
-      e.stopPropagation(); e.preventDefault();
-      const tr = btn.closest('tr') as HTMLElement;
-      if (tr.dataset.anim) return;   // still moving
-      const opening = !tr.classList.contains('ia-open');
-      btn.setAttribute('aria-expanded', String(opening));
-      btn.querySelector('span')!.textContent = opening ? 'Show less' : 'Show all';
-      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      // Measure both heights, then let the card grow or shrink smoothly between them.
-      const from = tr.getBoundingClientRect().height;
-      tr.classList.toggle('ia-open', opening);
-      const to = tr.getBoundingClientRect().height;
-      if (still || !tr.animate) return;
-      const extra = [...tr.children].filter((td) => getComputedStyle(td).display !== 'none' && (td as HTMLElement).matches(':nth-child(n+4):not(.ia-fold)')) as HTMLElement[];
-      if (!opening) tr.classList.add('ia-open');   // keep the rest visible while it folds away
-      tr.dataset.anim = '1';
-      tr.style.overflow = 'hidden';
-      const ease = 'cubic-bezier(.2,.8,.2,1)';
-      const a = tr.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: opening ? 320 : 260, easing: ease });
-      (opening ? extra : [...tr.querySelectorAll(':scope > td:nth-child(n+4):not(.ia-fold)')] as HTMLElement[]).forEach((td, i) =>
-        td.animate(opening ? [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }] : [{ opacity: 1 }, { opacity: 0 }],
-          { duration: opening ? 260 : 160, delay: opening ? 40 + i * 25 : 0, easing: ease, fill: 'backwards' }));
-      a.onfinish = a.oncancel = () => { if (!opening) tr.classList.remove('ia-open'); tr.style.overflow = ''; delete tr.dataset.anim; };
+      const t = e.target as HTMLElement;
+      const back = t.closest('td.ia-fold > .ia-page-back');
+      if (back) { e.stopPropagation(); e.preventDefault(); closePage(true); return; }
+      const tr = t.closest('tr[data-more]') as HTMLElement | null;
+      if (!tr || tr.hasAttribute('data-page') || !window.matchMedia('(max-width: 820px)').matches) return;
+      if (t.closest('a,button,input,select,textarea,label')) return;
+      e.stopPropagation();
+      openPage(tr);
     };
+    // One row at a time is shown as a full page. The phone's own back gesture closes it too.
+    let page: HTMLElement | null = null;
+    const still = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const openPage = (tr: HTMLElement) => {
+      page = tr;
+      tr.dataset.page = '';
+      document.documentElement.classList.add('ia-paged');
+      tr.scrollTop = 0;
+      if (!still()) tr.animate([{ transform: 'translateX(100%)' }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      try { history.pushState({ iaPage: 1 }, ''); } catch { /* ignore */ }
+    };
+    const closePage = (viaButton: boolean) => {
+      const tr = page; if (!tr) return;
+      page = null;
+      const done = () => { delete tr.dataset.page; document.documentElement.classList.remove('ia-paged'); };
+      if (still()) done(); else tr.animate([{ transform: 'none' }, { transform: 'translateX(100%)' }], { duration: 240, easing: 'cubic-bezier(.4,0,1,1)' }).onfinish = done;
+      if (viaButton) { try { if (history.state?.iaPage) history.back(); } catch { /* ignore */ } }
+    };
+    const onPop = () => { if (page) closePage(false); };
+    window.addEventListener('popstate', onPop);
     root.addEventListener('click', onClick);
     let queued = false;
     const mo = new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; label(); }); } });
     mo.observe(root, { childList: true, subtree: true });
-    return () => { mo.disconnect(); root.removeEventListener('click', onClick); };
+    return () => { mo.disconnect(); root.removeEventListener('click', onClick); window.removeEventListener('popstate', onPop); document.documentElement.classList.remove('ia-paged'); };
   }, []);
   return <div className="ia" ref={ref}><style>{CSS + INSIGHTS_CSS}</style>{children}</div>;
 }

@@ -306,14 +306,31 @@ export const CSS = `
   /* Today: the setup steps stack one under another instead of sliding sideways */
   .ia-lanes{grid-template-columns:minmax(0,1fr)!important;overflow:visible!important;padding-bottom:0}
 }
-/* ---- Phone (20 Nov, 4): folded cards. Title + two numbers; "Show all" opens the rest. ---- */
+/* ---- Phone (20 Nov, 5): each card shows its title and two numbers with a ›. Tap: rows about a business open
+   that business; other rows open as their own full page with every detail and a Back button. ---- */
 .ia td.ia-fold{display:none}
 @media (max-width:820px){
-  .ia tbody tr:has(> td.ia-fold):not(.ia-open) > td:nth-child(n+4):not(.ia-fold){display:none}
-  .ia td.ia-fold{display:block;grid-column:1/-1;order:99}
-  .ia td.ia-fold button{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;border:0;border-radius:10px;background:var(--paper);color:var(--navy)!important;font-size:13px;font-weight:600}
-  .ia td.ia-fold svg{transition:transform .2s}
-  .ia tr.ia-open td.ia-fold svg{transform:rotate(180deg)}
+  .ia tbody tr[data-more]:not([data-page])>td:nth-child(n+4):not(.ia-fold),
+  .ia tbody tr[data-link]>td:nth-child(n+4){display:none}
+  .ia tbody tr[data-more],.ia tbody tr[data-link]{position:relative;cursor:pointer;padding-right:40px!important}
+  .ia tbody tr[data-more]:not([data-page])::after,.ia tbody tr[data-link]::after{content:"";position:absolute;right:16px;top:50%;width:9px;height:9px;margin-top:-5px;border-right:2px solid var(--faint);border-top:2px solid var(--faint);transform:rotate(45deg)}
+  .ia tbody tr[data-more]:not([data-page]):active,.ia tbody tr[data-link]:active{background:#F7F8FB}
+  /* the full page */
+  html.ia-paged,html.ia-paged body{overflow:hidden}
+  .ia tbody tr[data-page]{position:fixed;inset:0;z-index:60;margin:0;background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:10px;padding:calc(72px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))!important;border:0;cursor:default}
+  .ia tbody tr[data-page]>td{display:block;background:var(--card);border:1px solid var(--line)!important;border-radius:14px;padding:12px 14px!important;font-size:15px}
+  .ia tbody tr[data-page]>td:first-child{background:none;border:0!important;padding:4px 2px 8px!important;font-size:22px}
+  .ia tbody tr[data-page]>td:first-child strong{font:700 24px/1.2 var(--display)}
+  .ia tbody tr[data-page]>td[data-label]:not(:first-child):not([data-label=""])::before{font-size:11.5px;margin-bottom:4px}
+  .ia tbody tr[data-page]>td:has(input,select,button:not(.ia-page-back)){grid-column:1/-1}
+  .ia tbody tr[data-page]>td.ia-fold{display:flex;align-items:center;position:fixed;z-index:61;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) 10px 10px!important;border:0!important;border-radius:0;
+    background:color-mix(in srgb,var(--navy) 92%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+  .ia-page-back{display:flex;align-items:center;gap:4px;border:0;background:none;color:#fff!important;font-size:16px;font-weight:600;padding:8px 10px;border-radius:999px}
+  .ia-page-back:active{background:rgba(255,255,255,.12)}
+  .ia tbody tr[data-page] input,.ia tbody tr[data-page] select{width:100%!important;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink)}
+  .ia tbody tr[data-page] td:has(button:not(.ia-page-back)){display:flex!important;align-items:center;gap:14px;flex-wrap:wrap}
+  .ia tbody tr[data-page] .ia-textbtn,.ia tbody tr[data-page] td>button:not(.ia-page-back){font-size:15px;font-weight:600}
 }
 /* ---- Timelines (Audit log, Recent failed calls, Drawer history): long words wrap, never run off the card.
    On a phone the time sits above the text, and very long notes show 3 lines until tapped. ---- */
