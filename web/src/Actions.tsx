@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
+import { KitoLoader } from "./KitoLoader";
 
 type Member = { user_id: string; role: string; email: string };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null };
@@ -230,7 +231,7 @@ export function TaskCard({ t, r, ws, members, me, editor, onChange, compact }: {
         )}
         {editor && (
           <div className="row" style={{ gap: 6, marginTop: 6 }}>
-            <button className="small" disabled={busy} onClick={askKito}>{asking ? <><span className="kito-spin sm" aria-hidden />{T("Kito is writing…", "Kito anaandika…")}</> : T("Ask Kito for a draft", "Muombe Kito rasimu")}</button>
+            <button className="small" disabled={busy} onClick={askKito}>{asking ? <><KitoLoader size="sm" />{T("Kito is writing…", "Kito anaandika…")}</> : T("Ask Kito for a draft", "Muombe Kito rasimu")}</button>
             <button className="small" disabled={busy || draft === (t.draft ?? "")} onClick={() => patch({ draft: draft || null }, T("Draft saved.", "Rasimu imehifadhiwa."))}>{T("Save draft", "Hifadhi rasimu")}</button>
             <button className="small" disabled={!draft} onClick={copy}>{T("Copy", "Nakili")}</button>
           </div>

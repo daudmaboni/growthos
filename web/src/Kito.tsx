@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { enterCards, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, L, ago, money, fmt, canEdit } from "./lib";
 import { KitoLogo } from "./Logo";
+import { KitoLoader } from "./KitoLoader";
 
 type ChatItem = {
   chat_id: string; name: string | null; wa_id: string | null; last_message_at: string | null; last_dir: "in" | "out" | null;
@@ -32,7 +33,7 @@ export function KitoThinking({ sw }: { sw: boolean }) {
   return (
     <div className="card kito-thinking" role="status" aria-live="polite">
       <div className="kito-thinking-head">
-        <span className="kito-spin" aria-hidden />
+        <KitoLoader />
         <div>
           <b>{sw ? "Kito anapitia data yako…" : "Kito is looking through your data…"}</b>
           <span className="small muted">{secs}s{secs >= 25 ? (sw ? " · maswali makubwa huchukua hadi dakika moja" : " · big questions can take up to a minute") : ""}</span>
@@ -154,7 +155,7 @@ export default function Kito({ ws }: { ws: Workspace }) {
           placeholder={T("e.g. Which customers asked for the price yesterday and never replied?", "mf. Wateja gani waliuliza bei jana na hawakujibu tena?")}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(q); } }} />
-        <button className="primary" disabled={busy || q.trim().length < 2}>{busy ? <><span className="kito-spin sm" aria-hidden />{T("Thinking…", "Anafikiri…")}</> : T("Ask", "Uliza")}</button>
+        <button className="primary" disabled={busy || q.trim().length < 2}>{busy ? <><KitoLoader size="sm" />{T("Thinking…", "Anafikiri…")}</> : T("Ask", "Uliza")}</button>
       </form>
       <p className="small muted" style={{ margin: 0 }}>{T("Kito reads your data and never sends messages. It can prepare a delete, but nothing is deleted until you press Delete. Confirmed sales come from recorded orders only.", "Kito anasoma data yako na hatumi ujumbe. Anaweza kuandaa kufuta, lakini hakuna kinachofutwa mpaka ubonyeze Futa. Mauzo yaliyothibitishwa ni oda zilizorekodiwa tu.")}</p>
     </div>
@@ -314,7 +315,7 @@ function ChatCard({ c, ws }: { c: ChatItem; ws: Workspace }) {
       <div className="row" style={{ gap: 6 }}>
         <a className="btn small" href={"#chats/ids=" + c.chat_id}>{T("Open chat", "Fungua chat")}</a>
         {wa && <a className="btn small" href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>}
-        {canEdit(ws) && !draft && <button className="small" disabled={busy} onClick={makeDraft}>{busy ? <><span className="kito-spin sm" aria-hidden />{T("Writing…", "Anaandika…")}</> : T("Draft a follow-up", "Andaa ujumbe wa kufuatilia")}</button>}
+        {canEdit(ws) && !draft && <button className="small" disabled={busy} onClick={makeDraft}>{busy ? <><KitoLoader size="sm" />{T("Writing…", "Anaandika…")}</> : T("Draft a follow-up", "Andaa ujumbe wa kufuatilia")}</button>}
       </div>
       {err && <p className="err small" style={{ margin: 0 }}>{err}</p>}
       {draft && (
@@ -400,7 +401,7 @@ function DeleteBlock({ b, ws }: { b: Extract<Block, { kind: "delete_chats" }>; w
         </div>
         {b.allowed ? (
           <div className="row" style={{ gap: 6 }}>
-            <button className="small danger" disabled={state === "busy"} onClick={run}>{state === "busy" ? <><span className="kito-spin sm" aria-hidden />{T("Deleting…", "Inafuta…")}</> : T(`Delete ${b.count} chats`, `Futa chat ${b.count}`)}</button>
+            <button className="small danger" disabled={state === "busy"} onClick={run}>{state === "busy" ? <><KitoLoader size="sm" />{T("Deleting…", "Inafuta…")}</> : T(`Delete ${b.count} chats`, `Futa chat ${b.count}`)}</button>
             <a className="btn small" href={"#chats/ids=" + b.chat_ids.slice(0, 100).join(",")}>{T("Review them first", "Zikague kwanza")}</a>
             <button className="small" disabled={state === "busy"} onClick={() => setState("cancelled")}>{T("Cancel", "Ghairi")}</button>
           </div>

@@ -6,6 +6,7 @@ import { AssignChat } from "./team";
 import { useProducts, ProductPicker, itemsCost, itemsLabel, productPhotosReady, itemsFromMatches, type Item, type ProductMatch } from "./Products";
 import { OrderForm, OrderList, inferredFrom, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
+import { KitoLoader } from "./KitoLoader";
 import { Msg, Tr, waLink, agoT, statusOf, kitoStale, PARTY, markNotCustomer, nameOf, fromOf, prettyPhone, hiddenNote, special, whySource, lostWhy, lastPriceSent } from "./chatParts";
 
 /** Kito thinks this person isn't a customer (e.g. Hassan the bodaboda talks money but doesn't buy). */
@@ -318,7 +319,7 @@ export function Composer({ r, ws, T, phone, msgs, onSent }: { r: Outcome; ws: Wo
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 900) { e.preventDefault(); send(); } }} />
         <button className="wa-kito" onClick={draft} disabled={drafting || sending} aria-label={T("Kito, write a reply", "Kito, niandikie jibu")} title={T("Kito writes a reply from this chat. You check it before sending.", "Kito anaandika jibu kutoka chat hii. Unaliangalia kabla ya kutuma.")}>
-          {drafting ? <span className="kito-spin sm" aria-hidden style={{ marginRight: 0 }} /> : <KitoLogo size={18} />}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
+          {drafting ? <KitoLoader size="sm" className="flush" /> : <KitoLogo size={18} />}<span>{drafting ? T("Writing…", "Anaandika…") : "Kito"}</span>
         </button>
         <button className="wa-send" onClick={send} disabled={!text.trim() || sending} aria-label={T("Send", "Tuma")} title={T("Send from your WhatsApp number", "Tuma kutoka namba yako ya WhatsApp")}>
           {sending ? <span className="wa-spin" /> : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M21.4 2.6 2.9 10.3c-.8.3-.8 1.5.1 1.8l7 2.2 2.2 7c.3.9 1.5.9 1.8.1l7.7-18.5c.3-.6-.3-1.2-.9-.9z" /></svg>}

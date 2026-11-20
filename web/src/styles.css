@@ -268,6 +268,11 @@ a.btn { display: inline-block; text-decoration: none; }
 .kito-thinking-head > div { display: grid; gap: 2px; }
 .kito-spin { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--accent-soft); border-top-color: var(--accent); animation: wa-spin .8s linear infinite; }
 .kito-spin.sm { display: inline-block; width: 14px; height: 14px; border-width: 2px; border-color: currentColor; border-top-color: transparent; opacity: .9; margin-right: 8px; vertical-align: -2px; }
+.kito-lq { --lq-ink: var(--ink); --lq-dot: #f5c84c; flex: none; }
+.kito-lq.md { display: block; width: 88px; height: 66px; }
+.kito-lq.sm { display: inline-block; width: 22px; height: 17px; margin-right: 8px; vertical-align: -4px; --lq-ink: currentColor; }
+.kito-lq.sm.flush { margin-right: 0; }
+.kito-lq.kito-spin.md { width: 26px; height: 26px; }
 .kito-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .kito-steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; transition: color .3s; }
 .kito-steps li i { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-style: normal; font-size: 11px; transition: background .3s, border-color .3s; }

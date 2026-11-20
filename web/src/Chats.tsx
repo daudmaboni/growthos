@@ -8,6 +8,7 @@ import DateRange from "./DateRange";
 import { RangeSel, resolveRange, addDays, loadRange, saveRange, presetLabel } from "./ranges";
 import { signalDismissed, fromLocalInput } from "./Orders";
 import { KitoLogo } from "./Logo";
+import { KitoLoader } from "./KitoLoader";
 import { Source, Run, Lite, Tr, timeGroup, waLink, agoT, statusOf, kitoStale, interest, phoneOf, nameOf, fromOf, lostWhy } from "./chatParts";
 import { ChatPane, PartyHint } from "./ChatPane";
 export { timeGroup, waLink } from "./chatParts";
@@ -281,7 +282,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
           <span className="small muted chats-sub">{T("Everyone who messaged you on WhatsApp, and where each one stands.", "Kila aliyekutumia ujumbe WhatsApp, na amefika wapi.")}</span>
         </div>
         <button className="small primary" onClick={() => runKito()} disabled={rechecking} title={T("Kito reads new messages and updates every card. It also does this by itself every 15 minutes.", "Kito anasoma ujumbe mpya na kusasisha kila kadi. Pia hufanya hivi mwenyewe kila dakika 15.")}>
-          {rechecking ? <span className="kito-spin sm" aria-hidden /> : <KitoLogo size={18} />}{rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
+          {rechecking ? <KitoLoader size="sm" /> : <KitoLogo size={18} />}{rechecking ? T("Kito is reading…", "Kito anasoma…") : T("Update with Kito", "Sasisha na Kito")}
         </button>
       </div>
 
