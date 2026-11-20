@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import MoneyHero, { HERO_STYLES, SAMPLE, saveHeroStyle, useHeroStyle } from "./MoneyHero";
+import type { HeroStyle } from "./MoneyHero";
 import { createPortal } from "react-dom";
 import { supabase, callFn, Workspace, canManage, canEdit, when, moneyInput, moneyText, commaRuns } from "./lib";
 import PhoneApp from "./PhoneApp";
@@ -149,6 +151,7 @@ function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: 
         </div>
       </section>
       <FontPicker T={T} />
+      <HeroPicker T={T} />
       <form className="card" onSubmit={(e) => e.preventDefault()}>
         <div><h2>{T("Language", "Lugha")}</h2><span className="small muted">{T("Default language for the dashboard and Kito's notes. Everyone in the workspace sees this.", "Lugha chaguo-msingi ya dashibodi na maelezo ya Kito. Wote kwenye workspace wanaiona.")}</span></div>
         <div className="seg" role="group" aria-label="Language">
@@ -499,6 +502,31 @@ function FontPicker({ T }: { T: Tr }) {
             <span className="fp-sample">USD 462.71</span>
             <span>{f.name}</span>
             <span className="fp-name">{T(f.note[0], f.note[1])}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** How the big money cards at the top of Home look. Each choice shows a small live preview. */
+function HeroPicker({ T }: { T: Tr }) {
+  const cur = useHeroStyle();
+  const NAMES: Record<HeroStyle, [string, string, string, string]> = {
+    B: ["Two big cards", "Kadi mbili kubwa", "Ad spend, then revenue with where it came from", "Matangazo, kisha mapato na yalikotoka"],
+    A: ["One money card", "Kadi moja ya pesa", "Revenue big, with spend, profit and return under it", "Mapato makubwa, na matangazo, faida na faida ya tangazo chini"],
+    C: ["Side by side", "Kando kwa kando", "Revenue and spend in one row, the split under them", "Mapato na matangazo mstari mmoja, mgawanyo chini"],
+    E: ["Money in, money out", "Pesa ndani, pesa nje", "Revenue joined to ad spend, the return on the join", "Mapato yameungana na matangazo, faida katikati"],
+  };
+  return (
+    <section className="card">
+      <div><h2>{T("Home money cards", "Kadi za pesa za Nyumbani")}</h2><span className="small muted">{T("How revenue and ad spend show at the top of Home. Saved on this device only.", "Jinsi mapato na matangazo yanavyoonekana juu ya Nyumbani. Inahifadhiwa kwenye kifaa hiki tu.")}</span></div>
+      <div className="heropick" role="group" aria-label={T("Home money cards", "Kadi za pesa")}>
+        {HERO_STYLES.map((h) => (
+          <button key={h} type="button" className={cur === h ? "on" : ""} aria-pressed={cur === h} onClick={() => saveHeroStyle(h)}>
+            <div className="hp-prev" aria-hidden><MoneyHero style={h} data={SAMPLE} T={T} /></div>
+            <span className="hp-name">{T(NAMES[h][0], NAMES[h][1])}{cur === h && <span className="small muted">· {T("in use", "inatumika")}</span>}</span>
+            <span className="hp-note">{T(NAMES[h][2], NAMES[h][3])}</span>
           </button>
         ))}
       </div>
