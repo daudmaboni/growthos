@@ -333,12 +333,12 @@ export function DualhookSetup({ supabase, id, hasDualhook, linked, keySaved, onC
             <input type="password" autoComplete="off" placeholder="dh_live_…" value={key} onChange={(e) => setKey(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
             <button className="ia-btn primary" disabled={busy !== null || !key.trim().startsWith('dh_live_')} onClick={async () => {
               const r = await call('key', { action: 'set_api_key', api_key: key.trim() });
-              if (r) { setKey(''); setMsg({ ok: !r.last_error, text: r.last_error ? `Key saved, but Dualhook didn't return the images: ${r.last_error}` : `Key saved. ${r.images_saved} images fetched.` }); }
+              if (r) { setKey(''); setMsg({ ok: !r.last_error, text: r.last_error ? `Key saved, but Dualhook didn't return the images and voice notes: ${r.last_error}` : `Key saved. ${r.images_saved} images and voice notes fetched.` }); }
             }}>{busy === 'key' ? 'Saving…' : keySaved ? 'Replace key' : 'Save key'}</button>
             {keySaved && <button className="ia-btn" disabled={busy !== null} onClick={async () => {
               const r = await call('img', { action: 'backfill_media' });
-              if (r) setMsg({ ok: !r.last_error, text: r.last_error ? `Dualhook didn't return the images: ${r.last_error}` : `${r.images_saved} images fetched, ${r.images_failed} failed.` });
-            }}>{busy === 'img' ? 'Fetching…' : 'Fetch missed images'}</button>}
+              if (r) setMsg({ ok: !r.last_error, text: r.last_error ? `Dualhook didn't return the images and voice notes: ${r.last_error}` : `${r.images_saved} images and voice notes fetched, ${r.images_failed} failed.` });
+            }}>{busy === 'img' ? 'Fetching…' : 'Fetch images and voice notes'}</button>}
           </div>
           {!confirmRotate
             ? <button className="ia-btn" style={{ justifySelf: 'start' }} disabled={busy !== null} onClick={() => setConfirmRotate(true)}>Replace webhook URL…</button>

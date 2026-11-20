@@ -161,12 +161,12 @@ function ConnectSetup({ ws }: { ws: Workspace }) {
     const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "set_api_key", api_key: dhKey.trim() });
     setDhKey("");
     setMsg(r.images_failed && !r.images_saved
-      ? { err: `Key saved, but Dualhook did not return the images: ${r.last_error ?? "unknown error"}` }
-      : { ok: `Key saved. ${r.images_saved} image${r.images_saved === 1 ? "" : "s"} from the last 7 days fetched and read${r.images_failed ? `, ${r.images_failed} could not be fetched` : ""}.` });
+      ? { err: `Key saved, but Dualhook did not return the images and voice notes: ${r.last_error ?? "unknown error"}` }
+      : { ok: `Key saved. ${r.images_saved} image${r.images_saved === 1 ? "" : "s"} and voice note${r.images_saved === 1 ? "" : "s"} from the last 7 days fetched${r.images_failed ? `, ${r.images_failed} could not be fetched` : ""}.` });
   });
-  const fetchImages = () => run("dhkey", async () => {
+  const fetchImages = () => run("dhfetch", async () => {
     const r = await callFn<{ images_saved: number; images_failed: number; last_error: string | null }>("dualhook-connect", { workspace_id: ws.id, action: "backfill_media" });
-    setMsg(r.images_failed && !r.images_saved ? { err: `Could not fetch images: ${r.last_error ?? "unknown error"}` } : { ok: `${r.images_saved} image${r.images_saved === 1 ? "" : "s"} fetched and read${r.images_failed ? `, ${r.images_failed} failed` : ""}.` });
+    setMsg(r.images_failed && !r.images_saved ? { err: `Could not fetch images and voice notes: ${r.last_error ?? "unknown error"}` } : { ok: `${r.images_saved} images and voice notes fetched${r.images_failed ? `, ${r.images_failed} failed` : ""}.${r.images_saved >= 40 ? " Press again for more." : ""}` });
   });
 
   const replay = () => run("replay", async () => {
@@ -259,11 +259,11 @@ function ConnectSetup({ ws }: { ws: Workspace }) {
             {dhLinked.length > 0 && (
               <div className="dh-key">
                 <b className="small">Payment screenshots {dhKeyLast4 ? <span className="ok small">· key saved (…{dhKeyLast4})</span> : <span className="warnt small">· not set up</span>}</b>
-                <span className="small muted">To read the images customers send, itaOS downloads them through Dualhook. In Dualhook open <b>Connection → Overview → Outbound API key</b>, create a key (it starts with <code>dh_live_</code>) and paste it here. Images from the last 7 days are fetched right away.</span>
+                <span className="small muted">To read the images and play the voice notes customers send, itaOS downloads them through Dualhook. In Dualhook open <b>Connection → Overview → Outbound API key</b>, create a key (it starts with <code>dh_live_</code>) and paste it here. Images and voice notes from the last 7 days are fetched right away.</span>
                 <div className="row">
                   <input type="password" autoComplete="off" placeholder="dh_live_…" value={dhKey} onChange={(e) => setDhKey(e.target.value)} style={{ flex: 1 }} />
                   <button className="small primary" disabled={!!busy || !dhKey.trim().startsWith("dh_live_")} onClick={saveDhKey}>{busy === "dhkey" ? "Saving…" : dhKeyLast4 ? "Replace key" : "Save key"}</button>
-                  {dhKeyLast4 && <button className="small" disabled={!!busy} onClick={fetchImages}>Fetch missed images</button>}
+                  {dhKeyLast4 && <button className="small" disabled={!!busy} onClick={fetchImages}>{busy === "dhfetch" ? "Fetching…" : "Fetch images and voice notes"}</button>}
                 </div>
               </div>
             )}
