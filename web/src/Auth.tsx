@@ -263,8 +263,7 @@ type Sent = { kind: "signup" | "link" | "reset"; email: string; business?: strin
 
 export function AuthScreen() {
   const [lang, setLang] = useState<Lang>(initialLang);
-  // Sign in only: new businesses are set up by Pondi, so there is no "Create account" here.
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(() => (/[?&]signup\b/.test(location.search) ? "signup" : "signin"));
   const [business, setBusiness] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -409,7 +408,9 @@ export function AuthScreen() {
         {!tabbed && <button type="button" className="link-btn small ax-center" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
 
         <div className="ax-foot">
-          <a href="/" className="small muted">{t("home")}</a>
+          {tabbed
+            ? <span className="small muted">{mode === "signin" ? t("noAccount") : t("haveAccount")} <button type="button" className="link-btn small" onClick={() => go(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? t("createAccount") : t("signIn")}</button></span>
+            : <a href="/" className="small muted">{t("home")}</a>}
           <a href="/app/admin" className="small muted">{t("staff")}</a>
         </div>
       </form>
