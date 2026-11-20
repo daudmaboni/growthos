@@ -371,12 +371,6 @@ export function AuthScreen() {
     <AuthShell lang={lang}>
       <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
         <Brand lang={lang} setLang={setLang} />
-        {tabbed && (
-          <div className="seg auth-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "on" : ""} onClick={() => go("signin")}>{t("signIn")}</button>
-            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
-          </div>
-        )}
         <div className="ax-head"><h2>{title}</h2>{sub && <p>{sub}</p>}</div>
 
         {mode === "signup" && (
