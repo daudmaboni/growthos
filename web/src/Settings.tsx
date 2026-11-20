@@ -145,9 +145,8 @@ function Appearance({ ws, onWs, theme, onTheme, T }: { ws: Workspace; onWs: (w: 
       <section className="card">
         <div><h2>{T("Theme", "Mandhari")}</h2><span className="small muted">{T("Saved on this device only.", "Inahifadhiwa kwenye kifaa hiki tu.")}</span></div>
         <div className="seg" role="group" aria-label="Theme">
-          <button type="button" className={theme === "graphite" ? "on" : ""} aria-pressed={theme === "graphite"} onClick={(e) => onTheme("graphite", e.currentTarget)}>{T("Graphite", "Grafiti")}</button>
-          <button type="button" className={theme === "dark" ? "on" : ""} aria-pressed={theme === "dark"} onClick={(e) => onTheme("dark", e.currentTarget)}>{T("Navy", "Bluu")}</button>
           <button type="button" className={theme === "light" ? "on" : ""} aria-pressed={theme === "light"} onClick={(e) => onTheme("light", e.currentTarget)}>{T("Light", "Mwanga")}</button>
+          <button type="button" className={theme !== "light" ? "on" : ""} aria-pressed={theme !== "light"} onClick={(e) => onTheme("graphite", e.currentTarget)}>{T("Dark", "Giza")}</button>
         </div>
       </section>
       <FontPicker T={T} />

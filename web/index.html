@@ -223,7 +223,7 @@
 
     @media (prefers-reduced-motion: reduce) { #preloader .mark, #preloader .mark * { animation-duration: 6s !important; } }
   </style>
-  <script>/* Light is the default; dark only if the user picked it. */ (function () { var t = "light"; try { t = localStorage.getItem("itaos-theme") || "light"; } catch (e) {} var h = document.documentElement; h.dataset.theme = t === "light" || (t !== "dark" && t !== "graphite") ? "light" : "dark"; if (t === "graphite") h.dataset.dark = "graphite"; })();</script>
+  <script>/* Light is the default; dark only if the user picked it. */ (function () { var t = "light"; try { t = localStorage.getItem("itaos-theme") || "light"; } catch (e) {} var h = document.documentElement; h.dataset.theme = t === "light" || (t !== "dark" && t !== "graphite") ? "light" : "dark"; if (t === "graphite" || t === "dark") h.dataset.dark = "graphite"; /* navy dark removed: old "dark" opens as graphite */ })();</script>
 </head>
 <body>
   <script>/* itaOS liquid loaders (ita. wordmark and Kito gem). Gooey blobs wander, pour into the mark, hold, then melt back.

@@ -38,7 +38,7 @@ export default function App() {
   const hadSession = useRef<boolean | null>(null); // null until the first check: a reload never plays the curtain
   const curtainPending = useRef(false);
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    try { const t = localStorage.getItem("itaos-theme"); return t === "dark" || t === "graphite" ? t : "light"; } catch { return "light"; } // light is the default
+    try { const t = localStorage.getItem("itaos-theme"); return t === "dark" || t === "graphite" ? "graphite" : "light"; } catch { return "light"; } // light is the default
   });
   useEffect(() => { applyThemeMode(theme); }, []);
   const themeBtn = useRef<HTMLButtonElement>(null);
@@ -47,8 +47,8 @@ export default function App() {
     switchTheme(n, from ?? themeBtn.current); // circular wipe from the button, then the attribute + storage are set
     setTheme(n);
   };
-  // One button cycles the three looks: light → graphite (Dualhook-style dark) → navy dark → light.
-  const NEXT: Record<ThemeMode, ThemeMode> = { light: "graphite", graphite: "dark", dark: "light" };
+  // One button flips light ↔ dark (graphite). The navy dark was removed (21 Nov); anyone who had it now gets graphite.
+  const NEXT: Record<ThemeMode, ThemeMode> = { light: "graphite", graphite: "light", dark: "light" };
   const toggleTheme = () => setThemeFrom(NEXT[theme]);
   // Language switch = the same curtain wipe as the itaos.app homepage: the pill slides, a green panel
   // sweeps up over the app, the language changes behind it, then the panel lifts off the top.
@@ -172,8 +172,8 @@ export default function App() {
             {(["sw", "en"] as const).map((l) => <button key={l} type="button" className={(langPill ?? ws.language) === l ? "on" : ""} aria-pressed={ws.language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}
           </div>
           <button ref={themeBtn} className="icon" onClick={toggleTheme}
-            aria-label={theme === "light" ? "Switch to graphite dark" : theme === "graphite" ? "Switch to navy dark" : "Switch to light mode"}
-            title={theme === "light" ? "Light · tap for graphite dark" : theme === "graphite" ? "Graphite dark · tap for navy dark" : "Navy dark · tap for light"}>{theme === "light" ? "☾" : theme === "graphite" ? "◐" : "☀"}</button>
+            aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            title={theme === "light" ? "Light · tap for dark" : "Dark · tap for light"}>{theme === "light" ? "☾" : "☀"}</button>
           {isPlatformAdmin && <a href="/app/admin" className="icon" aria-label="Pondi admin" title="Pondi admin"><AdminIcon /></a>}
           <a href="#settings" className={"icon gear" + (view === "settings" ? " on" : "")} aria-label="Settings" title="Settings"><GearIcon /></a>
         </div>
