@@ -271,4 +271,20 @@ export const CSS = `
   .ia-msetup small{font-size:12px}
   .ia-tools+.ia-mlist+.ia-tablecard{display:none}
 }
+/* ---- Phone (20 Nov, 2): the page never slides sideways. Wide tables scroll inside their own box instead. ---- */
+@media (max-width:820px){
+  html:has(.ia),html:has(.ia) body{overflow-x:hidden;overscroll-behavior-x:none}
+  .ia{overflow-x:clip;max-width:100vw}
+  .ia-main{min-width:0;max-width:100vw;overflow-x:clip}
+  .ia-main>*,.ia-panel,.ia-split>*,.ix-two>*{min-width:0;max-width:100%}
+  .ia-strip,.ia-strip.ix-strip5{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ia-stat{min-width:0;overflow-wrap:anywhere}
+  .ia-panel{padding:16px}
+  .ia-main table:not(.ia-table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .ia-main table:not(.ia-table) td:first-child{min-width:150px}
+  .ia-panel-h{flex-wrap:wrap;gap:8px}
+  .ia-main .ia-seg{max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ia-main .ia-seg::-webkit-scrollbar{display:none}
+  .ia-main .ia-seg button{flex:none;white-space:nowrap}
+  .ia-timeline li{grid-template-columns:minmax(0,80px) minmax(0,1fr)}
+}
 `;
