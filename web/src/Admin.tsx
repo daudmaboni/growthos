@@ -151,18 +151,39 @@ function Frame({ children }: { children: React.ReactNode }) {
       root.querySelectorAll('table').forEach((t) => {
         const heads = [...t.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
         t.querySelectorAll('tbody tr').forEach((tr) => {
-          [...tr.children].forEach((td, i) => {
+          const cells = [...tr.children].filter((td) => !td.classList.contains('ia-fold'));
+          cells.forEach((td, i) => {
             const want = (td as HTMLElement).hasAttribute('colspan') ? '' : heads[i] ?? '';
             if ((td as HTMLElement).dataset.label !== want) (td as HTMLElement).dataset.label = want;
           });
+          // Phone: a card shows its title and two numbers; "Show all" unfolds the rest.
+          const filled = cells.filter((td) => !(td as HTMLElement).hasAttribute('colspan') && (td.textContent ?? '').trim() !== '').length;
+          let fold = tr.querySelector(':scope > td.ia-fold');
+          if (filled > 3 && !fold) {
+            fold = document.createElement('td');
+            fold.className = 'ia-fold';
+            fold.innerHTML = '<button type="button" aria-expanded="false"><span>Show all</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>';
+            tr.appendChild(fold);
+          } else if (filled <= 3 && fold) fold.remove();
         });
       });
     };
     label();
+    // Open/close a folded card. Runs before React's own click handling, so the row's tap (open the business) doesn't fire.
+    const onClick = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('td.ia-fold > button');
+      if (!btn) return;
+      e.stopPropagation(); e.preventDefault();
+      const tr = btn.closest('tr')!;
+      const open = tr.classList.toggle('ia-open');
+      btn.setAttribute('aria-expanded', String(open));
+      btn.querySelector('span')!.textContent = open ? 'Show less' : 'Show all';
+    };
+    root.addEventListener('click', onClick);
     let queued = false;
     const mo = new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; label(); }); } });
     mo.observe(root, { childList: true, subtree: true });
-    return () => mo.disconnect();
+    return () => { mo.disconnect(); root.removeEventListener('click', onClick); };
   }, []);
   return <div className="ia" ref={ref}><style>{CSS + INSIGHTS_CSS}</style>{children}</div>;
 }

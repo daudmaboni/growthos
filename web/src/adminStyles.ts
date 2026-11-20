@@ -306,4 +306,13 @@ export const CSS = `
   /* Today: the setup steps stack one under another instead of sliding sideways */
   .ia-lanes{grid-template-columns:minmax(0,1fr)!important;overflow:visible!important;padding-bottom:0}
 }
+/* ---- Phone (20 Nov, 4): folded cards. Title + two numbers; "Show all" opens the rest. ---- */
+.ia td.ia-fold{display:none}
+@media (max-width:820px){
+  .ia tbody tr:has(> td.ia-fold):not(.ia-open) > td:nth-child(n+4):not(.ia-fold){display:none}
+  .ia td.ia-fold{display:block;grid-column:1/-1;order:99}
+  .ia td.ia-fold button{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;border:0;border-radius:10px;background:var(--paper);color:var(--navy)!important;font-size:13px;font-weight:600}
+  .ia td.ia-fold svg{transition:transform .2s}
+  .ia tr.ia-open td.ia-fold svg{transform:rotate(180deg)}
+}
 `;
