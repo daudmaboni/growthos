@@ -230,7 +230,7 @@ export function Businesses({ rows, act, loading, onOpen }: { rows: WsRow[]; act:
     <div>
       <header className="ia-pagehead"><h1>Businesses</h1><p>Everyone using itaOS, sorted so problems come first.</p></header>
       <div className="ia-tools">
-        <label className="ia-search">{ICON.search}<input placeholder="Find a business, owner email or WhatsApp number" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        <label className="ia-search">{ICON.search}<input placeholder="Find a business, email or number" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <div className="ia-seg" role="radiogroup" aria-label="Filter">
           {(['all', 'attention', 'live', 'trial', 'suspended'] as const).map((k) => (
             <button key={k} role="radio" aria-checked={f === k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>
@@ -239,6 +239,28 @@ export function Businesses({ rows, act, loading, onOpen }: { rows: WsRow[]; act:
           ))}
         </div>
       </div>
+      {/* Phone: one row per business instead of the wide table */}
+      <ul className="ia-mlist">
+        {loading && rows.length === 0 && <li><div className="ia-skel" /></li>}
+        {!loading && list.length === 0 && <li className="ia-empty">No business matches that search.</li>}
+        {list.map((w) => {
+          const h = healthOf(w); const s = stuckAt(w);
+          return (
+            <li key={w.id}>
+              <button onClick={() => onOpen(w.id)}>
+                <span className="ia-tile" style={{ background: tileColor(w.id) }}>{initials(w.name)}</span>
+                <span className="ia-mbody">
+                  <span className="ia-mtop"><strong>{w.name}</strong>{w.status !== 'active' && <span className={`ia-badge s-${w.status}`}>{w.status}</span>}<small>{ago(w.created_at)}</small></span>
+                  {w.wa_phone && <small className="ia-faint">+{w.wa_phone} · {viaName(w.wa_via)}</small>}
+                  <span className={`ia-health t-${h.tone}`}><i />{h.text}</span>
+                  <span className="ia-msetup"><span className="ia-ticks lg">{STEPS.map((st) => <i key={st.key} className={st.done(w) ? 'on' : ''} />)}</span>
+                    <small className="ia-faint">{s < STEPS.length ? `Next: ${STEPS[s]!.label}` : 'Fully set up'}</small></span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
       <div className="ia-tablecard">
         <table className="ia-table">
           <thead><tr>
