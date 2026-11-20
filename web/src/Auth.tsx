@@ -263,7 +263,8 @@ type Sent = { kind: "signup" | "link" | "reset"; email: string; business?: strin
 
 export function AuthScreen() {
   const [lang, setLang] = useState<Lang>(initialLang);
-  const [mode, setMode] = useState<Mode>(() => (/[?&]signup\b/.test(location.search) ? "signup" : "signin"));
+  // Sign in only: new businesses are set up by Pondi, so there is no "Create account" here.
+  const [mode, setMode] = useState<Mode>("signin");
   const [business, setBusiness] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -371,12 +372,6 @@ export function AuthScreen() {
     <AuthShell lang={lang}>
       <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
         <Brand lang={lang} setLang={setLang} />
-        {tabbed && (
-          <div className="seg auth-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "on" : ""} onClick={() => go("signin")}>{t("signIn")}</button>
-            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "on" : ""} onClick={() => go("signup")}>{t("createAccount")}</button>
-          </div>
-        )}
         <div className="ax-head"><h2>{title}</h2>{sub && <p>{sub}</p>}</div>
 
         {mode === "signup" && (
@@ -414,9 +409,7 @@ export function AuthScreen() {
         {!tabbed && <button type="button" className="link-btn small ax-center" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
 
         <div className="ax-foot">
-          {tabbed
-            ? <span className="small muted">{mode === "signin" ? t("noAccount") : t("haveAccount")} <button type="button" className="link-btn small" onClick={() => go(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? t("createAccount") : t("signIn")}</button></span>
-            : <a href="/" className="small muted">{t("home")}</a>}
+          <a href="/" className="small muted">{t("home")}</a>
           <a href="/app/admin" className="small muted">{t("staff")}</a>
         </div>
       </form>
