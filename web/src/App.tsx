@@ -407,8 +407,8 @@ const pageEl = () => document.querySelector<HTMLElement>(".page-view");
 function phoneSwitch(from: View, next: View): boolean {
   const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
   const html = document.documentElement;
-  const a = ORDER.indexOf(from), b = ORDER.indexOf(next);
-  const dir = a >= 0 && b >= 0 ? Math.sign(b - a) : b >= 0 ? -1 : 1; // More-menu pages sit to the right of the bar
+  const seq = swipeOrder(false); // only the order matters, not the labels
+  const dir = Math.sign(seq.indexOf(next) - seq.indexOf(from)) || 1; // More pages sit to the right of Chats
   const swap = () => { window.scrollTo({ top: 0 }); flushSync(() => setViewRef.current?.(next)); };
   if (reducedMotion()) { swap(); return true; }
   if (!doc.startViewTransition) { navFlags.fade = dir; swap(); return true; } // PageView fades it in
@@ -418,6 +418,8 @@ function phoneSwitch(from: View, next: View): boolean {
   return true;
 }
 const setViewRef: { current: ((v: View) => void) | null } = { current: null };
+/** Every page in bar order: Home, Kito, Chats, then the More menu's pages top to bottom. */
+const swipeOrder = (sw: boolean): View[] => [...ORDER, ...moreItems(sw).map(([v]) => v)];
 
 /** Wraps the current page. On phones, a new section slides in from the side it lives on
  *  (iOS-style), or rises in gently when it isn't one of the bottom-nav sections. */
@@ -500,10 +502,13 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
   };
 
-  // Swipe the page left/right to move between the four main sections; the lens tracks the swipe.
+  // Swipe the page left/right to move through every page in bar order (Home, Kito, Chats, then the More pages);
+  // the lens tracks the swipe, and the change itself uses the same quick crossfade as a tap.
   useEffect(() => {
-    const cur = ORDER.indexOf(view);
+    const seq = swipeOrder(sw);
+    const cur = seq.indexOf(view);
     if (cur < 0 || open) return;
+    const slotOf = (f: number) => Math.min(SLOTS - 1, f); // pages past Chats live under More
     let x0 = 0, y0 = 0, t0 = 0, mode: "" | "h" | "v" = "", dx = 0;
     const blocked = (el: EventTarget | null) => {
       for (let n = el as HTMLElement | null; n && n !== document.body; n = n.parentElement) {
@@ -523,15 +528,15 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
       if (!mode) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; mode = Math.abs(dx) > Math.abs(dy) ? "h" : "v"; if (mode === "v") return; x0 += dx > 0 ? 8 : -8; dx = e.touches[0].clientX - x0; }
       e.preventDefault(); // locked sideways: the page must not scroll up/down during the swipe
       const w = window.innerWidth;
-      setLens(Math.min(ORDER.length - 1, Math.max(0, cur - dx / w)), true);
+      setLens(slotOf(Math.min(seq.length - 1, Math.max(0, cur - dx / w))), true);
       const page = pageEl();
       if (page && !reducedMotion()) {
-        const edge = (dx > 0 && cur === 0) || (dx < 0 && cur === ORDER.length - 1);
-        const tx = edge ? dx * 0.18 : dx; // 1:1 with the finger; rubber-band at the first / last section
+        const edge = (dx > 0 && cur === 0) || (dx < 0 && cur === seq.length - 1);
+        const tx = dx * (edge ? 0.12 : 0.35); // the page leans with the finger; the switch itself is the tap crossfade
         page.classList.add("swiping");
         page.style.transition = "none";
         page.style.transform = `translate3d(${tx}px,0,0)`;
-        page.style.opacity = String(1 - Math.min(1, Math.abs(tx) / w) * 0.5);
+        page.style.opacity = String(1 - Math.min(1, Math.abs(dx) / w) * 0.35);
       }
     };
     const end = () => {
@@ -540,12 +545,12 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
       const next = Math.abs(dx) > window.innerWidth * 0.2 || (v > 0.3 && Math.abs(dx) > 30) ? cur + (dx < 0 ? 1 : -1) : cur;
       mode = "";
       const page = pageEl();
-      if (next >= 0 && next < ORDER.length && next !== cur) {
+      if (next >= 0 && next < seq.length && next !== cur) {
         navigator.vibrate?.(8);
-        navFlags.swipe = true; // the page is already moving with the finger: skip the panel wipe
-        go(next); // the next section slides straight in (PageView)
+        setLens(slotOf(next), false);
+        location.hash = seq[next]; // same crossfade as tapping a tab (phoneSwitch)
       } else {
-        setLens(cur, false);
+        setLens(slotOf(cur), false);
         if (page) { // spring back into place
           page.style.transition = "transform .32s cubic-bezier(.3, 1.3, .5, 1), opacity .2s ease";
           page.style.transform = ""; page.style.opacity = "";
@@ -558,7 +563,7 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
     window.addEventListener("touchend", end);
     window.addEventListener("touchcancel", end);
     return () => { window.removeEventListener("touchstart", start); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", end); window.removeEventListener("touchcancel", end); };
-  }, [view, open]);
+  }, [view, open, sw]);
 
   return (
     <>

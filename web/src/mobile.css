@@ -30,6 +30,12 @@ html[data-font="urbanist"] .shell.dash-ia, html[data-font="inter"] .shell.dash-i
   .hero h2, .dash-ia .hero h2 { font: 700 23px/1.15 var(--display); letter-spacing: -0.025em; }
   .hero .sub { font-size: 13.5px; line-height: 1.45; }
   .hero > .row { flex: none; flex-wrap: nowrap; gap: 8px; }
+  /* A page head with a tab switcher (Actions, Needs attention…): title and stats on top, the tabs full width below */
+  .hero:has(> .seg) { flex-wrap: wrap; gap: 12px; }
+  .hero:has(> .seg) > :first-child { flex-basis: 100%; }
+  .hero:has(> .seg) .sub { gap: 2px 12px; font-size: 13px; }
+  .hero > .seg { flex: 1 1 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .hero > .seg button { white-space: nowrap; padding-left: 6px; padding-right: 6px; font-size: 13px; }
   .hero > .row > .small.muted { display: none; } /* "Updating…" — the spinner on the KPIs is enough */
   .dr-trigger { padding: 9px 12px; gap: 6px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); font-size: 13.5px; min-height: 40px; }
   .dr-trigger b { font-weight: 650; white-space: nowrap; }
