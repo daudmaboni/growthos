@@ -1195,3 +1195,13 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
   .inbox.frame .cc-main { padding: 11px 2px 11px 0; border-top: 1px solid var(--ib-edge, var(--line)); border-bottom: 0; }
   .inbox.frame .cc-list > div:last-of-type .cc-main, .inbox.frame .cc-list > div:has(+ button.cc-more) .cc-main { border-bottom: 1px solid var(--ib-edge, var(--line)); }
 }
+
+/* ===== Pull down to refresh (pullRefresh.ts) ===== */
+.ptr { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; z-index: 200; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--card); color: var(--muted); border: 1px solid var(--line);
+  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, .35); opacity: 0; transform: translate(-50%, -56px); pointer-events: none; }
+.ptr.ready { color: var(--accent); }
+.ptr.back { transition: transform .25s var(--ease), opacity .2s ease; }
+.ptr.spin { transition: transform .2s var(--ease); color: var(--accent); }
+.ptr.spin svg { animation: ptr-spin .7s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
