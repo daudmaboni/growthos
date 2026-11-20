@@ -528,12 +528,12 @@ function NotCustomer({ r, T, busy, setBusy, onChange }: { r: Outcome; T: Tr; bus
   if (r.not_customer) return (
     <div className="cc-party small">
       <span>{r.not_customer_note && PARTY[r.not_customer_note] ? `${T(PARTY[r.not_customer_note][0], PARTY[r.not_customer_note][1])}. ` : ""}{T("No labels, no follow-ups, not in your numbers. Kito doesn't read this chat.", "Hakuna lebo, hakuna ufuatiliaji, hayumo kwenye takwimu. Kito hasomi chat hii.")}</span>
-      <button className="small" disabled={busy} onClick={() => set(false)}>{T("Undo: they're a customer", "Rudisha: ni mteja")}</button>
+      <button className="small" disabled={busy} onClick={() => set(false)}>{busy ? T("Saving…", "Inahifadhi…") : T("Undo: they're a customer", "Rudisha: ni mteja")}</button>
     </div>
   );
   return (
     <button className="small cc-notcust" disabled={busy} title={T("You on another phone, staff, delivery, a supplier or family. The chat stops being labelled for good.", "Wewe kwa simu nyingine, mfanyakazi, msafirishaji, msambazaji au familia. Chat haitawekewa lebo tena.")}
-      onClick={() => set(true)}>⊘ {T("Not a customer — stop labelling", "Si mteja — acha kuweka lebo")}</button>
+      onClick={() => set(true)}>⊘ {busy ? T("Saving…", "Inahifadhi…") : T("Not a customer — stop labelling", "Si mteja — acha kuweka lebo")}</button>
   );
 }
 

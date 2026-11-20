@@ -238,6 +238,14 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const found = openId ? rows.find((x) => x.id === openId) ?? null : null;
   useEffect(() => { if (found) setOpenSnap(found); }, [found]);
   const openRow = found ?? (openSnap && openSnap.id === openId ? openSnap : null);
+  // The open chat left the list (e.g. you just marked it "not a customer"): reload it so the panel shows the change.
+  useEffect(() => {
+    if (!openId || found) return;
+    let off = false;
+    supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).eq("id", openId).maybeSingle()
+      .then(({ data }) => { if (!off && data) setOpenSnap(data as Outcome); });
+    return () => { off = true; };
+  }, [openId, found, rows, ws.id]);
   // Keep the address in step with the open chat (replaceState: no extra history entries, no hashchange).
   useEffect(() => {
     if (!location.hash.startsWith("#chats") || hashIds()) return;
