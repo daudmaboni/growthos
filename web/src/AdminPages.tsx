@@ -115,7 +115,7 @@ export function Board({ rows, onOpen, onb = {} }: { rows: WsRow[]; onOpen: (id: 
     <section className="ia-board" aria-label="Where each business is stuck">
       <div className="ia-board-h">
         <h2>Where each business is stuck</h2>
-        <p>Each business sits on the next setup step it hasn't done yet. Move them all to the right.</p>
+        <p>Each business sits on the next setup step it hasn't done yet. Move them all to Fully set up.</p>
       </div>
       <ol className="ia-lanes">
         {cols.map((c, i) => (
@@ -176,7 +176,7 @@ export function ActivityChart({ a }: { a: Activity }) {
             <g key={d} onMouseEnter={() => setHover(i)}>
               <rect x={x} y={P.t} width={bw} height={ih + P.b} fill="transparent" />
               <rect x={x + bw * 0.18} y={P.t + ih - h} width={bw * 0.64} height={Math.max(h, a.messages[i] ? 2 : 0)} rx={2}
-                    className={`bar${hover === i ? ' hi' : ''}`} />
+                    className={`ia-bar${hover === i ? ' hi' : ''}`} />
               {a.signups[i]! > 0 && <circle cx={x + bw / 2} cy={P.t + ih + 9} r={4.5} className="sign" />}
               {(i % 7 === 2 || i === a.days.length - 1) && (
                 <text x={x + bw / 2} y={H - 4} className="ax" textAnchor="middle">
@@ -352,7 +352,7 @@ export function Audit({ supabase, tick }: { supabase: SupabaseClient; tick: numb
           {data.map((a, i) => (
             <li key={i}><time title={stamp(a.at)}>{ago(a.at)}</time>
               <div><strong>{ACTION[a.action] ?? a.action}</strong>{a.workspace_name && <> for {a.workspace_name}</>}
-                <span>{describe(a.action, a.details)} · {a.actor_email}</span></div></li>
+                <span>{[describe(a.action, a.details), a.actor_email].filter(Boolean).join(' · ')}</span></div></li>
           ))}
         </ol>
       )}
