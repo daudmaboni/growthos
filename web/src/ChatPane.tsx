@@ -504,10 +504,14 @@ export function MediaView({ m, ws, T }: { m: Msg; ws: Workspace; T: Tr }) {
   }, [m.media?.path]);
   const r = m.media?.receipt;
   const isPdf = m.media?.mime === "application/pdf";
-  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha") && l !== "[image]" && l !== "[document]").join("\n");
+  const isAudio = /^audio\//.test(m.media?.mime ?? "") || m.type === "audio";
+  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha") && l !== "[image]" && l !== "[document]" && l !== "[voice note]").join("\n");
   return (
     <span className="mv">
-      {url && (isPdf
+      {url && (isAudio
+        ? <span className="mv-audio"><audio controls preload="metadata" src={url}>{T("This browser can't play it.", "Kivinjari hiki hakiwezi kuicheza.")}</audio>
+            <a className="small" href={url} target="_blank" rel="noopener noreferrer">{T("Open / download", "Fungua / pakua")}</a></span>
+        : isPdf
         ? <a href={url} target="_blank" rel="noopener noreferrer">📄 {T("Open PDF", "Fungua PDF")}</a>
         : <img src={url} alt={m.direction === "in" ? T("Image from customer", "Picha kutoka kwa mteja") : T("Image you sent", "Picha uliyotuma")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
       {caption && <span>{caption}</span>}
