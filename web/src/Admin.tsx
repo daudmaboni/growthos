@@ -3,7 +3,7 @@
 // 0031_admin_insights adds Performance, AI usage, Data quality, onboarding days and staff follow-ups (AdminInsights.tsx).
 // Fields added in 0023 are optional here, so the page still works against an older database.
 // Every RPC re-checks platform_admins server-side; hiding this page is UX, not security.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PerformancePage, UsagePage, QualityPage, INSIGHTS_CSS } from './AdminInsights';
 import { usageAlerts, type OnboardingRow, type ApiUsage } from './adminInsights';
@@ -141,7 +141,30 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
-  return <div className="ia"><style>{CSS + INSIGHTS_CSS}</style>{children}</div>;
+  // On a phone every table turns into a stack of cards (CSS). Each cell needs its column name to show
+  // as a small label, so copy the header text onto the cells whenever a table appears or changes.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const label = () => {
+      root.querySelectorAll('table').forEach((t) => {
+        const heads = [...t.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
+        t.querySelectorAll('tbody tr').forEach((tr) => {
+          [...tr.children].forEach((td, i) => {
+            const want = (td as HTMLElement).hasAttribute('colspan') ? '' : heads[i] ?? '';
+            if ((td as HTMLElement).dataset.label !== want) (td as HTMLElement).dataset.label = want;
+          });
+        });
+      });
+    };
+    label();
+    let queued = false;
+    const mo = new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; label(); }); } });
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, []);
+  return <div className="ia" ref={ref}><style>{CSS + INSIGHTS_CSS}</style>{children}</div>;
 }
 
 function NavBtn({ on, onClick, icon, count, hot, children }:
