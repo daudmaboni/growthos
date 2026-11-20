@@ -52,9 +52,12 @@ export type Order = {
 export const orderNet = (o: Pick<Order, "amount" | "discount" | "refund_amount">) => Number(o.amount) - Number(o.discount) - Number(o.refund_amount);
 
 export type Task = {
-  id: string; conversation_id: string; title: string; draft: string | null; due_at: string | null; status: "open" | "snoozed" | "done" | "dismissed";
-  assigned_to: string | null; snoozed_until: string | null; source: "manual" | "queue"; draft_source: "kito" | "manual" | "edited" | null;
+  id: string; conversation_id: string; title: string; draft: string | null; due_at: string | null; status: "proposed" | "open" | "snoozed" | "done" | "dismissed";
+  assigned_to: string | null; snoozed_until: string | null; source: "manual" | "queue" | "kito_promise"; draft_source: "kito" | "manual" | "edited" | null;
   draft_edited_at: string | null; created_by: string | null; created_at: string; updated_at: string; completed_at: string | null;
+  // Ahadi (customer promises Kito found; migration 0046)
+  kind?: "pay" | "call" | "collect" | "come_back" | "other" | null; promise_text?: string | null; when_text?: string | null;
+  promise_at?: string | null; needs_date?: boolean; result?: "paid" | "called" | "no_answer" | "postponed" | "not_interested" | "other" | null;
 };
 
 export type AdPerf = {

@@ -65,7 +65,7 @@ ad_performance(p_from date, p_to date) → (ad_id, ad_name, campaign_name, spend
        Use it as a table function: select * from ad_performance(current_date - 30, current_date)
 expenses(day, category, amount, currency, note)
 content_posts(post_id, platform, posted_at, caption, format, theme, hook, offer, reach, impressions, likes, comments, shares, saves, link_clicks, source_label)
-tasks(task_id, chat_id, title, status 'open'|'snoozed'|'done'|'dismissed', due_at, snoozed_until, created_at, completed_at, draft_source)`;
+tasks(task_id, chat_id, title, status 'proposed'|'open'|'snoozed'|'done'|'dismissed', due_at, snoozed_until, created_at, completed_at, draft_source, source 'manual'|'queue'|'kito_promise', kind 'pay'|'call'|'collect'|'come_back'|'other', promise_text, when_text, promise_at, needs_date, result 'paid'|'called'|'no_answer'|'postponed'|'not_interested'|'other') — source 'kito_promise' rows are customer promises (Ahadi) Kito found; 'proposed' = waiting for the owner to confirm`;
 
 function system(ws: { name: string; currency: string; timezone: string; language: string; fx_rate: number | null }) {
   const now = new Date().toLocaleString("en-GB", { timeZone: ws.timezone, dateStyle: "full", timeStyle: "short" });

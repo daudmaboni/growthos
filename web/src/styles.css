@@ -188,6 +188,11 @@ nav.subtabs a { padding: 7px 18px; }
 .rowstat.ready { background: var(--good-soft); color: var(--good); } .rowstat.duplicate { background: var(--raised); color: var(--muted); border: 1px solid var(--line); } .rowstat.rejected { background: var(--bad-soft); color: var(--bad); }
 textarea { font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 9px 12px; max-width: 100%; }
 @media (max-width: 760px) { .qitem { grid-template-columns: 1fr; } }
+/* Ahadi (customer promises) */
+.qitem.promise.proposed { border-left: 3px solid var(--c2); }
+.qitem.promise.overdue { border-left: 3px solid var(--bad); }
+.promise-quote { margin: 6px 0 3px; padding: 6px 10px; border-left: 2px solid var(--line-2); font-style: italic; font-size: 13.5px; color: var(--ink); }
+.qitem.promise input[type="datetime-local"] { font: inherit; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--card); color: var(--ink); }
 
 /* header: workspace name sits under "itaOS" so it is never cut to "Kay…" on phones */
 .brand a.home { min-width: 0; }

@@ -1,0 +1,67 @@
+import { describe, it, expect } from "vitest";
+import { zonedToUtc, localStamp, findSource, planPromise } from "../../supabase/functions/_shared/promise";
+
+const inn = (id: string, body: string, at: string) => ({ id, direction: "in", sent_at: at, body, type: "text" });
+const out = (id: string, body: string, at: string) => ({ id, direction: "out", sent_at: at, body, type: "text" });
+// Fri 2026-11-20 10:00 EAT
+const NOW = Date.parse("2026-11-20T07:00:00Z");
+
+describe("time zones", () => {
+  it("turns Dar es Salaam wall time into UTC", () => {
+    expect(zonedToUtc("2026-11-21", "16:00")).toBe("2026-11-21T13:00:00.000Z");
+    expect(zonedToUtc("2026-11-21", "09:00", "Africa/Nairobi")).toBe("2026-11-21T06:00:00.000Z");
+  });
+  it("rejects impossible dates and times", () => {
+    expect(zonedToUtc("2026-02-31", "09:00")).toBeNull();
+    expect(zonedToUtc("2026-11-21", "25:00")).toBeNull();
+    expect(zonedToUtc("kesho", "09:00")).toBeNull();
+  });
+  it("stamps days in business time", () => {
+    expect(localStamp("2026-11-20T22:30:00Z")).toBe("Sat 2026-11-21 01:30");
+  });
+});
+
+describe("finding the customer's message", () => {
+  const msgs = [inn("a", "Bei gani?", "2026-11-19T07:00:00Z"), out("b", "Ni 175,000", "2026-11-19T07:05:00Z"), inn("c", "Sawa nitalipa Ijumaa  asubuhi!", "2026-11-19T08:00:00Z")];
+  it("matches ignoring case, spaces and punctuation", () => {
+    expect(findSource(msgs, "nitalipa ijumaa asubuhi")?.id).toBe("c");
+  });
+  it("never matches the business's own words", () => {
+    expect(findSource(msgs, "Ni 175,000")).toBeNull();
+  });
+});
+
+describe("planning a promise", () => {
+  const msgs = [inn("m1", "Nimeipenda", "2026-11-19T07:00:00Z"), inn("m2", "Nitalipa kesho saa nne", "2026-11-19T08:00:00Z")];
+  it("dates a promise and keys it to its message", () => {
+    const p = planPromise({ kind: "pay", quote: "Nitalipa kesho saa nne", when_text: "kesho saa nne", due_date: "2026-11-20", due_time: "10:00" }, msgs, { now: NOW });
+    expect(p).toMatchObject({ kind: "pay", due_at: "2026-11-20T07:00:00.000Z", promise_key: "m:m2:pay", promise_at: "2026-11-19T08:00:00.000Z" });
+  });
+  it("uses a default hour when only the day is known", () => {
+    const p = planPromise({ kind: "call", quote: "Nitalipa kesho saa nne", due_date: "2026-11-21", due_time: null }, msgs, { now: NOW });
+    expect(p?.due_at).toBe("2026-11-21T07:00:00.000Z"); // 10:00 EAT for calls
+  });
+  it("leaves salary-day promises undated for the owner", () => {
+    const m = [inn("s", "Nikipata mshahara nitachukua", "2026-11-19T08:00:00Z")];
+    const p = planPromise({ kind: "pay", quote: "Nikipata mshahara nitachukua", when_text: "mshahara", due_date: null, due_time: null }, m, { now: NOW });
+    expect(p?.due_at).toBeNull();
+  });
+  it("drops dates before the promise or months away", () => {
+    expect(planPromise({ kind: "pay", quote: "Nitalipa kesho saa nne", due_date: "2026-10-01", due_time: null }, msgs, { now: NOW })?.due_at).toBeNull();
+    expect(planPromise({ kind: "pay", quote: "Nitalipa kesho saa nne", due_date: "2027-09-01", due_time: null }, msgs, { now: NOW })?.due_at).toBeNull();
+  });
+  it("ignores old promises and long-missed due dates", () => {
+    expect(planPromise({ kind: "pay", quote: "Nitalipa kesho saa nne", due_date: "2026-11-20", due_time: null }, msgs, { now: Date.parse("2026-12-30T00:00:00Z") })).toBeNull();
+    const m = [inn("x", "Nitalipa jumatatu", "2026-11-05T08:00:00Z")];
+    expect(planPromise({ kind: "pay", quote: "Nitalipa jumatatu", due_date: "2026-11-09", due_time: null }, m, { now: NOW })).toBeNull();
+  });
+  it("returns nothing for empty or junk promises", () => {
+    expect(planPromise(null, msgs, { now: NOW })).toBeNull();
+    expect(planPromise({ kind: "pay", quote: "" }, msgs, { now: NOW })).toBeNull();
+  });
+  it("falls back to a quote key when the words can't be found", () => {
+    const p = planPromise({ kind: "weird", quote: "something paraphrased by the model", due_date: null }, msgs, { now: NOW });
+    expect(p?.kind).toBe("other");
+    expect(p?.promise_key.startsWith("q:")).toBe(true);
+  });
+});

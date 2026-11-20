@@ -1,10 +1,11 @@
 // Push notifications to the itaOS phone app (PWA).
 //
-// Two callers:
+// Three callers:
 //  - The messages_push database trigger (migration 0039), right after a customer's WhatsApp message is saved (x-cron-secret header):
 //      { conversation_ids: [...] } → one notification per chat to every device that turned
 //      notifications on for that business. Only for messages from the last 10 minutes, so
 //      replayed or backfilled events never ring phones about old chats.
+//  - The promises-due-15m cron job (migration 0046): { due_tasks: true } → "promise due" notifications.
 //  - A signed-in member from Settings → Phone app: { test: true, workspace_id } → a test to
 //    that member's own devices.
 //
@@ -82,6 +83,46 @@ Deno.serve(async (req) => {
   }
 
   if (!isCron) return json({ error: "forbidden" }, 403);
+
+  // Due reminders (cron every 15 min, migration 0046): open tasks whose time came in the last day and
+  // haven't rung yet. Each task rings once per due time; moving the time or snoozing re-arms it.
+  if (body.due_tasks) {
+    const now = new Date();
+    const since = new Date(now.getTime() - 864e5).toISOString();
+    const cols = "id,workspace_id,conversation_id,title,kind,promise_text,when_text,due_at,snoozed_until";
+    const [a, b] = await Promise.all([
+      db.from("follow_up_tasks").select(cols).eq("status", "open").is("notified_at", null).gte("due_at", since).lte("due_at", now.toISOString()).limit(200),
+      db.from("follow_up_tasks").select(cols).eq("status", "snoozed").is("notified_at", null).gte("snoozed_until", since).lte("snoozed_until", now.toISOString()).limit(200),
+    ]);
+    const tasks = [...(a.data ?? []), ...(b.data ?? [])] as any[];
+    let rung = 0;
+    const subsBy = new Map<string, Sub[]>();
+    const langBy = new Map<string, string>();
+    for (const t of tasks) {
+      if (!subsBy.has(t.workspace_id)) {
+        const [{ data: subs }, { data: w }] = await Promise.all([
+          db.from("push_subscriptions").select("endpoint,p256dh,auth,fail_count").eq("workspace_id", t.workspace_id),
+          db.from("workspaces").select("language").eq("id", t.workspace_id).maybeSingle(),
+        ]);
+        subsBy.set(t.workspace_id, (subs ?? []) as Sub[]);
+        langBy.set(t.workspace_id, w?.language ?? "sw");
+      }
+      const subs = subsBy.get(t.workspace_id)!;
+      if (subs.length) {
+        const sw = langBy.get(t.workspace_id) === "sw";
+        const { data: conv } = await db.from("conversations").select("contacts(name,wa_id)").eq("id", t.conversation_id).maybeSingle();
+        const c = (conv as any)?.contacts ?? {};
+        const who = c.name || (c.wa_id ? "+" + String(c.wa_id).replace(/\D/g, "") : (sw ? "Mteja" : "Customer"));
+        const said = t.promise_text ? ` · “${String(t.promise_text).slice(0, 90)}”` : "";
+        rung += await deliver(db, subs, {
+          title: (t.kind ? (sw ? "Ahadi imefika: " : "Promise due: ") : (sw ? "Kazi imefika: " : "Task due: ") ) + who,
+          body: `${t.title}${said}`, url: "/app#actions", tag: "task-" + t.id,
+        });
+      }
+      await db.from("follow_up_tasks").update({ notified_at: now.toISOString() }).eq("id", t.id).is("notified_at", null);
+    }
+    return json({ ok: true, due: tasks.length, sent: rung });
+  }
   const ids: string[] = [...new Set((body.conversation_ids ?? []).map(String))].filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20);
   let sent = 0;
   for (const id of ids) {

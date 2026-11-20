@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
 import { KitoLoader } from "./KitoLoader";
+import { PromiseList, dueBucket } from "./Promises";
 
 type Member = { user_id: string; role: string; email: string };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null };
@@ -22,7 +23,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
-  const [tab, setTab] = useState<"queue" | "tasks" | "done">("queue");
+  const [tab, setTab] = useState<"promises" | "queue" | "tasks" | "done">(() => (location.hash.includes("tab=queue") ? "queue" : "promises"));
   const refresh = () => setTick((t) => t + 1);
   const editor = canEdit(ws);
 
@@ -45,10 +46,13 @@ export default function Actions({ ws }: { ws: Workspace }) {
     return () => { live = false; };
   }, [ws.id, tick]);
 
-  const open = useMemo(() => tasks.filter((t) => t.status === "open" || (t.status === "snoozed" && (!t.snoozed_until || Date.parse(t.snoozed_until) <= Date.now()))), [tasks]);
-  const snoozed = useMemo(() => tasks.filter((t) => t.status === "snoozed" && t.snoozed_until && Date.parse(t.snoozed_until) > Date.now()), [tasks]);
+  // Customer promises (Ahadi) live in their own tab; the Tasks tab keeps the other follow-ups.
+  const promises = useMemo(() => tasks.filter((t) => t.source === "kito_promise"), [tasks]);
+  const promiseCount = useMemo(() => promises.filter((t) => t.status === "proposed" || ((t.status === "open" || t.status === "snoozed") && dueBucket(t) !== "upcoming")).length, [promises]);
+  const open = useMemo(() => tasks.filter((t) => t.source !== "kito_promise").filter((t) => t.status === "open" || (t.status === "snoozed" && (!t.snoozed_until || Date.parse(t.snoozed_until) <= Date.now()))), [tasks]);
+  const snoozed = useMemo(() => tasks.filter((t) => t.source !== "kito_promise" && t.status === "snoozed" && t.snoozed_until && Date.parse(t.snoozed_until) > Date.now()), [tasks]);
   const closed = useMemo(() => tasks.filter((t) => t.status === "done" || t.status === "dismissed").slice(0, 50), [tasks]);
-  const handled = useMemo(() => new Set(tasks.filter((t) => t.status !== "done" && t.status !== "dismissed" || (t.completed_at && Date.now() - Date.parse(t.completed_at) < 7 * 864e5)).map((t) => t.conversation_id)), [tasks]);
+  const handled = useMemo(() => new Set(tasks.filter((t) => t.status !== "done" && t.status !== "dismissed" && t.status !== "proposed" || (t.completed_at && Date.now() - Date.parse(t.completed_at) < 7 * 864e5)).map((t) => t.conversation_id)), [tasks]);
 
   // Eligibility rules (deterministic): not a confirmed buyer, not marked lost, not already handled.
   const queue = useMemo(() => {
@@ -89,6 +93,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
           <div className="sub"><span>{queue.length} {T("chats need attention", "chats zinahitaji hatua")}</span><span>{open.length} {T("open tasks", "kazi wazi")}</span><span>{T("follow-up rule", "kanuni")}: {ws.follow_up_hours} h <a href="#settings/rules" className="small">{T("change", "badilisha")}</a></span></div>
         </div>
         <div className="seg" role="group" aria-label="View">
+          <button className={tab === "promises" ? "on" : ""} onClick={() => setTab("promises")}>{T("Promises", "Ahadi")}{promiseCount ? ` (${promiseCount})` : ""}</button>
           <button className={tab === "queue" ? "on" : ""} onClick={() => setTab("queue")}>{T("Queue", "Foleni")} ({queue.length})</button>
           <button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>{T("Tasks", "Kazi")} ({open.length + snoozed.length})</button>
           <button className={tab === "done" ? "on" : ""} onClick={() => setTab("done")}>{T("Done", "Zilizokamilika")}</button>
@@ -97,6 +102,8 @@ export default function Actions({ ws }: { ws: Workspace }) {
       {err && <p className="err">{err}</p>}
       {!editor && <p className="small muted">{T("You have a viewer role: you can see the queue but not change tasks.", "Una nafasi ya kutazama tu: unaweza kuona foleni lakini si kubadilisha kazi.")}</p>}
       <div className="finding"><b>{T("itaOS never sends messages.", "itaOS haitumi ujumbe kamwe.")}</b><span className="small">{T("Drafts here are suggestions. Copy one, edit it, and send it yourself from WhatsApp.", "Rasimu hapa ni mapendekezo. Nakili, hariri, na utume mwenyewe kutoka WhatsApp.")}</span></div>
+
+      {tab === "promises" && <PromiseList tasks={tasks} rows={rows} ws={ws} editor={editor} onChange={refresh} />}
 
       {tab === "queue" && (
         <section className="card">
