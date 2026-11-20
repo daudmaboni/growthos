@@ -4,6 +4,8 @@
 // Fields added in 0023 are optional here, so the page still works against an older database.
 // Every RPC re-checks platform_admins server-side; hiding this page is UX, not security.
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { pageTransition } from './pageTransition';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PerformancePage, UsagePage, QualityPage, INSIGHTS_CSS } from './AdminInsights';
 import { usageAlerts, type OnboardingRow, type ApiUsage } from './adminInsights';
@@ -28,17 +30,38 @@ export function useIsPlatformAdmin(supabase: SupabaseClient, userId?: string | n
   return ok;
 }
 
+const LABELS: Record<View, string> = {
+  today: 'Today', workspaces: 'Businesses', performance: 'Performance', usage: 'AI usage',
+  quality: 'Data quality', errors: 'Errors', audit: 'Audit log', staff: 'Staff',
+};
+
 function useHashView(): [View, (v: View) => void] {
   const read = (): View => {
     const h = window.location.hash.replace('#', '');
     return VIEWS.includes(h as View) ? (h as View) : 'today';
   };
   const [v, setV] = useState<View>(read);
-  useEffect(() => { const on = () => setV(read()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  const cur = useRef<View>(v);
+  // Same panel wipe as the business app (Arch Studio style), over the main area only — the sidebar,
+  // phone top bar and bottom menu stay put.
+  const go = (nv: View) => {
+    if (nv === cur.current) return;
+    cur.current = nv;
+    pageTransition({
+      label: LABELS[nv], index: VIEWS.indexOf(nv) + 1, zIndex: 15,
+      swap: () => flushSync(() => setV(nv)),
+      area: () => {
+        const side = document.querySelector('.ia-side')?.getBoundingClientRect();
+        if (!side) return {};
+        return side.width < innerWidth * 0.6 ? { left: side.right } : { top: Math.max(0, side.bottom) };
+      },
+      stage: () => document.querySelector<HTMLElement>('.ia-main'),
+    });
+  };
+  useEffect(() => { const on = () => go(read()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   return [v, (nv: View) => {
-    if (nv !== v) { try { window.scrollTo({ top: 0 }); } catch { /* sandboxed frames */ } }
     try { if (window.location.hash !== '#' + nv) window.location.hash = nv; } catch { /* hash may be blocked */ }
-    setV(nv);
+    go(nv); // no-op when the hashchange already started it
   }];
 }
 

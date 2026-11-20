@@ -1,7 +1,8 @@
 import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badges";
 import { AppTip } from "./PhoneApp";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
+import { pageTransition, navFlags } from "./pageTransition";
 import { enterShell, enterTiles, shake, switchTheme, applyThemeMode, usePageEnter, select, type ThemeMode } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
@@ -31,6 +32,8 @@ export default function App() {
   const [ws, setWs] = useState<Workspace | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
+  const viewRef = useRef<View>(view);
+  const langRef = useRef<string>("sw");
   const [theme, setTheme] = useState<ThemeMode>(() => {
     try { const t = localStorage.getItem("itaos-theme"); return t === "dark" || t === "graphite" ? t : "light"; } catch { return "light"; } // light is the default
   });
@@ -73,7 +76,25 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((e, s) => { setSession(s); if (e === "PASSWORD_RECOVERY") setRecovering(true); });
-    const onHash = () => setView(viewFromHash());
+    const onHash = () => {
+      const next = viewFromHash();
+      if (next === viewRef.current) return;
+      // Phone swipe already slides the page; everything else gets the panel wipe (Arch Studio style).
+      if (navFlags.swipe || !document.querySelector(".page-view")) { viewRef.current = next; setView(next); return; }
+      const sw = langRef.current === "sw";
+      const label = next === "dashboard" ? (sw ? "Nyumbani" : "Dashboard") : next === "kito" ? (sw ? "Muulize Kito" : "Ask Kito")
+        : next === "chats" ? "Chats" : moreItems(sw).find(([v]) => v === next)?.[1] ?? next;
+      viewRef.current = next;
+      pageTransition({
+        label, index: VIEWS.indexOf(next) + 1,
+        swap: () => flushSync(() => setView(next)),
+        area: () => {
+          const bar = document.querySelector(".topbar")?.getBoundingClientRect();
+          return { top: bar && bar.bottom > 0 ? bar.bottom : 0 };
+        },
+        stage: () => document.querySelector<HTMLElement>(".page-view"),
+      });
+    };
     window.addEventListener("hashchange", onHash);
     return () => { sub.subscription.unsubscribe(); window.removeEventListener("hashchange", onHash); };
   }, []);
@@ -106,6 +127,7 @@ export default function App() {
   // Keep the bouncing dots up until we know whether to show login, workspace setup or the dashboard.
   useEffect(() => { if (session === null || (session && ws !== undefined)) hidePreloader(); }, [session, ws]);
 
+  langRef.current = ws?.language ?? "sw";
   const badges = useNavBadges(ws?.id ?? "", view);
 
   if (session === undefined) return <div className="center muted">Loading…</div>;
@@ -371,7 +393,8 @@ export function PageView({ view, children }: { view: View; children: React.React
     const el = ref.current, from = prev.current; prev.current = view;
     if (!el || from === view) return;
     el.style.transition = ""; el.style.transform = ""; el.style.opacity = ""; el.classList.remove("swiping");
-    if (!window.matchMedia(PHONE_NAV).matches || reducedMotion()) return;
+    const swiped = navFlags.swipe; navFlags.swipe = false;
+    if (!swiped || !window.matchMedia(PHONE_NAV).matches || reducedMotion()) return; // taps/clicks use the panel wipe instead
     const a = ORDER.indexOf(from), b = ORDER.indexOf(view);
     const dir = a >= 0 && b >= 0 ? Math.sign(b - a) : 0;
     el.animate(dir
@@ -479,6 +502,7 @@ export function BottomNav({ view, sw, badges }: { view: View; sw: boolean; badge
       const page = pageEl();
       if (next >= 0 && next < ORDER.length && next !== cur) {
         navigator.vibrate?.(8);
+        navFlags.swipe = true; // the page is already moving with the finger: skip the panel wipe
         go(next); // the next section slides straight in (PageView)
       } else {
         setLens(cur, false);
