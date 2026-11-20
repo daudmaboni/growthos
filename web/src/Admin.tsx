@@ -171,6 +171,8 @@ function Frame({ children }: { children: React.ReactNode }) {
     label();
     // Open/close a folded card. Runs before React's own click handling, so the row's tap (open the business) doesn't fire.
     const onClick = (e: MouseEvent) => {
+      const note = (e.target as HTMLElement).closest('.ia-timeline li span');
+      if (note && !(e.target as HTMLElement).closest('a,button')) { note.closest('li')!.classList.toggle('ia-open'); return; }
       const btn = (e.target as HTMLElement).closest('td.ia-fold > button');
       if (!btn) return;
       e.stopPropagation(); e.preventDefault();

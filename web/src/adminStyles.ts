@@ -315,4 +315,15 @@ export const CSS = `
   .ia td.ia-fold svg{transition:transform .2s}
   .ia tr.ia-open td.ia-fold svg{transform:rotate(180deg)}
 }
+/* ---- Timelines (Audit log, Recent failed calls, Drawer history): long words wrap, never run off the card.
+   On a phone the time sits above the text, and very long notes show 3 lines until tapped. ---- */
+.ia-timeline li>div,.ia-timeline li>*{min-width:0}
+.ia-timeline li strong,.ia-timeline li span{overflow-wrap:anywhere;word-break:break-word}
+@media (max-width:820px){
+  .ia-timeline li,.ia-timeline.compact li{grid-template-columns:minmax(0,1fr)!important;gap:2px;padding:12px 16px}
+  .ia-timeline.compact li{padding:10px 0}
+  .ia-timeline time{font-size:12px}
+  .ia-timeline li span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+  .ia-timeline li.ia-open span{display:block;-webkit-line-clamp:unset}
+}
 `;
