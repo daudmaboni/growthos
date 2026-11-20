@@ -30,11 +30,6 @@ export function useIsPlatformAdmin(supabase: SupabaseClient, userId?: string | n
   return ok;
 }
 
-const LABELS: Record<View, string> = {
-  today: 'Today', workspaces: 'Businesses', performance: 'Performance', usage: 'AI usage',
-  quality: 'Data quality', errors: 'Errors', audit: 'Audit log', staff: 'Staff',
-};
-
 function useHashView(): [View, (v: View) => void] {
   const read = (): View => {
     const h = window.location.hash.replace('#', '');
@@ -42,18 +37,16 @@ function useHashView(): [View, (v: View) => void] {
   };
   const [v, setV] = useState<View>(read);
   const cur = useRef<View>(v);
-  // Same panel wipe as the business app (Arch Studio style), over the main area only — the sidebar,
-  // phone top bar and bottom menu stay put.
+  // Same light page change as the business app.
   const go = (nv: View) => {
     if (nv === cur.current) return;
     cur.current = nv;
     pageTransition({
-      label: LABELS[nv], index: VIEWS.indexOf(nv) + 1, zIndex: 15,
       swap: () => flushSync(() => setV(nv)),
-      area: () => {
+      area: () => { // yellow line along the top of the main area (right of the sidebar; under the phone top bar)
         const side = document.querySelector('.ia-side')?.getBoundingClientRect();
         if (!side) return {};
-        return side.width < innerWidth * 0.6 ? { left: side.right } : { top: Math.max(0, side.bottom) };
+        return side.width < innerWidth * 0.6 ? { left: side.right } : { top: Math.max(0, side.bottom - 1) };
       },
       stage: () => document.querySelector<HTMLElement>('.ia-main'),
     });

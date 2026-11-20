@@ -2,7 +2,7 @@ import { useNavBadges, chatsBadge, actionsBadge, NavBadge, Badges } from "./badg
 import { AppTip } from "./PhoneApp";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
-import { pageTransition, navFlags } from "./pageTransition";
+import { pageTransition, navFlags, curtainCover, curtainReveal } from "./pageTransition";
 import { enterShell, enterTiles, shake, switchTheme, applyThemeMode, usePageEnter, select, type ThemeMode } from "./motion";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, Workspace, WS_COLUMNS, Role, PASSWORD_RECOVERY } from "./lib";
@@ -33,7 +33,8 @@ export default function App() {
   const [recovering, setRecovering] = useState(PASSWORD_RECOVERY);
   const [view, setView] = useState<View>(viewFromHash());
   const viewRef = useRef<View>(view);
-  const langRef = useRef<string>("sw");
+  const hadSession = useRef<boolean | null>(null); // null until the first check: a reload never plays the curtain
+  const curtainPending = useRef(false);
   const [theme, setTheme] = useState<ThemeMode>(() => {
     try { const t = localStorage.getItem("itaos-theme"); return t === "dark" || t === "graphite" ? t : "light"; } catch { return "light"; } // light is the default
   });
@@ -74,23 +75,25 @@ export default function App() {
   const shellRef = usePageEnter<HTMLDivElement>((root) => { enterShell(root); }, [!!session && !!ws]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => { setSession(s); if (e === "PASSWORD_RECOVERY") setRecovering(true); });
+    supabase.auth.getSession().then(({ data }) => { hadSession.current = !!data.session; setSession(data.session); });
+    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
+      // Just signed in from the login screen: the full panel curtain carries them into the app (a big
+      // moment, so the short pause feels deliberate). It lifts once the business has loaded.
+      if (e === "SIGNED_IN" && s && hadSession.current === false) { curtainPending.current = true; void curtainCover(initialLang() === "en" ? "Welcome" : "Karibu"); }
+      hadSession.current = !!s;
+      setSession(s); if (e === "PASSWORD_RECOVERY") setRecovering(true);
+    });
     const onHash = () => {
       const next = viewFromHash();
       if (next === viewRef.current) return;
-      // Phone swipe already slides the page; everything else gets the panel wipe (Arch Studio style).
+      // Phone swipe already slides the page with the finger; everything else gets the light page change.
       if (navFlags.swipe || !document.querySelector(".page-view")) { viewRef.current = next; setView(next); return; }
-      const sw = langRef.current === "sw";
-      const label = next === "dashboard" ? (sw ? "Nyumbani" : "Dashboard") : next === "kito" ? (sw ? "Muulize Kito" : "Ask Kito")
-        : next === "chats" ? "Chats" : moreItems(sw).find(([v]) => v === next)?.[1] ?? next;
       viewRef.current = next;
       pageTransition({
-        label, index: VIEWS.indexOf(next) + 1,
         swap: () => flushSync(() => setView(next)),
-        area: () => {
+        area: () => { // the yellow line runs along the bottom edge of the top bar
           const bar = document.querySelector(".topbar")?.getBoundingClientRect();
-          return { top: bar && bar.bottom > 0 ? bar.bottom : 0 };
+          return { top: bar && bar.bottom > 0 ? bar.bottom - 1 : 0 };
         },
         stage: () => document.querySelector<HTMLElement>(".page-view"),
       });
@@ -124,10 +127,18 @@ export default function App() {
     });
   }, [session]);
 
+  // Lift the sign-in curtain once there's something to show (dashboard, setup or a notice), at least a beat after it closed.
+  useEffect(() => {
+    if (!curtainPending.current || !session || ws === undefined) return;
+    curtainPending.current = false;
+    const t = window.setTimeout(curtainReveal, 350);
+    return () => window.clearTimeout(t);
+  }, [session, ws]);
+  useEffect(() => { if (session === null && curtainPending.current) { curtainPending.current = false; curtainReveal(); } }, [session]);
+
   // Keep the bouncing dots up until we know whether to show login, workspace setup or the dashboard.
   useEffect(() => { if (session === null || (session && ws !== undefined)) hidePreloader(); }, [session, ws]);
 
-  langRef.current = ws?.language ?? "sw";
   const badges = useNavBadges(ws?.id ?? "", view);
 
   if (session === undefined) return <div className="center muted">Loading…</div>;

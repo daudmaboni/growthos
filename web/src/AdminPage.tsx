@@ -19,7 +19,7 @@ export default function AdminPage() {
 
   if (session === undefined) return null;
   if (!session) return <StaffSignIn />;
-  return <Admin supabase={supabase} backHref="/app" onSignOut={() => { void supabase.auth.signOut(); }} />;
+  return <Admin supabase={supabase} backHref="/app" onSignOut={() => { void supabase.auth.signOut({ scope: "local" }); }} />;
 }
 
 function StaffSignIn() {
@@ -43,7 +43,7 @@ function StaffSignIn() {
     // Only platform admins may stay signed in here.
     const { data: ok } = await supabase.rpc("is_platform_admin");
     if (ok !== true) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" }); // this device only: never end their other sign-ins
       setBusy(false);
       return setErr(`${data.user?.email ?? "This account"} isn't a Pondi staff account. Business owners sign in on the main sign-in page.`);
     }

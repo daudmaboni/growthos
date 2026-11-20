@@ -463,7 +463,7 @@ function Account({ email, T }: { email: string; T: Tr }) {
       <section className="card">
         <div className="row between">
           <div><h2>{T("Sign out", "Toka")}</h2><span className="small muted">{T("Signs you out on this device.", "Inakutoa kwenye kifaa hiki.")}</span></div>
-          <button type="button" onClick={() => supabase.auth.signOut()}>{T("Sign out", "Toka")}</button>
+          <button type="button" onClick={() => supabase.auth.signOut({ scope: "local" })}>{T("Sign out", "Toka")}</button>
         </div>
       </section>
     </>
