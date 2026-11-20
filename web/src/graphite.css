@@ -31,11 +31,11 @@
 }
 :root[data-dark="graphite"]:not([data-theme="light"]) body:has(.dash-ia) { background: #0f0f10; }
 @media (max-width: 760px) {
-  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child {
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis:not(.has-hero) > .kpi:first-child {
     background: radial-gradient(90% 120% at 100% 0%, #2fbf6233 0%, transparent 55%), #1b1b1e; box-shadow: inset 0 0 0 1px #34343a; }
-  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child::after { background: #4ade80; box-shadow: 0 0 0 6px #4ade8026; }
-  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child .k,
-  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis > .kpi:first-child .s { color: #9a9aa3; }
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis:not(.has-hero) > .kpi:first-child::after { background: #4ade80; box-shadow: 0 0 0 6px #4ade8026; }
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis:not(.has-hero) > .kpi:first-child .k,
+  :root[data-dark="graphite"]:not([data-theme="light"]) .view-dashboard .kpis:not(.has-hero) > .kpi:first-child .s { color: #9a9aa3; }
 }
 
 /* Chats (normally purple) */
