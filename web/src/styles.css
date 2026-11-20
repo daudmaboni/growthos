@@ -1181,3 +1181,15 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
   .inbox.frame .cc.sel { background: var(--ib-soft, var(--raised)); border-radius: 12px; }
   .inbox.frame .cc.sel .cc-main { border-bottom-color: transparent; }
 }
+
+/* ===== Chats on a phone (20 Nov, 2): no borders anywhere =====
+   The graphite theme and phone padding were putting the grey rounded box back around the page,
+   and the rows had hairlines between them. Both gone: the list sits flat on the page. */
+@media (max-width: 899px) {
+  :root .card.chats, :root[data-dark] .card.chats, :root[data-dark="graphite"]:not([data-theme="light"]) .card.chats {
+    background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 4px 0 0;
+  }
+  .chats .inbox.frame, .chats .inbox.frame > .cc-list { border: 0; box-shadow: none; background: transparent; }
+  .inbox.frame .cc-main, .inbox.frame .cc, .inbox.frame .cc + .cc, .inbox.frame .cc-list > div + div .cc { border: 0; }
+  .inbox.frame .cc-main { padding: 9px 2px 9px 0; }
+}
