@@ -48,6 +48,7 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
   const [view, setView] = useHashView();
   const [openWs, setOpenWs] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [more, setMore] = useState(false);   // phone: the "More" sheet
   const refresh = () => setTick((t) => t + 1);
 
   const ov = useRpc<Overview>(supabase, 'admin_overview', undefined, [tick, isAdmin]);
@@ -96,6 +97,30 @@ export default function Admin({ supabase, backHref, onSignOut }: { supabase: Sup
         </div>
       </aside>
 
+      {/* Phone only: refresh button in the slim top bar, and a bottom menu like the business app */}
+      <button className="ia-mrefresh" onClick={refresh} disabled={loading} aria-label="Refresh">{ICON.refresh}</button>
+      <nav className="ia-bnav" aria-label="Admin sections">
+        <BBtn on={view === 'today'} onClick={() => { setMore(false); setView('today'); }} icon={ICON.today}>Today</BBtn>
+        <BBtn on={view === 'workspaces'} onClick={() => { setMore(false); setView('workspaces'); }} icon={ICON.ws}>Businesses</BBtn>
+        <BBtn on={view === 'errors'} onClick={() => { setMore(false); setView('errors'); }} icon={ICON.err} count={recentErrors}>Errors</BBtn>
+        <BBtn on={more || ['performance', 'usage', 'quality', 'audit', 'staff'].includes(view)} onClick={() => setMore((m) => !m)} icon={ICON.more}
+              count={costAlerts.filter((a) => a.tone !== 'info').length}>More</BBtn>
+      </nav>
+      {more && <>
+        <div className="ia-sheet-back" onClick={() => setMore(false)} />
+        <div className="ia-sheet" role="dialog" aria-label="More">
+          {([['performance', 'Performance', ICON.perf], ['usage', 'AI usage', ICON.usage], ['quality', 'Data quality', ICON.quality], ['audit', 'Audit log', ICON.audit], ['staff', 'Staff', ICON.staff]] as const).map(([v, label, icon]) => (
+            <button key={v} className={view === v ? 'on' : ''} onClick={() => { setMore(false); setView(v); }}>{icon}<span>{label}</span>
+              {v === 'usage' && costAlerts.filter((a) => a.tone !== 'info').length > 0 && <em>{costAlerts.filter((a) => a.tone !== 'info').length}</em>}</button>
+          ))}
+          <div className="ia-sheet-foot">
+            <span>Updated {ov.data ? ago(ov.data.generated_at) : '…'}</span>
+            {backHref && <a href={backHref}>Open business app</a>}
+            {onSignOut && <button onClick={onSignOut}>Sign out</button>}
+          </div>
+        </div>
+      </>}
+
       <main className="ia-main">
         {loadError && <div className="ia-alert">Some data didn't load: {loadError}. Try Refresh.</div>}
         {view === 'today' && <Today ov={ov.data} rows={rows} act={act.data} errors={errors} onOpen={setOpenWs} goErrors={() => setView('errors')}
@@ -124,6 +149,14 @@ function NavBtn({ on, onClick, icon, count, hot, children }:
   return (
     <button className={`ia-navbtn${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} onClick={onClick}>
       {icon}<span>{children}</span>{count != null && count > 0 && <em className={hot ? 'hot' : ''}>{count}</em>}
+    </button>
+  );
+}
+
+function BBtn({ on, onClick, icon, count, children }: { on: boolean; onClick: () => void; icon: React.ReactNode; count?: number; children: React.ReactNode }) {
+  return (
+    <button className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={onClick}>
+      <span className="ia-bico">{icon}{count != null && count > 0 && <em>{count > 99 ? '99+' : count}</em>}</span><span>{children}</span>
     </button>
   );
 }

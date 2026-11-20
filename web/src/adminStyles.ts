@@ -224,4 +224,51 @@ export const CSS = `
 .ia-navbtn:active{transform:scale(.96)}
 .ia-refresh{border-radius:999px;background:rgba(255,255,255,.1) linear-gradient(180deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 60%);border-color:rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 16px -10px rgba(0,0,0,.6)}
 @media (max-width:820px){.ia-side{background:color-mix(in srgb,var(--navy) 84%,transparent);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%)}}
+/* ---- Phone (20 Nov): slim top bar, bottom menu + "More" sheet, filters in one swipeable line, businesses as rows ---- */
+.ia-mrefresh,.ia-bnav,.ia-mlist{display:none}
+@media (max-width:820px){
+  .ia-side{flex-wrap:nowrap;padding:max(10px,env(safe-area-inset-top)) 14px 10px;gap:8px}
+  .ia-nav,.ia-side-foot{display:none!important}
+  .ia-mrefresh{display:grid;place-items:center;position:fixed;z-index:21;top:max(10px,env(safe-area-inset-top));right:12px;width:36px;height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);color:#fff!important}
+  .ia-mrefresh:disabled svg{animation:ia-spin 1s linear infinite}
+  @keyframes ia-spin{to{transform:rotate(360deg)}}
+  .ia-main{padding:18px 14px calc(100px + env(safe-area-inset-bottom))}
+  .ia-bnav{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));width:min(340px,calc(100% - 24px));padding:6px;border-radius:999px;
+    background:color-mix(in srgb,var(--navy) 90%,transparent);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 12px 30px -12px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.12)}
+  .ia-bnav button{border:0;background:none;border-radius:999px;padding:7px 2px 6px;display:grid;justify-items:center;gap:2px;font-size:11.5px;font-weight:600;color:#AEB7D6!important}
+  .ia-bnav button.on{background:rgba(255,255,255,.13);color:#fff!important}.ia-bnav button.on svg{color:var(--yellow)}
+  .ia-bico{position:relative;display:grid}
+  .ia-bico em{position:absolute;top:-6px;left:12px;font-style:normal;font-size:10px;font-weight:700;line-height:16px;min-width:16px;padding:0 4px;border-radius:999px;background:#E2544A;color:#fff;text-align:center}
+  .ia-sheet-back{position:fixed;inset:0;z-index:28;background:rgba(10,14,30,.35)}
+  .ia-sheet{position:fixed;z-index:29;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));background:var(--card);border-radius:22px;padding:8px;display:grid;gap:2px;box-shadow:0 24px 60px -20px rgba(10,14,30,.6);animation:ia-up .22s ease both}
+  @keyframes ia-up{from{opacity:0;transform:translateY(12px)}}
+  .ia-sheet>button{display:flex;align-items:center;gap:12px;border:0;background:none;padding:12px 14px;border-radius:14px;font-weight:600;text-align:left}
+  .ia-sheet>button span{flex:1}.ia-sheet>button svg{color:var(--muted)}
+  .ia-sheet>button.on{background:var(--paper)}.ia-sheet>button.on svg{color:var(--navy)}
+  .ia-sheet>button em{font-style:normal;font-size:11px;font-weight:700;background:#E2544A;color:#fff;border-radius:999px;padding:1px 7px}
+  .ia-sheet-foot{display:flex;align-items:center;gap:14px;padding:10px 14px 6px;margin-top:4px;border-top:1px solid var(--line);font-size:13px;color:var(--faint)}
+  .ia-sheet-foot span{flex:1}.ia-sheet-foot a,.ia-sheet-foot button{color:var(--navy)!important;font-weight:600;text-decoration:none;border:0;background:none;padding:6px 0}
+  .ia-sheet-foot button{color:var(--bad)!important}
+  .ia-pagehead h1{font-size:28px}
+  .ia-tools{display:grid;gap:10px}
+  .ia-search{min-width:0;width:100%}
+  .ia-tools .ia-seg{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:none;box-shadow:none;padding:0;gap:6px;margin:0 -14px;padding:0 14px;border-radius:0}
+  .ia-tools .ia-seg::-webkit-scrollbar{display:none}
+  .ia-tools .ia-seg button{flex:none;height:34px;padding:0 13px;border-radius:999px;background:#E4E7EF;box-shadow:none;white-space:nowrap}
+  .ia-tools .ia-seg button.on{background:var(--navy);color:#fff!important;box-shadow:none}.ia-tools .ia-seg button.on em{color:#C9D0E6}
+  .ia-mlist{display:grid;list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+  .ia-mlist>li+li{border-top:1px solid var(--line)}
+  .ia-mlist>li.ia-empty{padding:18px}
+  .ia-mlist button{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;background:none;text-align:left;padding:14px}
+  .ia-mlist button:active{background:#F7F8FB}
+  .ia-mlist .ia-tile{width:40px;height:40px;border-radius:12px}
+  .ia-mbody{display:grid;gap:3px;min-width:0;flex:1}
+  .ia-mtop{display:flex;align-items:baseline;gap:6px;min-width:0}
+  .ia-mtop strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+  .ia-mtop small{margin-left:auto;flex:none;color:var(--faint);font-size:12px}
+  .ia-mbody>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+  .ia-msetup{display:flex;align-items:center;gap:8px;margin-top:3px}.ia-msetup .ia-ticks.lg{margin:0}.ia-msetup .ia-ticks.lg i{width:18px}
+  .ia-msetup small{font-size:12px}
+  .ia-tools+.ia-mlist+.ia-tablecard{display:none}
+}
 `;
