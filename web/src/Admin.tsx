@@ -174,10 +174,27 @@ function Frame({ children }: { children: React.ReactNode }) {
       const btn = (e.target as HTMLElement).closest('td.ia-fold > button');
       if (!btn) return;
       e.stopPropagation(); e.preventDefault();
-      const tr = btn.closest('tr')!;
-      const open = tr.classList.toggle('ia-open');
-      btn.setAttribute('aria-expanded', String(open));
-      btn.querySelector('span')!.textContent = open ? 'Show less' : 'Show all';
+      const tr = btn.closest('tr') as HTMLElement;
+      if (tr.dataset.anim) return;   // still moving
+      const opening = !tr.classList.contains('ia-open');
+      btn.setAttribute('aria-expanded', String(opening));
+      btn.querySelector('span')!.textContent = opening ? 'Show less' : 'Show all';
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      // Measure both heights, then let the card grow or shrink smoothly between them.
+      const from = tr.getBoundingClientRect().height;
+      tr.classList.toggle('ia-open', opening);
+      const to = tr.getBoundingClientRect().height;
+      if (still || !tr.animate) return;
+      const extra = [...tr.children].filter((td) => getComputedStyle(td).display !== 'none' && (td as HTMLElement).matches(':nth-child(n+4):not(.ia-fold)')) as HTMLElement[];
+      if (!opening) tr.classList.add('ia-open');   // keep the rest visible while it folds away
+      tr.dataset.anim = '1';
+      tr.style.overflow = 'hidden';
+      const ease = 'cubic-bezier(.2,.8,.2,1)';
+      const a = tr.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: opening ? 320 : 260, easing: ease });
+      (opening ? extra : [...tr.querySelectorAll(':scope > td:nth-child(n+4):not(.ia-fold)')] as HTMLElement[]).forEach((td, i) =>
+        td.animate(opening ? [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }] : [{ opacity: 1 }, { opacity: 0 }],
+          { duration: opening ? 260 : 160, delay: opening ? 40 + i * 25 : 0, easing: ease, fill: 'backwards' }));
+      a.onfinish = a.oncancel = () => { if (!opening) tr.classList.remove('ia-open'); tr.style.overflow = ''; delete tr.dataset.anim; };
     };
     root.addEventListener('click', onClick);
     let queued = false;
