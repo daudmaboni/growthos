@@ -4,6 +4,7 @@
 // The search runs in the database (find_payment, migration 0047), only over this business's sales.
 import { useEffect, useRef, useState } from "react";
 import { supabase, Workspace, money, orderNet } from "./lib";
+import ReceiptPrint from "./ReceiptPrint";
 
 type Found = {
   order: null | {
@@ -34,6 +35,7 @@ export default function Receipts({ ws }: { ws: Workspace }) {
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<Recent[]>([]);
   const seq = useRef(0);
+  const [printId, setPrintId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from("orders").select("id,receipt_no,amount,discount,refund_amount,currency,paid_at,product").eq("workspace_id", ws.id)
@@ -77,7 +79,9 @@ export default function Receipts({ ws }: { ws: Workspace }) {
           `Hakuna kilichopatikana kwa “${q.trim()}”. Hakiki namba, au tafuta sehemu yake (mfano herufi 4 za mwisho).`)}</div>
       )}
 
-      {res?.map((f, i) => <PaymentCard key={(f.order?.id ?? f.evidence?.message_id ?? "") + i} f={f} T={T} />)}
+      {res?.map((f, i) => <PaymentCard key={(f.order?.id ?? f.evidence?.message_id ?? "") + i} f={f} T={T} onPrint={setPrintId} />)}
+
+      {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
 
       {!res && recent.length > 0 && (
         <section className="card" style={{ display: "grid", gap: 8 }}>
@@ -95,7 +99,7 @@ export default function Receipts({ ws }: { ws: Workspace }) {
   );
 }
 
-function PaymentCard({ f, T }: { f: Found; T: (en: string, s: string) => string }) {
+function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) => string; onPrint: (id: string) => void }) {
   const o = f.order, ev = f.evidence, rc = ev?.receipt ?? null;
   const items = o?.items?.length ? o.items.map((x) => `${x.name ?? "?"}${x.qty && x.qty > 1 ? ` × ${x.qty}` : ""}`).join(", ") : o?.product ?? null;
   const status = !o ? T("Payment message — not recorded as a sale", "Ujumbe wa malipo — haujarekodiwa kama mauzo")
@@ -142,7 +146,10 @@ function PaymentCard({ f, T }: { f: Found; T: (en: string, s: string) => string 
         </div>
       )}
       {!ev && o && <span className="small muted">{T("No receipt screenshot or payment SMS found in the chat for this sale.", "Hakuna picha ya risiti wala SMS ya malipo kwenye chat kwa mauzo haya.")}</span>}
-      {f.conversation_id && <a href={"#chats/ids=" + f.conversation_id}>{T("Open the chat →", "Fungua chat →")}</a>}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {o && o.status === "paid" && <button type="button" className="primary" onClick={() => onPrint(o.id)}>{T("Print receipt", "Chapisha risiti")}</button>}
+        {f.conversation_id && <a href={"#chats/ids=" + f.conversation_id}>{T("Open the chat →", "Fungua chat →")}</a>}
+      </div>
     </section>
   );
 }
