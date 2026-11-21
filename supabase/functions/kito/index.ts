@@ -47,7 +47,9 @@ function transcript(msgs: { direction: string; sent_at: string; body: string | n
     if (stamp.slice(0, 14) !== day) { day = stamp.slice(0, 14); lines.push(`[${stamp}]`); }
     const gap = prev != null && t - prev > 3 * 3600e3 ? ` (+${Math.round((t - prev) / 3600e3)}h)` : "";
     prev = t;
-    lines.push(`${m.direction === "out" ? "BIASHARA" : "MTEJA"}${gap}: ${redact(m.body ?? `[${m.type}]`).slice(0, 400)}`);
+    // A transcribed voice note ("[voice note] …") can be a minute of talk: keep more of it than a typed line.
+    const max = m.body?.startsWith("[voice note] ") ? 1200 : 400;
+    lines.push(`${m.direction === "out" ? "BIASHARA" : "MTEJA"}${gap}: ${redact(m.body ?? `[${m.type}]`).slice(0, max)}`);
   }
   return lines.join("\n");
 }

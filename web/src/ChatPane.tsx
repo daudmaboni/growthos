@@ -502,7 +502,9 @@ export function MediaView({ m, ws, T }: { m: Msg; ws: Workspace; T: Tr }) {
   const r = m.media?.receipt;
   const isPdf = m.media?.mime === "application/pdf";
   const isAudio = /^audio\//.test(m.media?.mime ?? "") || m.type === "audio";
-  const caption = (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha") && l !== "[image]" && l !== "[document]" && l !== "[voice note]").join("\n");
+  // A voice note Kito has turned into text: body is "[voice note] <what was said>".
+  const heard = (m.body ?? "").startsWith("[voice note] ") ? (m.body ?? "").slice(13).trim() : "";
+  const caption = heard ? "" : (m.body ?? "").split("\n").filter((l) => !l.startsWith("[picha") && l !== "[image]" && l !== "[document]" && l !== "[voice note]").join("\n");
   return (
     <span className="mv">
       {url && (isAudio
@@ -512,6 +514,7 @@ export function MediaView({ m, ws, T }: { m: Msg; ws: Workspace; T: Tr }) {
         ? <a href={url} target="_blank" rel="noopener noreferrer">📄 {T("Open PDF", "Fungua PDF")}</a>
         : <img src={url} alt={m.direction === "in" ? T("Image from customer", "Picha kutoka kwa mteja") : T("Image you sent", "Picha uliyotuma")} className={big ? "big" : ""} onClick={() => setBig(!big)} />)}
       {caption && <span>{caption}</span>}
+      {heard && <span className="mv-heard"><b>{T("Voice note says:", "Sauti inasema:")}</b> {heard}</span>}
       {r?.is_receipt ? <span className="mv-tag">🧾 {T("Payment screenshot", "Picha ya malipo")}{r.amount ? ` · ${Math.round(r.amount).toLocaleString("en-US")}` : ""}{r.txn_code ? ` · ${r.txn_code}` : ""}</span>
         : pm?.is_product_photo && pm.name ? <span className="mv-tag" title={pm.notes ?? ""}>🏷 {pm.confidence === "low" ? T("Maybe", "Huenda ni") : T("Looks like", "Inaonekana ni")} {pm.name}{pm.alternatives.length ? ` (${T("or", "au")} ${pm.alternatives.map((a) => a.name).join(", ")})` : ""} <span className={"chip conf-" + pm.confidence}>{pm.confidence === "high" ? T("sure", "uhakika") : pm.confidence === "medium" ? T("fairly sure", "karibu uhakika") : T("not sure", "sina uhakika")}</span></span>
         : pm?.is_product_photo ? <span className="mv-tag muted">🏷 {T("A product, but not one of yours I recognise", "Ni bidhaa, lakini siitambui kati ya zako")}</span>
