@@ -209,10 +209,15 @@ button.linkish.small { color: var(--muted); }
    on the page — no big white card around them — so the inbox and lists use the full width up to the
    one page margin. Phones already work this way. Result cards (a payment, a Kito answer) keep their card. ---- */
 @media (min-width: 900px) {
-  :root .card.chats, :root[data-dark] .card.chats, :root[data-dark="graphite"]:not([data-theme="light"]) .card.chats,
-  :root .card.flat, :root[data-dark] .card.flat, :root[data-dark="graphite"]:not([data-theme="light"]) .card.flat {
+  :root .card.chats, :root[data-dark] .card.chats, :root[data-dark="graphite"]:not([data-theme="light"]) .card.chats {
     background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0;
   }
-  .card.chats:hover, .card.flat:hover { border-color: transparent; }
-  .card.flat + .card.flat { border-top: 1px solid var(--line); padding-top: 22px; }
+  .card.chats:hover { border-color: transparent; }
 }
+/* Same on phones for Ask Kito, Actions and Find a payment (Chats already is): every width. */
+:root .card.flat, :root[data-dark] .card.flat, :root[data-dark="graphite"]:not([data-theme="light"]) .card.flat {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0;
+}
+.card.flat:hover { border-color: transparent; }
+.card.flat + .card.flat { border-top: 1px solid var(--line); padding-top: 22px; }
+@media (max-width: 899px) { .card.flat + .card.flat { padding-top: 18px; } }
