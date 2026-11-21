@@ -2,7 +2,7 @@
 // Each card answers three questions: who is this, where do things stand, and what should I do now.
 // The technical detail (which rule or Kito reading decided the label) is still there, tucked away.
 import { enterRows, usePageEnter, select } from "./motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase, callFn, Workspace, Outcome, Task, fmt, when, canEdit, canManage, money, localDay } from "./lib";
 import DateRange from "./DateRange";
 import { RangeSel, resolveRange, addDays, loadRange, saveRange, presetLabel } from "./ranges";
@@ -36,17 +36,30 @@ const hashIds = () => {
   return m ? m[1].split(",").filter(Boolean).slice(0, 100) : null;
 };
 
+// The last list shown, kept while the app is open. Coming back to Chats from another tab shows it at once
+// and refreshes it quietly in the background, instead of blanking the page and loading everything again.
+type Snap = {
+  ws: string; key: string; filter: Filter; src: Source;
+  rows: Outcome[]; lite: Lite[]; counts: Record<string, number> | null; phones: Record<string, string>;
+  adNames: Record<string, string>; tasks: Record<string, Task>; runs: Run[];
+  paidOn: Record<string, string> | null; boughtInRange: number | null;
+};
+let snap: Snap | null = null;
+// Kito's automatic catch-up runs once per business while the app is open, not every time Chats opens.
+const autoRan = new Set<string>();
+
 export default function Chats({ ws }: { ws: Workspace }) {
   const [ids, setIds] = useState<string[] | null>(hashIds());
-  const [filter, setFilter] = useState<Filter>(ids ? "ids" : "all");
-  const [src, setSrc] = useState<Source>("any");
-  const [rows, setRows] = useState<Outcome[]>([]);
-  const [lite, setLite] = useState<Lite[]>([]);
-  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const cached = !ids && snap && snap.ws === ws.id ? snap : null;
+  const [filter, setFilter] = useState<Filter>(ids ? "ids" : cached?.filter ?? "all");
+  const [src, setSrc] = useState<Source>(cached?.src ?? "any");
+  const [rows, setRows] = useState<Outcome[]>(cached?.rows ?? []);
+  const [lite, setLite] = useState<Lite[]>(cached?.lite ?? []);
+  const [counts, setCounts] = useState<Record<string, number> | null>(cached?.counts ?? null);
   // Bought + a date picked: chat id -> when that customer actually paid (the order's paid date, read from the chat),
   // and how many bought on those days. Null when no date is picked.
-  const [paidOn, setPaidOn] = useState<Record<string, string> | null>(null);
-  const [boughtInRange, setBoughtInRange] = useState<number | null>(null);
+  const [paidOn, setPaidOn] = useState<Record<string, string> | null>(cached?.paidOn ?? null);
+  const [boughtInRange, setBoughtInRange] = useState<number | null>(cached?.boughtInRange ?? null);
   const [limit, setLimit] = useState(PAGE);
   const [openId, setOpenId] = useState<string | null>(hashOpen());
   // Search by name or phone, and an optional date range (own to this page; empty = all dates).
@@ -66,13 +79,15 @@ export default function Chats({ ws }: { ws: Workspace }) {
       .then(({ data }) => { const t = (data as any)?.[0]?.last_message_at; setChatStart(t ? localDay(new Date(t), tzChats) : null); });
   }, [ws.id, tzChats]);
   const [openConfirm, setOpenConfirm] = useState(false);
-  const [adNames, setAdNames] = useState<Record<string, string>>({});
-  const [phones, setPhones] = useState<Record<string, string>>({});
-  const [tasks, setTasks] = useState<Record<string, Task>>({});
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [adNames, setAdNames] = useState<Record<string, string>>(cached?.adNames ?? {});
+  const [phones, setPhones] = useState<Record<string, string>>(cached?.phones ?? {});
+  const [tasks, setTasks] = useState<Record<string, Task>>(cached?.tasks ?? {});
+  const [runs, setRuns] = useState<Run[]>(cached?.runs ?? []);
+  // Which list is on screen (tab, source, search, dates, page size). The grey placeholders only show when
+  // this changes; a refresh of the same list (live update, Kito finished, coming back to the tab) updates in place.
+  const shownKey = useRef<string | null>(cached?.key ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [tick, setTick] = useState(0);
-  const [autoDone, setAutoDone] = useState(false);
   const [rechecking, setRechecking] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [note, setNote] = useState("");
@@ -120,9 +135,12 @@ export default function Chats({ ws }: { ws: Workspace }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  const viewKey = JSON.stringify([ws.id, filter, ids, src, limit, search, period?.from, period?.to]);
+
   useEffect(() => {
-    if (!quiet) setLoading(true);
+    if (!quiet && shownKey.current !== viewKey) setLoading(true);
     setQuiet(false); setErr("");
+    let cur = true;
     const byPaid = filter === "sold";
     let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id)
       .order(byPaid ? "last_paid_at" : "last_message_at", { ascending: false, nullsFirst: false }).limit(limit);
@@ -197,6 +215,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
       supabase.from("ads").select("ad_id,name").eq("workspace_id", ws.id),
       supabase.from("follow_up_tasks").select("*").eq("workspace_id", ws.id).in("status", ["open", "snoozed"]),
     ]).then(async ([c, a, t]) => {
+      if (!cur) return;   // a newer load (other tab, new search) has started: don't let this older one overwrite it
       if (c.error) setErr(c.error.message);
       let list = (c.data as Outcome[]) ?? [];
       if (byPaid && period) {
@@ -209,17 +228,38 @@ export default function Chats({ ws }: { ws: Workspace }) {
       }
       const contactIds = [...new Set(list.map((r) => r.contact_id))];
       const { data: cts } = contactIds.length ? await supabase.from("contacts").select("id,wa_id").eq("workspace_id", ws.id).in("id", contactIds) : { data: [] };
+      if (!cur) return;
       setPhones(Object.fromEntries((cts ?? []).map((x: any) => [x.id, x.wa_id])));
       setRows(list);
       if (filter === "ids" && list.length && list.length <= 3) setOpenId((cur) => cur ?? list[0].id);
       setAdNames(Object.fromEntries((a.data ?? []).map((x: any) => [x.ad_id, x.name])));
       setTasks(Object.fromEntries(((t.data ?? []) as Task[]).map((task) => [task.conversation_id, task])));
-      setLoading(false);
+      setLoading(false); shownKey.current = viewKey;
     });
+    return () => { cur = false; };
   }, [ws.id, filter, ids, tick, src, limit, search, period?.from, period?.to]);
 
-  async function runKito(quiet = false) {
-    setRechecking(true); setNote(quiet ? T("Kito is reading new chats…", "Kito anasoma chat mpya…") : T("Kito is reading the chats…", "Kito anasoma chat…"));
+  // Remember what's on screen for the next visit to this tab.
+  useEffect(() => {
+    if (loading || filter === "ids") return;
+    snap = { ws: ws.id, key: viewKey, filter, src, rows, lite, counts, phones, adNames, tasks, runs, paidOn, boughtInRange };
+  }, [loading, viewKey, rows, lite, counts, phones, adNames, tasks, runs, paidOn, boughtInRange]);
+
+  /** background = the automatic catch-up when Chats opens: nothing on screen changes until new labels arrive. */
+  async function runKito(background = false) {
+    if (background) {
+      try {
+        let total = 0;
+        for (let i = 0; i < 10; i++) {
+          const r = await callFn<{ checked: number; remaining: number }>("kito", { workspace_id: ws.id });
+          total += r.checked;
+          if (!r.remaining || !r.checked) break;
+        }
+        if (total) { setQuiet(true); refresh(); }
+      } catch { /* the 15-minute background run will pick it up */ }
+      return;
+    }
+    setRechecking(true); setNote(T("Kito is reading the chats…", "Kito anasoma chat…"));
     try {
       let total = 0;
       for (let i = 0; i < 10; i++) {
@@ -229,18 +269,18 @@ export default function Chats({ ws }: { ws: Workspace }) {
         if (!r.remaining || !r.checked) break;
         setNote(T(`Kito has read ${total} chats, ${r.remaining} to go…`, `Kito amesoma chat ${total}, zimebaki ${r.remaining}…`));
       }
-      setNote(total ? T(`Kito read ${total} chats.`, `Kito amesoma chat ${total}.`) : quiet ? "" : T("Kito is up to date. No new messages.", "Kito yuko sawa. Hakuna ujumbe mpya.")); refresh();
-    } catch (e) { setNote(quiet ? "" : (e as Error).message); }
+      setNote(total ? T(`Kito read ${total} chats.`, `Kito amesoma chat ${total}.`) : T("Kito is up to date. No new messages.", "Kito yuko sawa. Hakuna ujumbe mpya.")); refresh();
+    } catch (e) { setNote((e as Error).message); }
     setRechecking(false);
   }
   useEffect(() => {
-    if (autoDone) return;
-    setAutoDone(true);
+    if (autoRan.has(ws.id)) return;
+    autoRan.add(ws.id);
     (async () => {
       const { data } = await supabase.from("conversations").select("id,label,last_message_at,kito_checked_at").eq("workspace_id", ws.id).limit(1000);
       const all = data ?? [];
       try {
-        if (all.some((c) => c.label == null && c.last_message_at)) { await callFn("chat-import", { workspace_id: ws.id, action: "reanalyze" }); refresh(); }
+        if (all.some((c) => c.label == null && c.last_message_at)) { await callFn("chat-import", { workspace_id: ws.id, action: "reanalyze" }); setQuiet(true); refresh(); }
         if (all.some((c) => c.last_message_at && (!c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at)))) await runKito(true);
       } catch { /* the 15-minute background run will pick it up */ }
     })();
@@ -264,8 +304,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
     else { setNote(T(`Deleted ${(data as any).deleted} imported chats.`, `Chat ${(data as any).deleted} zilizoingizwa zimefutwa.`)); setSrc("any"); refresh(); }
   }
 
+  const animated = useRef(!!cached);   // a list shown from memory doesn't replay the row entrance
   const pageRef = usePageEnter<HTMLElement>((root) => {
     if (loading) return;
+    if (animated.current) { animated.current = false; return; }
     enterRows(select(root, ".cc"), { delay: 0.1, stagger: 0.04 });
   }, [loading, filter]);
 
