@@ -36,14 +36,15 @@ export function dueBucket(t: Task, now = Date.now()): "overdue" | "today" | "upc
   return d < today ? "overdue" : d === today ? "today" : "upcoming";
 }
 
-export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outcome; ws: Workspace; editor: boolean; onChange: () => void }) {
+export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outcome; ws: Workspace; editor: boolean; onChange: () => void | Promise<void> }) {
   const sw = ws.language === "sw";
   const T = (en: string, s: string) => (sw ? s : en);
   const proposed = t.status === "proposed";
   const at = t.status === "snoozed" && t.snoozed_until ? t.snoozed_until : t.due_at;
   const [due, setDue] = useState(at ? toLocalInput(at) : "");
   const [kind, setKind] = useState<Kind>(t.kind ?? "other");
-  const [busy, setBusy] = useState(false);
+  const [doing, setDoing] = useState<string | null>(null);   // which button is working (shows the spinner)
+  const busy = doing !== null;
   const [msg, setMsg] = useState("");
   const [moving, setMoving] = useState(false);   // "Postponed": pick the new day
   const [draft, setDraft] = useState(t.draft ?? "");
@@ -53,17 +54,20 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
   const name = r?.contact_name ?? T("Customer", "Mteja");
   const quick = (d: string) => setDue(`${d}T${kind === "call" ? "10:00" : "09:00"}`);
 
-  async function run(p: PromiseLike<{ error: any }>, ok?: string) {
-    setBusy(true); setMsg("");
+  // Keeps the spinner on the clicked button until the list has reloaded and this card has moved.
+  async function run(which: string, p: PromiseLike<{ error: any }>, ok?: string) {
+    setDoing(which); setMsg("");
     const { error } = await p;
-    setBusy(false);
-    if (error) setMsg(error.message); else { if (ok) setMsg(ok); onChange(); }
+    if (error) { setDoing(null); setMsg(error.message); return; }
+    if (ok) setMsg(ok);
+    try { await onChange(); } finally { setDoing(null); }
   }
-  const patch = (p: Partial<Task>, ok?: string) => run(supabase.from("follow_up_tasks").update(p).eq("id", t.id).eq("workspace_id", ws.id), ok);
+  const patch = (which: string, p: Partial<Task>, ok?: string) => run(which, supabase.from("follow_up_tasks").update(p).eq("id", t.id).eq("workspace_id", ws.id), ok);
   const confirm = () => {
     if (!due) { setMsg(T("Pick a day first.", "Chagua siku kwanza.")); return; }
-    return run(supabase.rpc("confirm_promise", { p_task: t.id, p_due: fromLocalInput(due), p_kind: kind }));
+    return run("remind", supabase.rpc("confirm_promise", { p_task: t.id, p_due: fromLocalInput(due), p_kind: kind }));
   };
+  const spin = (which: string) => doing === which && <span className="kito-spin sm" aria-hidden />;
   async function askKito() {
     setWriting(true); setMsg("");
     try {
@@ -122,7 +126,7 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
           {moving && editor && (
             <div className="row" style={{ gap: 6, marginTop: 6 }}>
               <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
-              <button className="small primary" disabled={busy || !due} onClick={() => { setMoving(false); patch({ status: "open", due_at: fromLocalInput(due), snoozed_until: null, result: "postponed" }); }}>{T("Save new day", "Hifadhi siku mpya")}</button>
+              <button className="small primary" disabled={busy || !due} onClick={() => { setMoving(false); patch("move", { status: "open", due_at: fromLocalInput(due), snoozed_until: null, result: "postponed" }); }}>{spin("move")}{T("Save new day", "Hifadhi siku mpya")}</button>
             </div>
           )}
         </div>
@@ -131,14 +135,14 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
       {editor && (
         <div className={"promise-acts" + (proposed ? " proposed" : "")}>
           {proposed ? <>
-            <button className="small primary" disabled={busy} onClick={confirm}>{T("Remind me", "Nikumbushe")}</button>
-            <button className="linkish small" disabled={busy} onClick={() => patch({ status: "dismissed" })}>{T("Not a promise", "Si ahadi")}</button>
+            <button className="small primary" disabled={busy} aria-busy={doing === "remind"} onClick={confirm}>{spin("remind")}{doing === "remind" ? T("Saving…", "Inahifadhi…") : T("Remind me", "Nikumbushe")}</button>
+            <button className="linkish small" disabled={busy} onClick={() => patch("dismiss", { status: "dismissed" })}>{spin("dismiss")}{T("Not a promise", "Si ahadi")}</button>
           </> : <>
-            <button className="small primary" disabled={busy} onClick={() => { patch({ status: "done", result: "paid" }); location.hash = "#chats/open=" + t.conversation_id; }} title={T("Opens the chat so you can record the sale", "Inafungua chat ili urekodi mauzo")}>{T("Paid → record sale", "Amelipa → rekodi mauzo")}</button>
-            <button className="small" disabled={busy} onClick={() => patch({ status: "done", result: "called" })}>{T("Talked to them", "Nimeongea naye")}</button>
-            <button className="small" disabled={busy} onClick={() => patch({ status: "snoozed", snoozed_until: new Date(Date.now() + DAY).toISOString(), result: "no_answer" })}>{T("No answer — tomorrow", "Hakupokea — kesho")}</button>
+            <button className="small primary" disabled={busy} onClick={() => { patch("paid", { status: "done", result: "paid" }); location.hash = "#chats/open=" + t.conversation_id; }} title={T("Opens the chat so you can record the sale", "Inafungua chat ili urekodi mauzo")}>{spin("paid")}{T("Paid → record sale", "Amelipa → rekodi mauzo")}</button>
+            <button className="small" disabled={busy} onClick={() => patch("called", { status: "done", result: "called" })}>{spin("called")}{T("Talked to them", "Nimeongea naye")}</button>
+            <button className="small" disabled={busy} onClick={() => patch("snooze", { status: "snoozed", snoozed_until: new Date(Date.now() + DAY).toISOString(), result: "no_answer" })}>{spin("snooze")}{T("No answer — tomorrow", "Hakupokea — kesho")}</button>
             <button className="small" disabled={busy} onClick={() => setMoving((m) => !m)}>{T("Postponed…", "Ameahirisha…")}</button>
-            <button className="small" disabled={busy} onClick={() => patch({ status: "dismissed", result: "not_interested" })}>{T("Not interested", "Hana nia")}</button>
+            <button className="small" disabled={busy} onClick={() => patch("lost", { status: "dismissed", result: "not_interested" })}>{spin("lost")}{T("Not interested", "Hana nia")}</button>
           </>}
         </div>
       )}
@@ -147,7 +151,7 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
   );
 }
 
-export function PromiseList({ tasks, rows, ws, editor, onChange }: { tasks: Task[]; rows: Outcome[]; ws: Workspace; editor: boolean; onChange: () => void }) {
+export function PromiseList({ tasks, rows, ws, editor, onChange }: { tasks: Task[]; rows: Outcome[]; ws: Workspace; editor: boolean; onChange: () => void | Promise<void> }) {
   const sw = ws.language === "sw";
   const T = (en: string, s: string) => (sw ? s : en);
   const mine = tasks.filter((t) => t.source === "kito_promise");

@@ -1,7 +1,7 @@
 // Action Centre: the follow-up queue. Surfaces chats that need a reply or a follow-up, lets
 // staff assign / snooze / complete / dismiss tasks, and asks Kito for a DRAFT that a human
 // reviews and sends from their own phone. itaOS never sends WhatsApp messages.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
 import { KitoLoader } from "./KitoLoader";
@@ -24,12 +24,18 @@ export default function Actions({ ws }: { ws: Workspace }) {
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
   const [tab, setTab] = useState<"promises" | "queue" | "tasks" | "done">(() => (location.hash.includes("tab=queue") ? "queue" : "promises"));
-  const refresh = () => setTick((t) => t + 1);
+  // Refresh quietly: after the first load the page stays on screen while new data comes in
+  // (no skeleton flash). The returned promise resolves once the new data is shown, so a button
+  // can keep its spinner until its card has moved.
+  const waiters = useRef<(() => void)[]>([]);
+  const loadedWs = useRef<string | null>(null);
+  const refresh = () => new Promise<void>((res) => { waiters.current.push(res); setTick((t) => t + 1); });
   const editor = canEdit(ws);
 
   useEffect(() => {
     let live = true;
-    setLoading(true); setErr("");
+    if (loadedWs.current !== ws.id) setLoading(true);
+    setErr("");
     const since = new Date(Date.now() - 45 * 864e5).toISOString();
     Promise.all([
       supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).gte("last_message_at", since).order("last_message_at", { ascending: false }).limit(500),
@@ -41,7 +47,8 @@ export default function Actions({ ws }: { ws: Workspace }) {
       const e = c.error || t.error || m.error;
       if (e) setErr(e.message);
       setRows((c.data as Outcome[]) ?? []); setTasks((t.data as Task[]) ?? []); setMembers((m.data as Member[]) ?? []); setMe(u.data.user?.id ?? "");
-      setLoading(false);
+      setLoading(false); loadedWs.current = ws.id;
+      const w = waiters.current; waiters.current = []; w.forEach((f) => f());
     });
     return () => { live = false; };
   }, [ws.id, tick]);
