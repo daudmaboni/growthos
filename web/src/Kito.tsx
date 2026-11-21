@@ -6,6 +6,7 @@ import { enterCards, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, L, ago, money, fmt, canEdit } from "./lib";
 import { KitoLogo } from "./Logo";
 import { KitoLoader } from "./KitoLoader";
+import { useKept } from "./keep";
 
 type ChatItem = {
   chat_id: string; name: string | null; wa_id: string | null; last_message_at: string | null; last_dir: "in" | "out" | null;
@@ -76,9 +77,11 @@ const SUGGEST = {
 export default function Kito({ ws }: { ws: Workspace }) {
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [q, setQ] = useState("");
-  const [recent, setRecent] = useState<Answer[]>([]);
+  // Kept while the app is open: switching tabs mid-answer no longer loses the conversation, and an
+  // answer that arrives while you're on another tab is waiting when you come back.
+  const [turns, setTurns] = useKept<Turn[]>("kito:turns:" + ws.id, []);
+  const [q, setQ] = useKept("kito:q:" + ws.id, "");
+  const [recent, setRecent] = useKept<Answer[]>("kito:recent:" + ws.id, []);
   const busy = turns.some((t) => t.pending);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

@@ -18,7 +18,7 @@ export default function Report({ ws }: { ws: Workspace }) {
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   const [filters, setFilters] = useFilters("report");
-  const g = useGrowthData(ws, range, { filters });
+  const g = useGrowthData(ws, range, { cache: true, filters });   // last numbers show at once; fresh ones load quietly
   const [copied, setCopied] = useState(false);
   const { mx, prev } = g;
   const findings = useMemo(() => (mx ? diagnose(mx, g.convs, g.orders, ws.timezone) : []), [mx, g.convs, g.orders, ws.timezone]);
@@ -28,7 +28,7 @@ export default function Report({ ws }: { ws: Workspace }) {
     enterRows(select(root, ".finding"), { delay: 0.3, x: -8, y: 0, stagger: 0.05 });
   }, [g.loading, JSON.stringify(range)]);
 
-  if (g.loading || !mx || !prev) return <div className="skeletons" aria-busy="true"><div className="skeleton" style={{ minHeight: 120 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>;
+  if ((g.loading && !g.cached) || !mx || !prev) return <div className="skeletons" aria-busy="true"><div className="skeleton" style={{ minHeight: 120 }} /><div className="skeleton" style={{ minHeight: 300 }} /></div>;
 
   const rows: [string, Metric, Metric, (n: number | null) => string][] = [
     [T("Ad spend", "Matumizi ya matangazo"), mx.spend, prev.spend, (n) => money(n, mx.adCurrency)],

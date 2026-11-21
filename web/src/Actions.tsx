@@ -6,6 +6,7 @@ import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
 import { KitoLoader } from "./KitoLoader";
 import { PromiseList, dueBucket } from "./Promises";
+import { useKept, kept, put } from "./keep";
 
 type Member = { user_id: string; role: string; email: string };
 type Msg = { id: string; direction: "in" | "out"; sent_at: string; body: string | null };
@@ -16,11 +17,13 @@ const tempOf = (r: Outcome) => r.kito_temp ?? (r.warm ? "warm" : null);
 export default function Actions({ ws }: { ws: Workspace }) {
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const [rows, setRows] = useState<Outcome[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [me, setMe] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  // Kept while the app is open: coming back to Actions shows the last list at once and refreshes it quietly.
+  const K = "actions:" + ws.id;
+  const [rows, setRows] = useKept<Outcome[]>(K + ":rows", []);
+  const [tasks, setTasks] = useKept<Task[]>(K + ":tasks", []);
+  const [members, setMembers] = useKept<Member[]>(K + ":members", []);
+  const [me, setMe] = useKept<string>(K + ":me", "");
+  const [loading, setLoading] = useState(!kept(K + ":loaded"));
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
   const [tab, setTab] = useState<"promises" | "queue" | "tasks" | "done">(() => (location.hash.includes("tab=queue") ? "queue" : "promises"));
@@ -28,13 +31,13 @@ export default function Actions({ ws }: { ws: Workspace }) {
   // (no skeleton flash). The returned promise resolves once the new data is shown, so a button
   // can keep its spinner until its card has moved.
   const waiters = useRef<(() => void)[]>([]);
-  const loadedWs = useRef<string | null>(null);
+
   const refresh = () => new Promise<void>((res) => { waiters.current.push(res); setTick((t) => t + 1); });
   const editor = canEdit(ws);
 
   useEffect(() => {
     let live = true;
-    if (loadedWs.current !== ws.id) setLoading(true);
+    if (!kept(K + ":loaded")) setLoading(true);
     setErr("");
     const since = new Date(Date.now() - 45 * 864e5).toISOString();
     Promise.all([
@@ -47,7 +50,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       const e = c.error || t.error || m.error;
       if (e) setErr(e.message);
       setRows((c.data as Outcome[]) ?? []); setTasks((t.data as Task[]) ?? []); setMembers((m.data as Member[]) ?? []); setMe(u.data.user?.id ?? "");
-      setLoading(false); loadedWs.current = ws.id;
+      setLoading(false); put(K + ":loaded", true);
       const w = waiters.current; waiters.current = []; w.forEach((f) => f());
     });
     return () => { live = false; };

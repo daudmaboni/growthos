@@ -3,6 +3,7 @@
 // what is assigned to you. Data from needs_attention (0033) + webhook_health. Payment signals stay
 // signals: confirming one happens in the chat, where the owner checks the money first.
 import { useEffect, useState } from "react";
+import { useKept } from "./keep";
 import { enterCards, usePageEnter, select } from "./motion";
 import { supabase, Workspace, L, amt, ago, canEdit } from "./lib";
 import { AssignSelect, useTeam, shortName } from "./team";
@@ -23,8 +24,9 @@ const chatLink = (ids: (string | null)[]) => "#chats/ids=" + ids.filter(Boolean)
 export default function Attention({ ws }: { ws: Workspace }) {
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
-  const [d, setD] = useState<Data | null>(null);
-  const [health, setHealth] = useState<Health[]>([]);
+  // Kept while the app is open: coming back shows the last list at once (no placeholders) and refreshes it quietly.
+  const [d, setD] = useKept<Data | null>("attention:d:" + ws.id, null);
+  const [health, setHealth] = useKept<Health[]>("attention:h:" + ws.id, []);
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState("");
