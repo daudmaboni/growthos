@@ -202,13 +202,14 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
     : o?.inferred_from === "kito" ? T("Kito, confirmed by you", "Kito, umethibitisha")
     : o?.inferred_from === "rules" ? T("chat rules, confirmed by you", "kanuni za chat, umethibitisha")
     : o?.provenance === "csv_import" ? T("imported", "imeingizwa") : T("recorded by hand", "imerekodiwa kwa mkono");
-  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => v == null || v === "" ? null : (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-      <span className="muted">{k}</span><span style={{ textAlign: "right", fontWeight: 600 }}>{v}</span>
-    </div>
+  // Label left, value right; long values wrap instead of pushing the card off the screen. `stack` puts the value under the label.
+  const Row = ({ k, v, stack }: { k: string; v: React.ReactNode; stack?: boolean }) => v == null || v === "" ? null : (
+    <div className={"kv" + (stack ? " stack" : "")}><span className="muted">{k}</span><span>{v}</span></div>
   );
+  // Notes carry an internal WhatsApp message id ("[wamsg:wamid.…]") — useful to the system, noise to the owner.
+  const notes = o?.notes ? o.notes.replace(/\s*\[wamsg:[^\]]*\]/g, "").trim() || null : null;
   return (
-    <section className="card" style={{ display: "grid", gap: 10 }}>
+    <section className="card pay-card" style={{ display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "grid", gap: 2 }}>
           <span className="small muted">{T("Receipt no.", "Kumbukumbu Na.")}</span>
@@ -219,11 +220,11 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
           {o && <b style={{ fontSize: 22 }}>{money(orderNet(o), o.currency)}</b>}
         </div>
       </div>
-      <div className="small">
+      <div className="small kv-list">
         <Row k={T("Customer", "Mteja")} v={f.customer?.name || (f.customer?.phone ? "+" + f.customer.phone : null)} />
         <Row k={T("Phone", "Simu")} v={f.customer?.phone ? "+" + f.customer.phone : null} />
-        <Row k={T("Bought", "Alinunua")} v={items} />
-        <Row k={T("Place mentioned in the chat", "Mahali alipotaja kwenye chat")} v={f.place ? `“…${f.place}…”` : null} />
+        <Row k={T("Bought", "Alinunua")} v={items} stack />
+        <Row k={T("Place mentioned in the chat", "Mahali alipotaja kwenye chat")} v={f.place ? `“…${f.place}…”` : null} stack />
         <Row k={T("Paid on", "Alilipa")} v={o ? fmt(o.paid_at) : ev ? fmt(ev.sent_at) : null} />
         {o && (Number(o.discount) > 0 || Number(o.refund_amount) > 0) && <Row k={T("Before discount / refund", "Kabla ya punguzo / marejesho")} v={money(Number(o.amount), o.currency)} />}
         <Row k={T("Transaction code", "Namba ya muamala")} v={o?.payment_ref ?? rc?.txn_code ?? null} />
@@ -231,8 +232,8 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
         <Row k={T("Sent by (on receipt)", "Aliyetuma (kwenye risiti)")} v={rc?.sender ?? null} />
         <Row k={T("Paid to (on receipt)", "Aliyelipwa (kwenye risiti)")} v={rc?.paid_to ?? null} />
         <Row k={T("Amount on receipt", "Kiasi kwenye risiti")} v={rc?.amount != null ? money(rc.amount, rc.currency || o?.currency || "TZS") : null} />
-        <Row k={T("How the sale was recorded", "Mauzo yalirekodiwa vipi")} v={o ? `${how} · ${fmt(o.created_at)}` : null} />
-        <Row k={T("Notes", "Maelezo")} v={o?.notes ?? null} />
+        <Row k={T("How the sale was recorded", "Mauzo yalirekodiwa vipi")} v={o ? `${how} · ${fmt(o.created_at)}` : null} stack />
+        <Row k={T("Notes", "Maelezo")} v={notes} stack />
       </div>
       {ev && (
         <div className="evidence small" style={{ display: "grid", gap: 4 }}>
