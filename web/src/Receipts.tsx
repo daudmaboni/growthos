@@ -1,10 +1,15 @@
-// "Find a payment" (Tafuta malipo): type our receipt number (Kumbukumbu Na., e.g. KH-000123) or the
-// payment's transaction code (namba ya muamala, e.g. TKL8XJ2Q4P) and see the whole payment: the customer,
-// what they bought, how much, when they paid, how they paid, and the screenshot / SMS that proves it.
-// The search runs in the database (find_payment, migration 0047), only over this business's sales.
+// "Find a payment" (Tafuta malipo): search the business's payments by our receipt number (Kumbukumbu Na.,
+// e.g. KH-000123), the payment's transaction code (namba ya muamala), the customer's name or phone, a place
+// they mentioned in the chat, and/or the day they paid. Results are a short list (count + total on top);
+// tap one to open the whole payment: who, what, how much, when, how they paid, the proof and Print.
+// Search runs in the database: search_payments (migration 0053) and find_payment (0047, for payments that
+// were never recorded as a sale), only over this business's sales.
 import { useEffect, useRef, useState } from "react";
-import { supabase, Workspace, money, orderNet } from "./lib";
+import { supabase, Workspace, money, orderNet, localDay } from "./lib";
 import ReceiptPrint from "./ReceiptPrint";
+import DateRange from "./DateRange";
+import { RangeSel, resolveRange, addDays, presetLabel } from "./ranges";
+import { fromLocalInput } from "./Orders";
 
 type Found = {
   order: null | {
@@ -19,77 +24,161 @@ type Found = {
     message_id: string; sent_at: string; direction: string; text: string;
     receipt: null | { amount?: number | null; currency?: string | null; txn_code?: string | null; provider?: string | null; paid_to?: string | null; sender?: string | null; paid_at?: string | null };
   };
+  matched?: "code" | "name" | "location" | "date";
+  place?: string | null;
 };
 type Recent = { id: string; receipt_no: string; amount: number; discount: number; refund_amount: number; currency: string; paid_at: string | null; product: string | null };
+type By = "any" | "code" | "name" | "location";
+const LIMIT = 200;
 
 const fmt = (iso: string | null | undefined) => iso
   ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Dar_es_Salaam" })
   : "–";
+const itemsOf = (o: Found["order"]) => !o ? null : o.items?.length ? o.items.map((x) => `${x.name ?? "?"}${x.qty && x.qty > 1 ? ` × ${x.qty}` : ""}`).join(", ") : o.product;
+const keyOf = (f: Found, i: number) => f.order?.id ?? f.evidence?.message_id ?? String(i);
 
 export default function Receipts({ ws }: { ws: Workspace }) {
   const sw = ws.language === "sw";
   const T = (en: string, s: string) => (sw ? s : en);
+  const tz = ws.timezone || "Africa/Dar_es_Salaam";
+  const today = localDay(new Date(), tz);
   const [q, setQ] = useState(() => decodeURIComponent(location.hash.match(/#receipts\/q=([^&]+)/)?.[1] ?? ""));
+  const [by, setBy] = useState<By>("any");
+  const [range, setRange] = useState<RangeSel | null>(null);
   const [res, setRes] = useState<Found[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<Recent[]>([]);
+  const [start, setStart] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const seq = useRef(0);
   const [printId, setPrintId] = useState<string | null>(null);
+  const period = range ? resolveRange(range, today, start) : null;
 
   useEffect(() => {
     supabase.from("orders").select("id,receipt_no,amount,discount,refund_amount,currency,paid_at,product").eq("workspace_id", ws.id)
       .not("receipt_no", "is", null).order("receipt_seq", { ascending: false }).limit(8)
       .then(({ data }) => setRecent((data as Recent[]) ?? []));
+    supabase.from("orders").select("paid_at").eq("workspace_id", ws.id).eq("status", "paid").not("paid_at", "is", null)
+      .order("paid_at", { ascending: true }).limit(1)
+      .then(({ data }) => { const d = (data as { paid_at: string }[] | null)?.[0]?.paid_at; setStart(d ? localDay(d, tz) : null); });
   }, [ws.id]);
 
-  // Search as you type (after a short pause); 3 characters or more.
+  // Search as you type (after a short pause), and whenever the "search by" or the dates change.
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 3) { setRes(null); setErr(""); return; }
+    if (!period && term.length < 2) { setRes(null); setErr(""); setBusy(false); return; }
+    if (term && term.length < 2) return;
     const my = ++seq.current;
     const t = window.setTimeout(async () => {
       setBusy(true); setErr("");
-      const { data, error } = await supabase.rpc("find_payment", { p_ws: ws.id, p_q: term });
+      const p_from = period ? fromLocalInput(period.from + "T00:00") : null;
+      const p_to = period ? fromLocalInput(addDays(period.to, 1) + "T00:00") : null;
+      const calls = [supabase.rpc("search_payments", { p_ws: ws.id, p_q: term || null, p_by: by, p_from, p_to, p_limit: LIMIT })];
+      // Codes on a receipt screenshot / payment SMS whose sale was never recorded: only the code search finds those.
+      if (term.length >= 3 && !period && (by === "any" || by === "code")) calls.push(supabase.rpc("find_payment", { p_ws: ws.id, p_q: term }));
+      const out = await Promise.all(calls);
       if (my !== seq.current) return;
       setBusy(false);
-      if (error) { setErr(error.message); setRes([]); return; }
-      setRes((data as Found[]) ?? []);
-    }, 350);
+      const bad = out.find((r) => r.error);
+      if (bad && !out[0].data) { setErr(bad.error!.message); setRes([]); return; }
+      const list = [...((out[0].data as Found[]) ?? [])];
+      const seen = new Set(list.map((f) => f.order?.id).filter(Boolean));
+      for (const f of ((out[1]?.data as Found[]) ?? [])) {
+        if (f.order && seen.has(f.order.id)) continue;
+        list.push({ ...f, matched: "code" });
+        if (f.order) seen.add(f.order.id);
+      }
+      list.sort((a, b) => Date.parse(b.order?.paid_at ?? b.evidence?.sent_at ?? "") - Date.parse(a.order?.paid_at ?? a.evidence?.sent_at ?? ""));
+      setRes(list);
+      setOpenKey(list.length === 1 ? keyOf(list[0], 0) : null);
+    }, term ? 350 : 0);
     return () => window.clearTimeout(t);
-  }, [q, ws.id]);
+  }, [q, by, range?.key, period?.from, period?.to, ws.id]);
+
+  const BYS: [By, string, string][] = [
+    ["any", T("Anything", "Chochote"), T("Receipt no., M-Pesa code, name, phone or place", "Kumbukumbu Na., muamala, jina, simu au mahali")],
+    ["code", T("Receipt / M-Pesa code", "Risiti / muamala"), T("e.g. KH-000123 or TKL8XJ2Q4P", "mfano KH-000123 au TKL8XJ2Q4P")],
+    ["name", T("Name or phone", "Jina au simu"), T("Customer name or phone, e.g. Juma or 0712…", "Jina la mteja au simu, mfano Juma au 0712…")],
+    ["location", T("Location", "Mahali"), T("A place they mentioned, e.g. Mbeya, Arusha, Kariakoo", "Mahali walipotaja, mfano Mbeya, Arusha, Kariakoo")],
+  ];
+  const paid = (res ?? []).filter((f) => f.order && f.order.status === "paid");
+  const total = paid.reduce((n, f) => n + orderNet(f.order!), 0);
+  const cur = paid[0]?.order?.currency ?? "TZS";
+  const term = q.trim();
+  const when = period && range ? (range.key === "custom" ? (period.from === period.to ? period.from : `${period.from} – ${period.to}`) : presetLabel(range.key, sw ? "sw" : "en").toLowerCase()) : "";
 
   return (
     <div className="stack" style={{ display: "grid", gap: 16 }}>
+      <style>{`.rcpt-row{all:unset;box-sizing:border-box;width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;color:inherit;font:inherit}
+        .rcpt-row:last-child{border-bottom:0}.rcpt-row:hover{background:var(--hover, rgba(0,0,0,.03))}.rcpt-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+        .rcpt-row.open{border-bottom:0}
+        .pay-find{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}.pay-find input{flex:1 1 260px;min-width:0}
+        .pay-by{display:flex;gap:6px;flex-wrap:wrap}
+        .pay-by button{all:unset;box-sizing:border-box;cursor:pointer;font:500 13px/1 var(--font);padding:9px 14px;min-height:38px;display:inline-flex;align-items:center;border-radius:999px;background:var(--raised);color:var(--ink-2,var(--ink));border:1px solid transparent}
+        .pay-by button:hover{border-color:var(--line-2)}.pay-by button[aria-pressed=true]{background:var(--ink);color:var(--card)}
+        .pay-by button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+        .pay-open{padding:0 0 14px;border-bottom:1px solid var(--line)}`}</style>
       <section className="card flat" style={{ display: "grid", gap: 10 }}>
         <div>
           <h2 style={{ margin: 0 }}>{T("Find a payment", "Tafuta malipo")}</h2>
-          <span className="small muted">{T("Type a receipt number or the payment's transaction code. You'll see who paid, for what, how much, when and the proof.",
-            "Andika kumbukumbu namba ya risiti au namba ya muamala. Utaona nani alilipa, alinunua nini, kiasi gani, lini na uthibitisho.")}</span>
+          <span className="small muted">{T("Search by receipt number, M-Pesa code, the customer's name or phone, or a place they mentioned. Pick dates to see every payment on those days.",
+            "Tafuta kwa kumbukumbu namba, namba ya muamala, jina au simu ya mteja, au mahali alipotaja. Chagua tarehe kuona malipo yote ya siku hizo.")}</span>
         </div>
-        <label className="small muted" htmlFor="pay-q">{T("Receipt no. or transaction code", "Kumbukumbu Na. au namba ya muamala")}</label>
-        <input id="pay-q" type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false}
-          placeholder={T("e.g. KH-000123 or TKL8XJ2Q4P", "mfano KH-000123 au TKL8XJ2Q4P")} style={{ fontSize: 18, padding: "12px 14px", textTransform: "uppercase" }} />
+        <div className="pay-by" role="group" aria-label={T("Search by", "Tafuta kwa")}>
+          {BYS.map(([k, label]) => <button key={k} type="button" aria-pressed={by === k} onClick={() => setBy(k)}>{label}</button>)}
+        </div>
+        <div className="pay-find">
+          <input id="pay-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false}
+            aria-label={T("Search payments", "Tafuta malipo")} placeholder={BYS.find((b) => b[0] === by)![2]}
+            style={{ fontSize: 17, padding: "12px 14px", textTransform: by === "code" ? "uppercase" : "none" }} />
+          <DateRange value={range ?? { key: "all" }} onChange={(r) => setRange(r.key === "all" ? null : r)} today={today} tz={tz} lang={sw ? "sw" : "en"} start={start} />
+        </div>
         {busy && <span className="small muted">{T("Searching…", "Inatafuta…")}</span>}
         {err && <span className="err small">{T("Couldn't search right now. Try again in a moment.", "Imeshindwa kutafuta sasa. Jaribu tena baada ya muda.")}</span>}
       </section>
 
       {res && !busy && !err && res.length === 0 && (
-        <div className="empty">{T(`Nothing found for “${q.trim()}”. Check the number, or search part of it (e.g. the last 4 characters).`,
-          `Hakuna kilichopatikana kwa “${q.trim()}”. Hakiki namba, au tafuta sehemu yake (mfano herufi 4 za mwisho).`)}</div>
+        <div className="empty">{term
+          ? T(`Nothing found for “${term}”${when ? ` ${when}` : ""}. Try another spelling, part of the number, or “Anything”.`, `Hakuna kilichopatikana kwa “${term}”${when ? ` ${when}` : ""}. Jaribu tahajia nyingine, sehemu ya namba, au “Chochote”.`)
+          : T(`No payments ${when}.`, `Hakuna malipo ${when}.`)}</div>
       )}
 
-      {res?.map((f, i) => <PaymentCard key={(f.order?.id ?? f.evidence?.message_id ?? "") + i} f={f} T={T} onPrint={setPrintId} />)}
+      {res && res.length > 0 && (
+        <section className="card flat" style={{ display: "grid", gap: 0 }}>
+          <div className="row between" style={{ flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+            <h3 style={{ margin: 0 }}>{paid.length === 1 ? T("1 payment", "Malipo 1") : T(`${paid.length} payments`, `Malipo ${paid.length}`)}{when ? <span className="muted" style={{ fontWeight: 400 }}> · {when}</span> : null}</h3>
+            {paid.length > 0 && <b>{money(total, cur)}</b>}
+          </div>
+          {res.length >= LIMIT && <span className="small muted">{T(`Showing the latest ${LIMIT}. Narrow the dates to see older ones.`, `Inaonyesha ${LIMIT} za karibuni. Punguza tarehe kuona za zamani.`)}</span>}
+          {res.map((f, i) => {
+            const k = keyOf(f, i), o = f.order, open = openKey === k;
+            const who = f.customer?.name || (f.customer?.phone ? "+" + f.customer.phone : T("Customer", "Mteja"));
+            return (
+              <div key={k}>
+                <button type="button" className={"rcpt-row" + (open ? " open" : "")} aria-expanded={open} onClick={() => setOpenKey(open ? null : k)}>
+                  <span style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                    <span><b>{o?.receipt_no ?? T("Payment message", "Ujumbe wa malipo")}</b> <span className="muted">· {who}</span></span>
+                    <span className="small muted" style={{ overflowWrap: "anywhere" }}>{o ? (itemsOf(o) || T("Products not recorded", "Bidhaa hazijaandikwa")) : T("Not recorded as a sale", "Haijarekodiwa kama mauzo")}</span>
+                    {f.matched === "location" && f.place && <span className="small" style={{ overflowWrap: "anywhere", display: "flex", gap: 4, alignItems: "flex-start" }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg><span>“…{f.place}…”</span></span>}
+                    <span className="small muted">{fmt(o?.paid_at ?? f.evidence?.sent_at)}{o?.status === "refunded" ? ` · ${T("refunded", "imerudishwa")}` : ""}</span>
+                  </span>
+                  <b style={{ whiteSpace: "nowrap" }}>{o ? money(orderNet(o), o.currency) : "—"}</b>
+                </button>
+                {open && <div className="pay-open"><PaymentCard f={f} T={T} onPrint={setPrintId} /></div>}
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
 
-      {!res && recent.length > 0 && (
+      {!res && !busy && recent.length > 0 && (
         <section className="card flat" style={{ display: "grid", gap: 0 }}>
-          <style>{`.rcpt-row{all:unset;box-sizing:border-box;width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;color:inherit;font:inherit}
-            .rcpt-row:last-child{border-bottom:0}.rcpt-row:hover{background:var(--hover, rgba(0,0,0,.03))}.rcpt-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}`}</style>
           <h3 style={{ margin: "0 0 4px" }}>{T("Latest receipts", "Risiti za karibuni")}</h3>
           {recent.map((r) => (
-            <button key={r.id} type="button" className="rcpt-row" onClick={() => setQ(r.receipt_no)}>
+            <button key={r.id} type="button" className="rcpt-row" onClick={() => { setBy("code"); setQ(r.receipt_no); }}>
               <span style={{ display: "grid", gap: 2, minWidth: 0 }}>
                 <b>{r.receipt_no}</b>
                 <span className="small muted" style={{ overflowWrap: "anywhere" }}>{r.product || T("Products not recorded", "Bidhaa hazijaandikwa")}</span>
@@ -106,7 +195,7 @@ export default function Receipts({ ws }: { ws: Workspace }) {
 
 function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) => string; onPrint: (id: string) => void }) {
   const o = f.order, ev = f.evidence, rc = ev?.receipt ?? null;
-  const items = o?.items?.length ? o.items.map((x) => `${x.name ?? "?"}${x.qty && x.qty > 1 ? ` × ${x.qty}` : ""}`).join(", ") : o?.product ?? null;
+  const items = itemsOf(o);
   const status = !o ? T("Payment message — not recorded as a sale", "Ujumbe wa malipo — haujarekodiwa kama mauzo")
     : o.status === "paid" ? T("Paid", "Imelipwa") : o.status === "refunded" ? T("Refunded", "Imerudishwa") : o.status === "cancelled" ? T("Cancelled", "Imeghairiwa") : T("Pending", "Inasubiri");
   const how = o?.inferred_from === "tick" ? T("your ✅ price message", "ujumbe wako wa bei wenye ✅")
@@ -134,6 +223,7 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
         <Row k={T("Customer", "Mteja")} v={f.customer?.name || (f.customer?.phone ? "+" + f.customer.phone : null)} />
         <Row k={T("Phone", "Simu")} v={f.customer?.phone ? "+" + f.customer.phone : null} />
         <Row k={T("Bought", "Alinunua")} v={items} />
+        <Row k={T("Place mentioned in the chat", "Mahali alipotaja kwenye chat")} v={f.place ? `“…${f.place}…”` : null} />
         <Row k={T("Paid on", "Alilipa")} v={o ? fmt(o.paid_at) : ev ? fmt(ev.sent_at) : null} />
         {o && (Number(o.discount) > 0 || Number(o.refund_amount) > 0) && <Row k={T("Before discount / refund", "Kabla ya punguzo / marejesho")} v={money(Number(o.amount), o.currency)} />}
         <Row k={T("Transaction code", "Namba ya muamala")} v={o?.payment_ref ?? rc?.txn_code ?? null} />
