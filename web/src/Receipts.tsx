@@ -19,7 +19,7 @@ type Found = {
     payment_ref: string | null; fulfillment_status: string;
   };
   conversation_id: string | null;
-  customer: { name: string | null; phone: string | null } | null;
+  customer: { name: string | null; wa_name?: string | null; phone: string | null; alt_phone?: string | null; location?: string | null; landmark?: string | null } | null;
   evidence: null | {
     message_id: string; sent_at: string; direction: string; text: string;
     receipt: null | { amount?: number | null; currency?: string | null; txn_code?: string | null; provider?: string | null; paid_to?: string | null; sender?: string | null; paid_at?: string | null };
@@ -223,9 +223,10 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
       <div className="pay-body">
       <div className="small kv-list">
         <Row k={T("Customer", "Mteja")} v={f.customer?.name || (f.customer?.phone ? "+" + f.customer.phone : null)} />
-        <Row k={T("Phone", "Simu")} v={f.customer?.phone ? "+" + f.customer.phone : null} />
+        <Row k={T("Phone", "Simu")} v={f.customer?.phone ? "+" + f.customer.phone + (f.customer.alt_phone ? ` · ${f.customer.alt_phone}` : "") : null} />
+        <Row k={T("Location", "Mahali")} v={f.customer?.location ? f.customer.location + (f.customer.landmark ? ` (${f.customer.landmark})` : "") : null} />
         <Row k={T("Bought", "Alinunua")} v={items} stack />
-        <Row k={T("Place mentioned in the chat", "Mahali alipotaja kwenye chat")} v={f.place ? `“…${f.place}…”` : null} stack />
+        <Row k={T("Place mentioned in the chat", "Mahali alipotaja kwenye chat")} v={f.place && f.place !== f.customer?.location ? `“…${f.place}…”` : null} stack />
         <Row k={T("Paid on", "Alilipa")} v={o ? fmt(o.paid_at) : ev ? fmt(ev.sent_at) : null} />
         {o && (Number(o.discount) > 0 || Number(o.refund_amount) > 0) && <Row k={T("Before discount / refund", "Kabla ya punguzo / marejesho")} v={money(Number(o.amount), o.currency)} />}
         <Row k={T("Transaction code", "Namba ya muamala")} v={o?.payment_ref ?? rc?.txn_code ?? null} />
@@ -247,6 +248,7 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         {o && o.status === "paid" && <button type="button" className="primary" onClick={() => onPrint(o.id)}>{T("Print receipt", "Chapisha risiti")}</button>}
         {f.conversation_id && <a href={"#chats/ids=" + f.conversation_id}>{T("Open the chat →", "Fungua chat →")}</a>}
+        {f.customer?.phone && <a href={"#buyers/q=" + encodeURIComponent("0" + f.customer.phone.replace(/^255/, ""))}>{T("Edit customer details →", "Rekebisha taarifa za mteja →")}</a>}
       </div>
       </div>
       </div>
