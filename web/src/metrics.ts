@@ -54,7 +54,7 @@ export const DEFINITIONS: Record<string, { en: string; sw: string }> = {
   costPerQualifiedInquiry: { en: "Ad spend ÷ ad chats where a price was shared.", sw: "Matumizi ÷ chats za matangazo zilizopewa bei." },
   costPerAttributedSale: { en: "Ad spend ÷ sales paid in this period by customers whose chat came from an ad (whenever the chat started). A matched estimate.", sw: "Matumizi ÷ mauzo yaliyolipwa kipindi hiki na wateja waliotoka kwenye tangazo (chat ilipoanza popote). Ni makadirio." },
   returnOnAdSpend: { en: "Attributed revenue from ad chats ÷ ad spend (converted with your exchange rate).", sw: "Mapato yaliyounganishwa na matangazo ÷ matumizi (kwa kiwango chako cha kubadilisha)." },
-  contribution: { en: "Profit = revenue − ad spend − what each order cost you (product + delivery) − imported expenses. Shown when every order in the period has a cost; orders without their own cost use your default cost, and then it says \"estimated\". Rent, salaries and other running costs are not taken out unless you import them as expenses.", sw: "Faida = mapato − matangazo − gharama ya kila oda (bidhaa + usafiri) − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama; oda zisizo na gharama yake zinatumia gharama ya kawaida, na hapo inasema \"makadirio\". Kodi, mishahara na gharama nyingine za uendeshaji hazitolewi isipokuwa uziingize kama matumizi." },
+  contribution: { en: "Profit = revenue − ad spend − what each order cost you (product + delivery) − imported expenses. Shown when every order in the period has a cost; orders without their own cost use your default cost, and then it says \"estimated\". With no paid orders it is the ad spend, shown as a loss. Rent, salaries and other running costs are not taken out unless you import them as expenses.", sw: "Faida = mapato − matangazo − gharama ya kila oda (bidhaa + usafiri) − matumizi yaliyoingizwa. Inaonyeshwa kila oda ikiwa na gharama; oda zisizo na gharama yake zinatumia gharama ya kawaida, na hapo inasema \"makadirio\". Kama hakuna oda zilizolipwa, ni matumizi ya matangazo yakionyeshwa kama hasara. Kodi, mishahara na gharama nyingine za uendeshaji hazitolewi isipokuwa uziingize kama matumizi." },
 };
 
 const m = (value: number | null, provenance: Provenance, extra: Partial<Metric> = {}): Metric => ({ value, provenance, ...extra });
@@ -142,9 +142,13 @@ export function computeFunnel(i: Inputs): FunnelMetrics {
   // Profit is shown only when every paid order has a cost (its own, or the workspace default).
   // Imported expenses are subtracted on top; they never stand in for missing order costs.
   const costsKnown = paid.length > 0 && missingCost === 0;
+  // No paid orders: nothing is missing, so profit is just what went out (ad spend + imported expenses),
+  // shown as a loss rather than a dash.
   const contribution = spendInWs != null && costsKnown
     ? m(revenue - spendInWs - orderCosts - expensesTotal, "derived", { n: paid.length - estimatedCost, d: paid.length, note: estimatedCost ? "estimated" : "order costs" })
-    : m(null, "derived", { n: paid.length - missingCost, d: paid.length, note: spendInWs == null ? "needs exchange rate" : paid.length === 0 ? "no paid orders in period" : "needs order costs" });
+    : spendInWs != null && paid.length === 0
+      ? m(revenue - spendInWs - expensesTotal, "derived", { n: 0, d: 0, note: "no paid orders in period" })
+      : m(null, "derived", { n: paid.length - missingCost, d: paid.length, note: spendInWs == null ? "needs exchange rate" : "needs order costs" });
 
   return {
     period: p, adCurrency,

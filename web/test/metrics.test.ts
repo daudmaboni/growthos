@@ -101,6 +101,12 @@ describe("cost metrics", () => {
     const exact = computeFunnel({ ...base, ws: { ...WS, unit_cost: 10000 }, conversations: [], daily, orders: [order({ amount: 100000, cost: 35000 })] });
     expect(exact.contribution.note).toBe("order costs");
   });
+  it("shows the ad spend as a loss when there are no paid orders", () => {
+    const mx = computeFunnel({ ...base, ws: WS, conversations: [], daily, orders: [] });
+    expect(mx.contribution.value).toBe(-20 * 2600);
+    expect(mx.contribution.note).toBe("no paid orders in period");
+    expect(mx.costPerAttributedSale.value).toBeNull();
+  });
   it("does not show profit when orders lack a cost, even if expenses were imported", () => {
     const mx = computeFunnel({ ...base, ws: WS, conversations: [], daily, orders: [order({ amount: 100000 })], expenses: [{ day: daily[0].day, amount: 5000, currency: "TZS", category: "rent" }] });
     expect(mx.contribution.value).toBeNull();

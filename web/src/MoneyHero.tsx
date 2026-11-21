@@ -34,7 +34,7 @@ export type HeroData = {
   spend: string; spendD: number | null; spendSub: string;
   /** money from ad customers vs the rest, in the same currency; null when nothing was sold */
   split: { ads: number; other: number; adsText: string; otherText: string } | null;
-  roas: string | null; profit: string | null; profitSub?: string;
+  roas: string | null; profit: string | null; profitSub?: string; profitNeg?: boolean;
 };
 
 function Delta({ d, good }: { d: number | null; good: boolean | null }) {
@@ -79,7 +79,7 @@ export default function MoneyHero({ style, data: x, T, onRevenue, revenueOpen }:
         <Split s={x.split} T={T} />
         <div className="mh-trio">
           <div><span className="mh-k">{T("Ad spend", "Matangazo")}</span><b>{x.spend}</b><Delta d={x.spendD} good={spendGood} /></div>
-          <div><span className="mh-k">{T("Profit (est.)", "Faida (makadirio)")}</span><b className="pos">{x.profit ?? "–"}</b><span className="mh-s">{T("after costs", "baada ya gharama")}</span></div>
+          <div><span className="mh-k">{T("Profit (est.)", "Faida (makadirio)")}</span><b className={x.profitNeg ? "neg" : "pos"}>{x.profit ?? "–"}</b><span className="mh-s">{x.profitSub ?? T("after costs", "baada ya gharama")}</span></div>
           <div><span className="mh-k">{T("Return on ads", "Mapato kwa tangazo")}</span><b>{x.roas ?? "–"}</b><span className="mh-s">{T("per 1 spent", "kwa kila 1")}</span></div>
         </div>
       </div>
