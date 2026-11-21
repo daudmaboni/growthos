@@ -108,6 +108,7 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
                   <span className="chip">{L[lang].provenance[o.provenance]}</span>
                 </div>
                 <div className="paid-grid small">
+                  {o.receipt_no && <span><span className="muted">{T("Receipt no.", "Kumbukumbu Na.")}</span> <b>{o.receipt_no}</b>{o.payment_ref ? ` · ${T("txn", "muamala")} ${o.payment_ref}` : ""}</span>}
                   <span><span className="muted">{T("Paid", "Alilipa")}</span> {fmtWhen(o.paid_at)}</span>
                   <span><span className="muted">{T("Chat started", "Chat ilianza")}</span> {fmtWhen(c?.started_at ?? null)}{toPay != null ? ` · ${toPay === 0 ? T("paid same day", "alilipa siku hiyo") : T(`paid after ${toPay} day${toPay === 1 ? "" : "s"}`, `alilipa baada ya siku ${toPay}`)}` : ""}</span>
                   <span><span className="muted">{T("Products", "Bidhaa")}</span> {prodText || "–"}</span>

@@ -13,6 +13,7 @@ import Connect from "./Connect";
 import Settings from "./Settings";
 import Report from "./Report";
 import Actions from "./Actions";
+import Receipts from "./Receipts";
 import Kito from "./Kito";
 import Attention from "./Attention";
 import Island from "./Island";
@@ -21,8 +22,8 @@ import Logo, { KitoLogo } from "./Logo";
 import { hidePreloader } from "./preloader";
 import { useIsPlatformAdmin } from "./adminAccess";
 
-type View = "dashboard" | "kito" | "attention" | "report" | "actions" | "chats" | "products" | "connect" | "settings";
-const VIEWS: View[] = ["dashboard", "kito", "attention", "report", "actions", "chats", "products", "connect", "settings"];
+type View = "dashboard" | "kito" | "attention" | "report" | "actions" | "receipts" | "chats" | "products" | "connect" | "settings";
+const VIEWS: View[] = ["dashboard", "kito", "attention", "report", "actions", "receipts", "chats", "products", "connect", "settings"];
 const viewFromHash = (): View => {
   const h = location.hash.replace("#", "").split("/")[0];
   return (VIEWS as string[]).includes(h) ? (h as View) : "dashboard";
@@ -186,6 +187,7 @@ export default function App() {
       {view === "attention" && <Attention ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
+      {view === "receipts" && <Receipts ws={ws} />}
       {view === "chats" && <Chats ws={ws} />}
       {view === "products" && (PRODUCTS_PAGE_READY ? <Products ws={ws} /> : <ComingSoon sw={ws.language === "sw"} />)}
       {view === "connect" && <Connect ws={ws} />}
@@ -352,6 +354,7 @@ function moreItems(sw: boolean): [View, string, string, JSX.Element][] {
     ["attention", L("Needs attention", "Yanayohitaji hatua"), L("Payments, deliveries", "Malipo, usafirishaji"), <Ico d="M12 8v5M12 16.5v.5M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />],
     ["report", L("Diagnosis", "Uchunguzi"), L("This week's results", "Matokeo ya wiki hii"), <Ico d="M3 12h4l3-8 4 16 3-8h4" />],
     ["actions", L("Actions", "Vitendo"), L("Promises and tasks", "Ahadi na kazi"), <Ico d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />],
+    ["receipts", L("Find a payment", "Tafuta malipo"), L("Receipt no. or transaction code", "Kumbukumbu Na. au muamala"), <Ico d="M4 3h16v18l-3-2-3 2-2-2-2 2-3-2-3 2V3ZM8 8h8M8 12h8M8 16h5" />],
     ["products", L("My products", "Bidhaa zangu"), PRODUCTS_PAGE_READY ? L("Prices and photos", "Bei na picha") : L("Coming soon", "Inakuja karibuni"), <Ico d="M21 8 12 3 3 8v8l9 5 9-5V8ZM3 8l9 5 9-5M12 13v8" />],
     ["connect", L("Connections", "Miunganisho"), L("Ads and WhatsApp", "Matangazo, WhatsApp"), <Ico d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />],
     ["settings", L("Settings", "Mipangilio"), L("Business and rules", "Biashara na kanuni"), <GearIcon />],

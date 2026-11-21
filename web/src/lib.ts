@@ -45,6 +45,8 @@ export type Order = {
   status: "pending" | "paid" | "refunded" | "cancelled"; fulfillment_status: "not_applicable" | "not_shipped" | "shipped" | "delivered" | "returned";
   product: string | null; notes: string | null; occurred_at: string; paid_at: string | null; provenance: "manual" | "csv_import" | "provider" | "inferred";
   inferred_from: string | null; external_ref: string | null; created_by: string | null; updated_by: string | null; created_at: string; updated_at: string;
+  receipt_no?: string | null;  // our own receipt number (Kumbukumbu Na.), e.g. KH-000123 — given by the database when paid
+  payment_ref?: string | null; // the payment's transaction code (M-Pesa etc.) read from the chat
   cost?: number | null;       // what this order cost the business (product + delivery), typed when confirming
   conv_source?: string | null; // source of the linked chat (any start date), joined in by the dashboard
   assigned_to?: string | null; delivery_issue?: string | null; delivery_issue_at?: string | null; delivery_resolved_at?: string | null; // 0033
