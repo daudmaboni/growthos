@@ -289,3 +289,37 @@ html[data-screen="auth"]::-webkit-scrollbar { display: none; }
   .ax-form { gap: 12px; }
 }
 @media (max-width: 380px) { .ax-mini-s { display: none; } }
+
+/* ---- 21 Nov, option 6: deeper green with one big result, form as a sheet over it (phones) ---- */
+.ax-show-top, .ax-big { display: none; }
+@media (max-width: 760px) {
+  .ax-show { border-radius: 0; padding: max(16px, env(safe-area-inset-top)) 22px 50px; min-height: 330px; gap: 0; }
+  .ax-show-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: auto; }
+  .ax-show-logo { display: flex; text-decoration: none; }
+  .ax-show-top .auth-lang { background: #ffffff1f; border: 1px solid #ffffff2e; padding: 3px; border-radius: 999px; }
+  .ax-show-top .auth-lang button { color: #e6fff3; background: none; box-shadow: none; border: 0; }
+  .ax-show-top .auth-lang button.on { background: #fff; color: var(--ink); }
+  .ax-show-copy { margin-top: 24px; }
+  .ax-headline, .ax-mini { display: none !important; }
+  .ax-big { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 10px; }
+  .ax-big-txt { display: grid; gap: 2px; }
+  .ax-big-txt span { font-size: 12.5px; color: #d7f7e8; }
+  .ax-big-txt b { font-size: 38px; line-height: 1.05; letter-spacing: -.03em; color: #fff; font-variant-numeric: tabular-nums; }
+  .ax-big-bars { display: flex; align-items: flex-end; gap: 5px; width: 120px; height: 56px; flex: none; }
+  .ax-big-bars i { flex: 1; border-radius: 5px; background: #ffffff40; }
+  .ax-big-bars i.hi { background: var(--hp-mint); }
+  /* the form: a white sheet pulled up over the green */
+  .ax-side { position: relative; z-index: 1; margin-top: -28px; border-radius: 28px 28px 0 0; background: #fff; box-shadow: 0 -10px 30px -18px #0a3d2966; padding-top: 24px; }
+  .ax-side::before { border-radius: inherit; background: radial-gradient(130% 40% at 0% 112%, var(--ax-glow), transparent 65%), #fff; }
+  .ax:has(.ax-show-top) .ax-side .auth-top { display: none; }
+  .ax-head p.ax-sub-opt { display: none; }
+  .ax-form { gap: 11px; }
+  /* typing: green shrinks to its top row so the button stays above the keyboard */
+  .ax:has(.ax-side input:focus) .ax-show { min-height: 0; padding-bottom: 42px; }
+  .ax:has(.ax-side input:focus) .ax-show-copy,
+  .ax:has(.ax-side input:focus) .ax-big { display: none; }
+  /* create account has an extra field: a little less green */
+  .ax:has(#biz) .ax-show { min-height: 250px; }
+  .ax:has(#biz) .ax-big-bars { display: none; }
+}
+@media (max-width: 760px) and (max-height: 700px) { .ax-show { min-height: 260px; } .ax-big-bars { display: none; } }

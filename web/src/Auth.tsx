@@ -105,6 +105,7 @@ const T = {
   paid: { en: "Order paid", sw: "Oda imelipwa" },
   paidSub: { en: "Instagram ad → WhatsApp", sw: "Tangazo Instagram → WhatsApp" },
   week: { en: "Sales, last 7 days", sw: "Mauzo, siku 7 zilizopita" },
+  weekAds: { en: "Sales from ads, last 7 days", sw: "Mauzo kutoka matangazo, siku 7" },
   newChats: { en: "+12 new chats today", sw: "+12 gumzo mpya leo" },
   kito: { en: "Kito replied in 8 seconds", sw: "Kito amejibu ndani ya sekunde 8" },
   legal: { en: "Terms & privacy", sw: "Masharti na faragha" },
@@ -179,23 +180,33 @@ const Icon = {
 };
 
 /** The right-hand panel (top banner on phones): what itaOS does, shown as floating product cards. */
-function Showcase({ lang }: { lang: Lang }) {
+function Showcase({ lang, setLang }: { lang: Lang; setLang?: (l: Lang) => void }) {
   const t = (k: Key) => tr(lang, k);
   const ref = usePageEnter<HTMLDivElement>((el) => { enterCards(select(el, ".ax-float"), { y: 30, stagger: 0.09, delay: 0.15 }); });
   const bars = [38, 52, 30, 86, 44, 70, 60];
   return (
-    <aside className="ax-show" ref={ref} aria-hidden="true">
-      <div className="ax-show-copy">
+    <aside className="ax-show" ref={ref}>
+      {setLang && (
+        <div className="ax-show-top">
+          <a className="ax-show-logo" href="/" aria-label={t("close")} title={t("close")}><Logo size={34} variant="white" /></a>
+          <LangToggle lang={lang} onChange={setLang} />
+        </div>
+      )}
+      <div className="ax-show-copy" aria-hidden="true">
         <span className="ax-eyebrow">itaOS · {t("flow")}</span>
         <p className="ax-headline">{t("tagline")}</p>
       </div>
-      <div className="ax-mini">
+      <div className="ax-big" aria-hidden="true">
+        <div className="ax-big-txt"><span>{t("weekAds")}</span><b>TZS 1.2M</b></div>
+        <div className="ax-big-bars">{bars.map((h, i) => <i key={i} className={i === 3 ? "hi" : ""} style={{ height: h + "%" }} />)}</div>
+      </div>
+      <div className="ax-mini" aria-hidden="true">
         <span className="ax-tick">{Icon.check}</span>
         <span className="ax-mini-l">{t("paid")}</span>
         <b className="ax-mini-v">TZS 45,000</b>
         <span className="ax-mini-s">{t("paidSub")}</span>
       </div>
-      <div className="ax-stage">
+      <div className="ax-stage" aria-hidden="true">
         <div className="ax-float ax-chat">
           <div className="ax-chat-head"><span className="ax-av" style={{ background: "#ffd84d", color: "#0a3d29" }}>AM</span>
             <div><b>Asha M.</b><span className="ax-wa">● WhatsApp · 09:41</span></div></div>
@@ -224,13 +235,13 @@ function Showcase({ lang }: { lang: Lang }) {
 }
 
 /** Shared frame for every sign-in screen (sign in, create account, emails sent, new password, name your business). */
-export function AuthShell({ lang, children, showcase = true }: { lang: Lang; children: React.ReactNode; showcase?: boolean }) {
+export function AuthShell({ lang, setLang, children, showcase = true }: { lang: Lang; setLang?: (l: Lang) => void; children: React.ReactNode; showcase?: boolean }) {
   useAuthScreen();
   return (
     <div className="ax">
       <div className={"ax-split" + (showcase ? "" : " solo")}>
         <section className="ax-side">{children}</section>
-        {showcase && <Showcase lang={lang} />}
+        {showcase && <Showcase lang={lang} setLang={setLang} />}
         <a className="ax-notch" href="/" aria-label={tr(lang, "close")} title={tr(lang, "close")}><span>{Icon.x}</span></a>
       </div>
     </div>
@@ -351,7 +362,7 @@ export function AuthScreen() {
     const body = sent.kind === "signup" ? "checkSignup" : sent.kind === "link" ? "checkLink" : "checkReset";
     const celebrate = sent.kind === "signup";
     return (
-      <AuthShell lang={lang}>
+      <AuthShell lang={lang} setLang={setLang}>
         <form className="ax-form ax-done" ref={formRef} onSubmit={(e) => e.preventDefault()}>
           <Brand lang={lang} setLang={setLang} />
           {celebrate ? <StepBadge /> : <div className="auth-mail" aria-hidden="true">{Icon.mail}</div>}
@@ -380,10 +391,10 @@ export function AuthScreen() {
   const title = mode === "signin" ? t("welcomeBack") : mode === "signup" ? t("newTitle") : mode === "forgot" ? t("resetTitle") : t("sendLink");
   const sub = mode === "signin" ? t("welcomeSub") : mode === "signup" ? t("newSub") : mode === "forgot" ? t("resetBody") : "";
   return (
-    <AuthShell lang={lang}>
+    <AuthShell lang={lang} setLang={setLang}>
       <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
         <Brand lang={lang} setLang={setLang} />
-        <div className="ax-head"><h2>{title}</h2>{sub && <p>{sub}</p>}</div>
+        <div className="ax-head"><h2>{title}</h2>{sub && <p className={mode === "signin" ? "ax-sub-opt" : undefined}>{sub}</p>}</div>
 
         {mode === "signup" && (
           <Field id="biz" label={t("business")} icon={Icon.biz}>
@@ -451,7 +462,7 @@ export function SetNewPassword({ email, onDone }: { email: string; onDone: () =>
     setOk(true); setTimeout(onDone, 900);
   }
   return (
-    <AuthShell lang={lang}>
+    <AuthShell lang={lang} setLang={setLang}>
       <form className="ax-form" ref={formRef} onSubmit={submit} noValidate>
         <Brand lang={lang} setLang={setLang} />
         <div className="ax-head"><h2>{tr(lang, "setTitle")}</h2><p>{tr(lang, "setBody", { e: email })}</p></div>
