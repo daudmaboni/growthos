@@ -121,6 +121,20 @@ function zip(cols: Record<string, unknown[]>): Outcome[] {
   }
   return rows as Outcome[];
 }
+/** Meta's daily ad numbers for a span. The database hands back at most 1,000 rows per request
+ *  (one row per ad per day), so a long range is read page by page — otherwise some days come back
+ *  missing, the spend chart drops to 0 on random days and the total is too low. */
+async function loadDailyInsights(ws: string, from: string, to: string) {
+  const rows: any[] = [];
+  for (let at = 0; ; at += 1000) {
+    const r = await supabase.from("ad_insights_daily").select("ad_id,day,spend,currency,impressions,clicks,messaging_conversations")
+      .eq("workspace_id", ws).gte("day", from).lte("day", to).order("day", { ascending: true }).order("ad_id", { ascending: true }).range(at, at + 999);
+    if (r.error) return { data: rows.length ? rows : null, error: r.error };
+    rows.push(...(r.data ?? []));
+    if (!r.data || r.data.length < 1000 || at > 200000) return { data: rows, error: null };
+  }
+}
+
 export async function loadConversations(ws: string, fromIso: string): Promise<Outcome[]> {
   const v2 = await supabase.rpc("dashboard_conversations2", { p_ws: ws, p_from: fromIso });
   if (!v2.error && v2.data && Array.isArray((v2.data as any).id)) return zip(v2.data as Record<string, unknown[]>);
@@ -242,7 +256,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: period.from, p_to: period.to }),
           supabase.rpc("ad_performance", { p_ws: ws.id, p_from: prevP.from, p_to: prevP.to }),
           loadConversations(ws.id, fromIso),
-          supabase.from("ad_insights_daily").select("ad_id,day,spend,currency,impressions,clicks,messaging_conversations").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(20000),
+          loadDailyInsights(ws.id, prevP.from, period.to),
           supabase.from("orders").select("*, conv:conversations!orders_conversation_workspace_fk(source)").eq("workspace_id", ws.id).gte("occurred_at", fromIso).order("occurred_at", { ascending: false }).limit(5000),
           supabase.from("expenses").select("day,amount,currency,category").eq("workspace_id", ws.id).gte("day", prevP.from).lte("day", period.to).limit(5000),
           supabase.from("connections").select("id,provider,external_id,label,status,last_sync_at,last_error").eq("workspace_id", ws.id),
