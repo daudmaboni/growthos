@@ -150,7 +150,7 @@ ${chat}
 
 type Prompt = string | { system: string; user: string };
 // KITO_PROMPT=single puts everything in one user message (the layout before 21 Nov, kept for comparison).
-const LAYOUT = Deno.env.get("KITO_PROMPT") ?? "cached";
+const LAYOUT = Deno.env.get("KITO_PROMPT") ?? "single";   // switch to "cached" once layout_compare agrees
 function buildPrompt(chat: string, lastAt: string, lang: string, currency: string, paidTexts: string[] = [], tz = "Africa/Dar_es_Salaam", now = Date.now(), layout = LAYOUT): Prompt {
   if (layout === "single") return prompt(chat, lastAt, lang, currency, paidTexts, tz, now);
   return { system: rulesText(lang, currency, paidTexts), user: chatText(chat, lastAt, tz, now) };
