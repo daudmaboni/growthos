@@ -84,13 +84,18 @@ export default function Receipts({ ws }: { ws: Workspace }) {
       {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
 
       {!res && recent.length > 0 && (
-        <section className="card" style={{ display: "grid", gap: 8 }}>
-          <h3 style={{ margin: 0 }}>{T("Latest receipts", "Risiti za karibuni")}</h3>
+        <section className="card" style={{ display: "grid", gap: 0 }}>
+          <style>{`.rcpt-row{all:unset;box-sizing:border-box;width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;color:inherit;font:inherit}
+            .rcpt-row:last-child{border-bottom:0}.rcpt-row:hover{background:var(--hover, rgba(0,0,0,.03))}.rcpt-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}`}</style>
+          <h3 style={{ margin: "0 0 4px" }}>{T("Latest receipts", "Risiti za karibuni")}</h3>
           {recent.map((r) => (
-            <button key={r.id} type="button" className="linkish" onClick={() => setQ(r.receipt_no)}
-              style={{ display: "flex", justifyContent: "space-between", gap: 12, textAlign: "left", padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-              <span><b>{r.receipt_no}</b> <span className="small muted">· {fmt(r.paid_at)}{r.product ? ` · ${r.product}` : ""}</span></span>
-              <b>{money(orderNet(r), r.currency)}</b>
+            <button key={r.id} type="button" className="rcpt-row" onClick={() => setQ(r.receipt_no)}>
+              <span style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <b>{r.receipt_no}</b>
+                <span className="small muted" style={{ overflowWrap: "anywhere" }}>{r.product || T("Products not recorded", "Bidhaa hazijaandikwa")}</span>
+                <span className="small muted">{fmt(r.paid_at)}</span>
+              </span>
+              <b style={{ whiteSpace: "nowrap" }}>{money(orderNet(r), r.currency)}</b>
             </button>
           ))}
         </section>
