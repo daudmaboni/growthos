@@ -383,7 +383,7 @@ Deno.serve(async (req) => {
     flagged = (fl ?? []).filter((c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at));
   }
   const force = !isCron && body.all === true;
-  // The 15-minute run and the app's automatic catch-up when Chats opens wait for the quiet window.
+  // The 5-minute run and the app's automatic catch-up when Chats opens wait for the quiet window.
   // Instant: chats wa-webhook sends (money moments), the owner's "Update with Kito" button, and
   // flagged "maybe paid" chats. Every changed chat is still read: at the latest MAX_WAIT after its
   // last read (or after it started, if never read), plus the cron interval.
@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
   }
   // Catch-up: the query above only sees the 400 newest chats, so busy businesses had older chats
   // (still inside the last 30 days) that Kito never read. A few of those, newest first, ride along
-  // on every 15-minute run. Chats that already failed are skipped (they show on the admin Errors page).
+  // on every scheduled run. Chats that already failed are skipped (they show on the admin Errors page).
   // Cron only: the app keeps calling while "remaining" > 0, and the backlog would keep it looping.
   let backlog: any[] = [];
   if (isCron && !only.length) {
