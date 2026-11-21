@@ -74,7 +74,9 @@ const SUGGEST = {
   ],
 };
 
-export default function Kito({ ws }: { ws: Workspace }) {
+// staff = Pondi platform admin. Only staff see "How Kito found this" (the raw database queries): business
+// owners get the answer, the tables and the chats behind it, never SQL (21 Nov 2026).
+export default function Kito({ ws, staff = false }: { ws: Workspace; staff?: boolean }) {
   const lang = ws.language;
   const T = (en: string, sw: string) => (lang === "sw" ? sw : en);
   // Kept while the app is open: switching tabs mid-answer no longer loses the conversation, and an
@@ -148,7 +150,7 @@ export default function Kito({ ws }: { ws: Workspace }) {
           <div className="kito-q">{t.question}</div>
           {t.pending && <KitoThinking sw={lang === "sw"} />}
           {t.error && <div className="card"><p className="err" style={{ margin: 0 }}>{t.error}</p></div>}
-          {t.answer && <AnswerCard a={t.answer} ws={ws} onAsk={ask} stale={!!t.answer.id && i === 0 && turns.length === 1 && Date.now() - Date.parse(t.answer.created_at) > 3600e3} />}
+          {t.answer && <AnswerCard a={t.answer} ws={ws} onAsk={ask} staff={staff} stale={!!t.answer.id && i === 0 && turns.length === 1 && Date.now() - Date.parse(t.answer.created_at) > 3600e3} />}
         </div>
       ))}
       <div ref={endRef} />
@@ -165,7 +167,7 @@ export default function Kito({ ws }: { ws: Workspace }) {
   );
 }
 
-function AnswerCard({ a, ws, onAsk, stale }: { a: Answer; ws: Workspace; onAsk: (q: string) => void; stale: boolean }) {
+function AnswerCard({ a, ws, onAsk, stale, staff }: { a: Answer; ws: Workspace; onAsk: (q: string) => void; stale: boolean; staff: boolean }) {
   const T = (en: string, sw: string) => (ws.language === "sw" ? sw : en);
   return (
     <div className="card kito-answer">
@@ -184,9 +186,9 @@ function AnswerCard({ a, ws, onAsk, stale }: { a: Answer; ws: Workspace; onAsk: 
           {a.follow_ups.map((f) => <button key={f} className="small" onClick={() => onAsk(f)}>{f}</button>)}
         </div>
       )}
-      {a.queries.length > 0 && (
+      {staff && a.queries.length > 0 && (
         <details className="kito-how">
-          <summary className="small muted">{T(`How Kito found this (${a.queries.length} ${a.queries.length === 1 ? "query" : "queries"})`, `Kito amepataje hili (maswali ${a.queries.length} kwenye data)`)}</summary>
+          <summary className="small muted">{T(`Staff only · How Kito found this (${a.queries.length} ${a.queries.length === 1 ? "query" : "queries"})`, `Wafanyakazi tu · Kito amepataje hili (maswali ${a.queries.length} kwenye data)`)}</summary>
           {a.queries.map((qq, i) => (
             <div key={i} className="kito-query">
               <span className="small"><b>{i + 1}.</b> {qq.purpose} · {qq.error ? <span className="err">{T("failed, retried", "ilishindwa, akajaribu tena")}</span> : `${fmt(qq.rows)} ${T("rows", "mistari")}`}</span>

@@ -190,7 +190,7 @@ export default function App() {
       <BottomNav view={view} sw={ws.language === "sw"} badges={badges} />
       <PageView view={view}>
       {view === "dashboard" && <><AppTip sw={ws.language === "sw"} /><Dashboard ws={ws} onWs={setWs} /></>}
-      {view === "kito" && <Kito ws={ws} />}
+      {view === "kito" && <Kito ws={ws} staff={isPlatformAdmin} />}
       {view === "attention" && <Attention ws={ws} />}
       {view === "report" && <Report ws={ws} />}
       {view === "actions" && <Actions ws={ws} />}
