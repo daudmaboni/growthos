@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase, Workspace, Order, Outcome, L, amt, money, localDay, orderNet } from "./lib";
 import type { Period } from "./metrics";
+import ReceiptPrint from "./ReceiptPrint";
 
 type Row = { o: Order; c: Outcome | null; phone: string | null };
 
@@ -24,13 +25,15 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
   const key = paid.map((o) => o.id).join(",");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState("");
+  const [printId, setPrintId] = useState<string | null>(null);   // the sale whose receipt is open
 
   // Desktop: a popup over the blurred dashboard. Phone: a full-screen page.
   // Esc closes it; on a phone the Back button closes it instead of leaving the dashboard.
   useEffect(() => {
     history.pushState({ ...(history.state ?? {}), paidList: true }, "");
     const onPop = () => onClose();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    // Esc while a receipt is open closes only the receipt (it listens for Esc itself).
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.body.classList.contains("rcpt-open")) onClose(); };
     window.addEventListener("popstate", onPop);
     window.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
@@ -118,13 +121,17 @@ export default function PaidOrders({ ws, orders, period, adNames, onClose }: {
                   {c?.paid_orders != null && Number(c.paid_orders) > 1 && <span><span className="muted">{T("Repeat customer", "Mteja wa kurudia")}</span> {T(`${c.paid_orders} paid orders`, `oda ${c.paid_orders} zilizolipwa`)}</span>}
                 </div>
                 {c?.kito_summary && <p className="small muted" style={{ margin: 0 }}>✦ {c.kito_summary}</p>}
-                {o.conversation_id && <a className="small" href={"#chats/open=" + o.conversation_id}>{T("Open chat →", "Fungua chat →")}</a>}
+                <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  {o.receipt_no && <button className="small" onClick={() => setPrintId(o.id)}>🧾 {T("Print receipt", "Chapisha risiti")} · {o.receipt_no}</button>}
+                  {o.conversation_id && <a className="small" href={"#chats/open=" + o.conversation_id}>{T("Open chat →", "Fungua chat →")}</a>}
+                </div>
               </div>
             );
           })}
         </div>
       )}
     </div>
+    {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
     </div>,
     document.body,
   );
