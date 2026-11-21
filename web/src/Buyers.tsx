@@ -8,7 +8,7 @@ import { supabase, Workspace, money, canEdit, localDay } from "./lib";
 
 export type Buyer = {
   contact_id: string; wa_name: string | null; full_name: string | null; phone: string | null; alt_phone: string | null;
-  region: string | null; district: string | null; area: string | null; landmark: string | null; delivery_note: string | null;
+  delivery_place: string | null; region: string | null; district: string | null; area: string | null; landmark: string | null; delivery_note: string | null;
   location_source: "auto" | "owner" | null; location_evidence: string | null; name_source: "auto" | "owner" | null;
   orders: number; spent: number; currency: string | null; first_at: string | null; last_at: string | null;
   last_conversation_id: string | null; last_receipt: string | null; products: string | null;
@@ -19,7 +19,11 @@ export const REGIONS = ["Arusha", "Dar es Salaam", "Dodoma", "Geita", "Iringa", 
   "Tabora", "Tanga", "Zanzibar"];
 
 const local = (wa: string | null | undefined) => { if (!wa) return ""; const d = wa.replace(/\D/g, ""); return d.startsWith("255") && d.length === 12 ? "0" + d.slice(3) : "+" + d; };
-const placeOf = (b: Pick<Buyer, "area" | "district" | "region">) => [b.area, b.district, b.region].filter(Boolean).join(", ");
+// The delivery location exactly as the customer wrote it; the region is added only when their words don't already say it.
+export const placeOf = (b: Pick<Buyer, "delivery_place" | "area" | "district" | "region">) => {
+  if (b.delivery_place) return b.region && !b.delivery_place.toLowerCase().includes(b.region.toLowerCase().split(" ")[0]) ? `${b.delivery_place} · ${b.region}` : b.delivery_place;
+  return [b.area, b.district, b.region].filter(Boolean).join(", ");
+};
 const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Dar_es_Salaam" }) : "–";
 
 export default function Buyers({ ws }: { ws: Workspace }) {
@@ -44,18 +48,18 @@ export default function Buyers({ ws }: { ws: Workspace }) {
   useEffect(() => { const t = window.setTimeout(load, q ? 300 : 0); return () => window.clearTimeout(t); }, [q, region, ws.id]);
 
   const shown = useMemo(() => (rows ?? []).filter((b) =>
-    only === "all" ? true : only === "nolocation" ? !b.region : b.location_source === "auto" || b.name_source === "auto"), [rows, only]);
+    only === "all" ? true : only === "nolocation" ? !b.region && !b.delivery_place : b.location_source === "auto" || b.name_source === "auto"), [rows, only]);
   const counts = useMemo(() => ({
     all: rows?.length ?? 0,
-    nolocation: (rows ?? []).filter((b) => !b.region).length,
+    nolocation: (rows ?? []).filter((b) => !b.region && !b.delivery_place).length,
     suggested: (rows ?? []).filter((b) => b.location_source === "auto" || b.name_source === "auto").length,
   }), [rows]);
   const regionsInData = useMemo(() => Array.from(new Set([...(rows ?? []).map((b) => b.region).filter(Boolean) as string[]])).sort(), [rows]);
 
   const csv = () => {
-    const head = ["Name", "WhatsApp name", "Phone", "Second phone", "Region", "District/town", "Area", "Landmark", "Delivery note", "Location confirmed", "Orders", "Total spent", "Currency", "First purchase", "Last purchase", "Last receipt", "Products"];
+    const head = ["Name", "WhatsApp name", "Phone", "Second phone", "Delivery location", "Region", "District/town", "Area", "Landmark", "Delivery note", "Location confirmed", "Orders", "Total spent", "Currency", "First purchase", "Last purchase", "Last receipt", "Products"];
     const esc = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = shown.map((b) => [b.full_name ?? b.wa_name, b.wa_name, local(b.phone), b.alt_phone, b.region, b.district, b.area, b.landmark, b.delivery_note,
+    const lines = shown.map((b) => [b.full_name ?? b.wa_name, b.wa_name, local(b.phone), b.alt_phone, b.delivery_place, b.region, b.district, b.area, b.landmark, b.delivery_note,
       b.location_source === "owner" ? "yes" : b.region ? "suggested" : "", b.orders, Math.round(b.spent), b.currency, day(b.first_at), day(b.last_at), b.last_receipt, b.products].map(esc).join(","));
     const blob = new Blob(["﻿" + [head.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -135,18 +139,18 @@ export default function Buyers({ ws }: { ws: Workspace }) {
 }
 
 export function BuyerEdit({ b, T, editor, onSaved }: { b: Buyer; T: (en: string, s: string) => string; editor: boolean; onSaved: (b: Buyer) => void }) {
-  const [f, setF] = useState({ full_name: b.full_name ?? "", alt_phone: b.alt_phone ?? "", region: b.region ?? "", district: b.district ?? "", area: b.area ?? "", landmark: b.landmark ?? "", delivery_note: b.delivery_note ?? "" });
+  const [f, setF] = useState({ full_name: b.full_name ?? "", alt_phone: b.alt_phone ?? "", delivery_place: b.delivery_place ?? "", region: b.region ?? "", district: b.district ?? "", area: b.area ?? "", landmark: b.landmark ?? "", delivery_note: b.delivery_note ?? "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const id = (k: string) => `by-${b.contact_id}-${k}`;
   const save = async () => {
     setBusy(true); setMsg("");
-    const { error } = await supabase.rpc("save_customer", { p_contact: b.contact_id, p_full_name: f.full_name, p_alt_phone: f.alt_phone, p_region: f.region,
+    const { error } = await supabase.rpc("save_customer", { p_contact: b.contact_id, p_full_name: f.full_name, p_alt_phone: f.alt_phone, p_delivery_place: f.delivery_place, p_region: f.region,
       p_district: f.district, p_area: f.area, p_landmark: f.landmark, p_delivery_note: f.delivery_note });
     setBusy(false);
     if (error) { setMsg(T("Couldn't save. Try again.", "Imeshindwa kuhifadhi. Jaribu tena.")); return; }
-    const hasLoc = !!(f.region || f.district || f.area);
+    const hasLoc = !!(f.delivery_place || f.region || f.district || f.area);
     onSaved({ ...b, ...Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.trim() || null])) as Partial<Buyer>,
       location_source: hasLoc ? "owner" : null, name_source: f.full_name.trim() ? "owner" : null, location_evidence: null } as Buyer);
     setMsg(T("Saved", "Imehifadhiwa"));
@@ -154,19 +158,20 @@ export function BuyerEdit({ b, T, editor, onSaved }: { b: Buyer; T: (en: string,
   return (
     <div className="by-edit">
       {b.location_source === "auto" && b.location_evidence && (
-        <span className="small muted">{T("Suggested from their message:", "Imependekezwa kutoka ujumbe wao:")} <i>“{b.location_evidence}”</i></span>
+        <span className="small muted">{T("Taken from their delivery message:", "Imetoka kwenye ujumbe wao wa mzigo:")} <i>“{b.location_evidence}”</i></span>
       )}
       <div className="by-grid">
         <label htmlFor={id("n")}>{T("Full name", "Jina kamili")}<input id={id("n")} value={f.full_name} onChange={set("full_name")} disabled={!editor} placeholder={b.wa_name ?? ""} /></label>
         <label>{T("WhatsApp number", "Namba ya WhatsApp")}<input value={local(b.phone)} disabled readOnly /></label>
         <label htmlFor={id("p")}>{T("Second phone", "Simu nyingine")}<input id={id("p")} value={f.alt_phone} onChange={set("alt_phone")} disabled={!editor} inputMode="tel" placeholder="07xx xxx xxx" /></label>
+        <label htmlFor={id("dp")} className="by-wide">{T("Delivery location — as the customer wrote it", "Mahali pa kupelekea — kama mteja alivyoandika")}<input id={id("dp")} value={f.delivery_place} onChange={set("delivery_place")} disabled={!editor} placeholder={T("e.g. Kyela, boda Kasumulu", "mfano Kyela, boda Kasumulu")} /></label>
         <label htmlFor={id("r")}>{T("Region", "Mkoa")}
           <select id={id("r")} value={f.region} onChange={set("region")} disabled={!editor}>
             <option value="">{T("—", "—")}</option>
             {[...REGIONS, ...(f.region && !REGIONS.includes(f.region) ? [f.region] : [])].map((r) => <option key={r} value={r}>{r}</option>)}
           </select></label>
         <label htmlFor={id("d")}>{T("District / town", "Wilaya / mji")}<input id={id("d")} value={f.district} onChange={set("district")} disabled={!editor} placeholder={T("e.g. Kyela", "mfano Kyela")} /></label>
-        <label htmlFor={id("a")}>{T("Area / street", "Eneo / mtaa")}<input id={id("a")} value={f.area} onChange={set("area")} disabled={!editor} placeholder={T("e.g. Mbezi Beach", "mfano Mbezi Beach")} /></label>
+        <label htmlFor={id("a")}>{T("Area / street (optional)", "Eneo / mtaa (si lazima)")}<input id={id("a")} value={f.area} onChange={set("area")} disabled={!editor} placeholder={T("e.g. Mbezi Beach", "mfano Mbezi Beach")} /></label>
         <label htmlFor={id("l")} className="by-wide">{T("Landmark", "Alama ya eneo")}<input id={id("l")} value={f.landmark} onChange={set("landmark")} disabled={!editor} placeholder={T("e.g. near Africana, Goba mti pesa", "mfano karibu na Africana, Goba mti pesa")} /></label>
         <label htmlFor={id("dn")} className="by-wide">{T("Delivery note", "Maelezo ya kusafirisha")}<textarea id={id("dn")} rows={2} value={f.delivery_note} onChange={set("delivery_note")} disabled={!editor} placeholder={T("e.g. send by bus to Kyela, picks up at the stand", "mfano tuma kwa basi Kyela, atachukua stendi")} /></label>
       </div>

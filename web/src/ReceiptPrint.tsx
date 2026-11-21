@@ -54,7 +54,7 @@ async function loadReceipt(ws: Workspace, orderId: string): Promise<R> {
   if (error || !o) throw new Error(error?.message ?? "not found");
   const ord = o as Order & { items?: { name?: string; qty?: number }[]; receipt_no?: string | null; payment_ref?: string | null; };
   const [cv, wn, lk] = await Promise.all([
-    ord.conversation_id ? supabase.from("conversations").select("contact:contacts(name,wa_id,full_name,alt_phone,region,district,area,landmark,delivery_note)").eq("id", ord.conversation_id).single() : Promise.resolve({ data: null } as any),
+    ord.conversation_id ? supabase.from("conversations").select("contact:contacts(name,wa_id,full_name,alt_phone,delivery_place,region,district,area,landmark,delivery_note)").eq("id", ord.conversation_id).single() : Promise.resolve({ data: null } as any),
     supabase.from("wa_numbers").select("display_phone").eq("workspace_id", ws.id).limit(1),
     // The sale's secret QR code (made on first print, migration 0055). No receipt number yet → no link.
     ord.receipt_no ? supabase.rpc("receipt_link", { p_order: orderId }) : Promise.resolve({ data: null } as any),
@@ -70,7 +70,8 @@ async function loadReceipt(ws: Workspace, orderId: string): Promise<R> {
   return {
     biz: ws.name, bizPhone: phone ? localPhone(phone) : null, waLink: phone ? `https://wa.me/${String(phone).replace(/\D/g, "")}` : null,
     no: ord.receipt_no ?? "—", customer: ct?.full_name || ct?.name || masked(ct?.wa_id) || "—", custPhone: masked(ct?.wa_id),
-    place: [ct?.area, ct?.district, ct?.region].filter(Boolean).join(", ") || null, landmark: ct?.landmark ?? null,
+    // the delivery location exactly as the customer wrote it; otherwise what the owner filled in
+    place: ct?.delivery_place || [ct?.area, ct?.district, ct?.region].filter(Boolean).join(", ") || null, landmark: ct?.landmark ?? null,
     deliveryNote: ct?.delivery_note ?? null, altPhone: ct?.alt_phone ?? null,
     items: items.length ? items : ["—"], total: `${ord.currency} ${amt(orderNet(ord), ord.currency)}`,
     date: d.toLocaleDateString("en-GB", { ...opt, day: "numeric", month: "short", year: "numeric" }),
