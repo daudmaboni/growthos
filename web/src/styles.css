@@ -1351,9 +1351,8 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
 
 /* ---- Find a payment: list rows + the opened receipt card (nothing may run off a phone screen) ---- */
 .card button.rcpt-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; width: 100%; min-height: 0;
-  padding: 12px 2px; margin: 0; text-align: left; font: inherit; color: inherit; background: none; background-image: none; box-shadow: none;
-  -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
-.card button.rcpt-row:hover { background: none; }
+  padding: 12px 4px; margin: 0; text-align: left; font: inherit; color: inherit; background-image: none; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; }
 .card button.rcpt-row:active { transform: none; }
 .card button.rcpt-row > b { padding-top: 1px; }
 .pay-open { min-width: 0; padding: 0 0 14px; }
@@ -1364,6 +1363,22 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
 .pay-card .kv.stack > span:last-child { text-align: left; font-weight: 500; }
 .pay-card .kv:last-child { border-bottom: 0; }
 .pay-card .evidence { min-width: 0; overflow-wrap: anywhere; }
+.pay-body { display: grid; gap: 12px; min-width: 0; }
+.pay-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* Desktop: details on the left, the customer's screenshot/message and the actions on the right,
+   and each value sits next to its label instead of across the whole width. */
+@media (min-width: 900px) {
+  .pay-open { padding: 4px 0 18px; }
+  .pay-card { padding: 22px 24px; gap: 16px !important; }
+  .pay-body { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .pay-card .kv { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; }
+  .pay-card .kv > span:last-child { text-align: left; }
+  .pay-card .kv.stack { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; }
+  .pay-side .evidence { padding: 12px 14px; line-height: 1.5; }
+  .pay-side > div:last-child { padding-top: 2px; }
+  .card button.rcpt-row { padding: 14px 8px; border-radius: 10px; }
+  .card button.rcpt-row:hover, .card button.rcpt-row.open { background: var(--raised); }
+}
 @media (max-width: 760px) {
   .pay-card { padding: 14px; border-radius: 16px; }
   .pay-card .kv { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }

@@ -220,6 +220,7 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
           {o && <b style={{ fontSize: 22 }}>{money(orderNet(o), o.currency)}</b>}
         </div>
       </div>
+      <div className="pay-body">
       <div className="small kv-list">
         <Row k={T("Customer", "Mteja")} v={f.customer?.name || (f.customer?.phone ? "+" + f.customer.phone : null)} />
         <Row k={T("Phone", "Simu")} v={f.customer?.phone ? "+" + f.customer.phone : null} />
@@ -235,6 +236,7 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
         <Row k={T("How the sale was recorded", "Mauzo yalirekodiwa vipi")} v={o ? `${how} · ${fmt(o.created_at)}` : null} stack />
         <Row k={T("Notes", "Maelezo")} v={notes} stack />
       </div>
+      <div className="pay-side">
       {ev && (
         <div className="evidence small" style={{ display: "grid", gap: 4 }}>
           <span className="muted">{rc ? T("Payment screenshot", "Picha ya malipo") : T("Payment message", "Ujumbe wa malipo")} · {fmt(ev.sent_at)}</span>
@@ -245,6 +247,8 @@ function PaymentCard({ f, T, onPrint }: { f: Found; T: (en: string, s: string) =
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         {o && o.status === "paid" && <button type="button" className="primary" onClick={() => onPrint(o.id)}>{T("Print receipt", "Chapisha risiti")}</button>}
         {f.conversation_id && <a href={"#chats/ids=" + f.conversation_id}>{T("Open the chat →", "Fungua chat →")}</a>}
+      </div>
+      </div>
       </div>
     </section>
   );
