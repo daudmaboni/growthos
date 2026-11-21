@@ -64,15 +64,20 @@ describe("owner ✅ messages", () => {
   });
 });
 
-import { isMoneyMoment } from "../../supabase/functions/_shared/signals";
+import { isMoneyMoment } from "../../supabase/functions/_shared/money";
 describe("isMoneyMoment (Kito reads these chats at once)", () => {
   it("customer payment words, M-Pesa SMS and read receipts", () => {
     for (const t of ["Nimelipa tayari", "nimetuma pesa", "nimetuma", "QK41ABC9XY Imethibitishwa. Umelipa Tsh155,000", "[picha ya malipo] M-Pesa · TSh 155,000", "I've paid"])
       expect(isMoneyMoment(t, "in"), t).toBe(true);
   });
   it("ordinary customer messages wait for the quiet window", () => {
-    for (const t of ["Habari", "bei gani?", "nipo Mbeya", "mnaleta mikoani?", "[picha] product photo", null])
+    for (const t of ["Habari", "bei gani?", "nipo Mbeya", "mnaleta mikoani?", null])
       expect(isMoneyMoment(t as string | null, "in"), String(t)).toBe(false);
+    expect(isMoneyMoment("[picha] product photo", "in", [], "image")).toBe(false);
+  });
+  it("receipt photos, and photos that couldn't be read, are read at once", () => {
+    expect(isMoneyMoment("[picha ya malipo] M-Pesa · TSh 155,000", "in", [], "image")).toBe(true);
+    expect(isMoneyMoment("[image]", "in", [], "image")).toBe(true);
   });
   it("business confirms, ships, sends usage or its own paid text", () => {
     expect(isMoneyMoment("Tumepokea malipo yako, asante", "out")).toBe(true);

@@ -7,6 +7,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { claude, type UsageMeta } from "../_shared/claude.ts";
 import { planPromise, promiseTitle, localStamp, PROMISE_KINDS } from "../_shared/promise.ts";
+import { isMoneyMoment } from "../_shared/money.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -358,12 +359,12 @@ Deno.serve(async (req) => {
   }
 
   // Chats never checked, or with new messages since the last check.
-  // wa-webhook passes conversation_ids (with the cron secret) for money moments, so Kito reads those
-  // within seconds instead of waiting for the quiet window.
+  // wa-webhook passes conversation_ids (with the cron secret) after every customer message; only the
+  // money moments among them are read now (see below), the rest wait for the quiet window.
   const only: string[] = isCron && Array.isArray(body.conversation_ids)
     ? body.conversation_ids.map(String).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20) : [];
   // People marked "not a customer" (bodaboda, suppliers, staff…) are not read: they aren't sales chats.
-  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
+  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,payment_signal,contacts!inner(not_customer)")
     .eq("contacts.not_customer", false)
     .not("last_message_at", "is", null).order("last_message_at", { ascending: false }).limit(400);
   if (wsFilter) q = q.eq("workspace_id", wsFilter);
@@ -374,7 +375,7 @@ Deno.serve(async (req) => {
   // Kito, not the word rules, decides whether they go to "Check payment".
   let flagged: any[] = [];
   if (!only.length) {
-    let fq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
+    let fq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,payment_signal,contacts!inner(not_customer)")
       .eq("contacts.not_customer", false).eq("payment_signal", true).not("last_message_at", "is", null)
       .order("last_message_at", { ascending: false }).limit(300);
     if (wsFilter) fq = fq.eq("workspace_id", wsFilter);
@@ -398,13 +399,30 @@ Deno.serve(async (req) => {
   const changed = (c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at);
   const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || (changed(c) && settled(c))))];
   for (const c of due) seen.add(c.id);
+  const wsInfo = new Map<string, WsInfo>();
+  // Woken by wa-webhook: read now only if the new messages are a money moment (the customer says they
+  // paid, a receipt photo, the business confirms / ships / sends usage) or the word rules flag the chat
+  // as maybe paid. Everything else is left for the quiet-window run, which reads every changed chat.
+  if (only.length && due.length) {
+    const urgent: any[] = [];
+    for (const c of due) {
+      try {
+        const info = await wsInfoFor(db, wsInfo, c.workspace_id);
+        let mq = db.from("messages").select("direction,body,type").eq("conversation_id", c.id).order("sent_at", { ascending: false }).limit(20);
+        if (c.kito_checked_at) mq = mq.gt("sent_at", c.kito_checked_at);
+        const { data: fresh } = await mq;
+        if (c.payment_signal || (fresh ?? []).some((m: any) => isMoneyMoment(m.body, m.direction, info.paid, m.type))) urgent.push(c);
+      } catch { urgent.push(c); }   // unsure: read now
+    }
+    due.splice(0, due.length, ...urgent);
+  }
   // Catch-up: the query above only sees the 400 newest chats, so busy businesses had older chats
   // (still inside the last 30 days) that Kito never read. A few of those, newest first, ride along
   // on every 15-minute run. Chats that already failed are skipped (they show on the admin Errors page).
   // Cron only: the app keeps calling while "remaining" > 0, and the backlog would keep it looping.
   let backlog: any[] = [];
   if (isCron && !only.length) {
-    let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
+    let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,payment_signal,contacts!inner(not_customer)")
       .eq("contacts.not_customer", false).is("kito_checked_at", null).is("kito_error", null)
       .gte("last_message_at", new Date(Date.now() - BACKLOG_DAYS * 864e5).toISOString())
       .order("last_message_at", { ascending: false }).limit(60);
@@ -416,7 +434,6 @@ Deno.serve(async (req) => {
   const fresh = due.slice(0, backlog.length ? cap - BACKLOG_SLOTS : cap);
   const batch = [...fresh, ...backlog.slice(0, cap - fresh.length)];
 
-  const wsInfo = new Map<string, WsInfo>();
   const tally = new Map<string, { checked: number; failed: number; note: string }>();
   const bump = (ws: string, k: "checked" | "failed", note = "") => {
     const t = tally.get(ws) ?? { checked: 0, failed: 0, note: "" };

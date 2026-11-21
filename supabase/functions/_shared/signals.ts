@@ -1,4 +1,5 @@
 // Conversation signal detection (Kiswahili + English). Same rules as the Phase 0 engine.
+import { paidCustomer, paidCustomerAfterPay, mpesaSms, paidBusiness, shipped, usage } from "./money.ts";
 export type Msg = { direction: "in" | "out"; sent_at: string; body: string | null; type: string };
 
 const SIG = {
@@ -6,15 +7,15 @@ const SIG = {
   priceAmount: /((tsh|tzs|sh\.?|shs|shilingi)\s*\.?\s*[\d][\d,. ]{2,}|[\d][\d,.]{2,}\s*(\/=|tsh|tzs|shilingi)|\b\d{1,3}[,.]\d{3}\b|\belfu\s+\w+)/i,
   // Customer words. Only strong ones: "nimetuma" / "nimekutumia" alone can mean a photo or a location,
   // so those count only after you sent payment details (see analyze).
-  paidCustomer: /(\[picha ya malipo\]|nimelipa|nimelipia|nimeshalipia|nimeshalipa|nimeweka (pesa|hela)|nimetuma (pesa|hela|malipo|kiasi)|nimeshatuma (pesa|hela|malipo)|i have paid|i'?ve paid|sent the money)/i,
-  paidCustomerAfterPay: /(nimetuma|nimeshatuma|nimesend|nimekutumia|tayari nimetuma|check (sms|message)|angalia (sms|ujumbe|meseji))/i,
+  paidCustomer,
+  paidCustomerAfterPay,
   // An M-Pesa / Tigo / Airtel SMS the customer pasted: "XYZ123ABCD Imethibitishwa. Umelipa Tsh155,000…"
-  mpesaSms: /(\b[A-Z0-9]{10}\b\s+(confirmed|imethibitishwa)|umelipa\s+tsh|umetuma\s+tsh|tsh\s*[\d,.]+\s+(sent to|paid to|imetumwa))/i,
-  paidBusiness: /(tumepokea (malipo|pesa|tsh|tzs|sh)|malipo yamepokelewa|tumepokea\b.*\d|payment received|received your payment|asante kwa malipo|mzigo unatoka|order (is )?confirmed)/i,
+  mpesaSms,
+  paidBusiness,
   payInstr: /(lipa namba|till|paybill|akaunti|m-?pesa|tigo ?pesa|airtel ?money|halopesa|nalipa vipi|how do i pay)/i,
   // Fulfilment language (how sales really look in chat: goods sent, picked up, usage explained)
-  shipped: /((kwenda|kuja|uende|njoo) kuchukua (mzigo|dawa)|mzigo (wako )?(umefika|umetumwa|umeshatumwa|uko njiani|umeondoka|umeshafika|tayari)|tumetuma (mzigo|dawa)|tumeshatuma|your (order|parcel) (has been )?(sent|shipped|dispatched)|out for delivery)/i,
-  usage: /(matumizi ya \S+|maelekezo ya matumizi|jinsi ya kutumia|namna ya kutumia|dawa ulizopokea|picha ya dawa ulizo|how to use (it|your))/i,
+  shipped,
+  usage,
   // "I received the goods" — must name what was received. Not "nianze kutumia?", "naomba maelekezo", "nimechukua namba yako".
   received: /(nime(pokea|upata|ipata|zipata|pata|chukua|shachukua|shapokea)\s+(\w+\s+){0,2}(mzigo|dawa|parcel|package|oda|order|kifurushi|bidhaa)|(mzigo|dawa|kifurushi)\s+(\w+\s+){0,2}(nimeupokea|nimeipokea|nimezipokea|nimepokea|nimeupata|nimeipata|nimezipata|imefika|umefika|zimefika)|dawa nimeacha|sijazifungua|i (have )?(received|got) (the|my) (order|parcel|package|medicine))/i,
   media: /(<media omitted>|<attached:|\[image\]|\[document\]|\[video\]|picha imeondolewa|image omitted|document omitted)/i,
@@ -27,22 +28,6 @@ const SIG = {
     delivery: /(mko wapi|mnapatikana wapi|mnafikisha|mikoani|mkoani|delivery|usafiri|nje ya dar)/i,
   } as Record<string, RegExp>,
 };
-
-/**
- * A "money moment": a message that may mean a sale just happened, so Kito should read the chat now
- * instead of waiting for it to go quiet. Generous on purpose: a false alarm costs one extra read,
- * a miss only delays the label until the next quiet-window read.
- *  in:  the customer says they paid / sent money, pastes an M-Pesa SMS, or a receipt photo was read.
- *  out: the business confirms payment, ships, sends usage instructions, or one of its own "paid" texts.
- */
-export function isMoneyMoment(text: string | null | undefined, direction: "in" | "out", paidTexts: string[] = []): boolean {
-  const t = text ?? "";
-  if (!t) return false;
-  if (direction === "in") return SIG.paidCustomer.test(t) || SIG.paidCustomerAfterPay.test(t) || SIG.mpesaSms.test(t) || /muamala/i.test(t);
-  if (SIG.paidBusiness.test(t) || SIG.shipped.test(t) || SIG.usage.test(t)) return true;
-  const low = t.toLowerCase();
-  return paidTexts.some((p) => p && p.trim().length >= 4 && low.includes(p.trim().toLowerCase()));
-}
 
 export function extractAmount(text: string): number {
   const m = text.match(/(?:tsh|tzs|sh\.?|shs)\s*\.?\s*([\d][\d,. ]{2,})|([\d][\d,.]{2,})\s*(?:\/=|tsh|tzs)|\b(\d{1,3}[,.]\d{3}(?:[,.]\d{3})?)\b/i);

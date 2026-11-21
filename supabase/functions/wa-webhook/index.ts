@@ -14,7 +14,6 @@
 // runs after the response and is idempotent; failed events are retried by the scheduled job
 // (bounded by max_attempts) or replayed on request by a workspace owner/admin.
 import { admin, userClient, reanalyze, json, cors } from "../_shared/db.ts";
-import { isMoneyMoment } from "../_shared/signals.ts";
 import { captureMedia, dualhookKey } from "../_shared/media.ts";
 import { confirmTicks, type TickMsg } from "../_shared/ticks.ts";
 import { eventKey, safeError, isRetryable, normalizeEnvelope, sha256Hex, threadPeer, senderId, recipientId, contactKey, historyDirection, type Envelope } from "../_shared/webhook.ts";
@@ -47,8 +46,7 @@ function textOf(m: any): string | null {
   }
 }
 
-// urgent: chats with a money moment in this event (Kito reads them now; the rest wait for the quiet window).
-type Ctx = { db: SupabaseClient; ws: string; pnid: string; touched: string[]; urgent: string[]; paidTexts?: string[] };
+type Ctx = { db: SupabaseClient; ws: string; pnid: string; touched: string[] };
 
 async function conversationFor(ctx: Ctx, waId: string, name?: string | null) {
   const { db, ws, pnid } = ctx;
@@ -76,28 +74,6 @@ async function saveMessage(ctx: Ctx, convId: string, m: any, direction: "in" | "
   // Voice notes (both ways): also only playable for a short while, so save them now to play in Chats.
   if (m.type === "audio" && origin === "webhook") await captureMedia(ctx.db, ctx.ws, m.id, m, undefined, false);
   ctx.touched.push(convId);
-  if (await moneyMoment(ctx, m, direction)) ctx.urgent.push(convId);
-}
-
-/** Does this live message mean a sale may have just happened? (see isMoneyMoment). Never throws. */
-async function moneyMoment(ctx: Ctx, m: any, direction: "in" | "out") {
-  try {
-    if (direction === "in" && (m.type === "image" || m.type === "document")) {
-      // Read for a receipt above: "[picha ya malipo]" = receipt, "[picha]" = some other photo.
-      // Not read (download or AI failed): unknown, so treat it as a possible receipt.
-      const { data } = await ctx.db.from("messages").select("body").eq("id", m.id).maybeSingle();
-      const b = String(data?.body ?? "");
-      return b.includes("[picha ya malipo]") || !b.includes("[picha]") || isMoneyMoment(b, "in");
-    }
-    if (direction === "out" && ctx.paidTexts === undefined) {
-      const { data: w } = await ctx.db.from("workspaces").select("rule_paid_texts").eq("id", ctx.ws).maybeSingle();
-      ctx.paidTexts = Array.isArray(w?.rule_paid_texts) ? w.rule_paid_texts.map(String) : [];
-    }
-    return isMoneyMoment(textOf(m), direction, ctx.paidTexts ?? []);
-  } catch (e) {
-    console.error("money moment check", String((e as Error)?.message ?? e).slice(0, 120));
-    return true;   // when unsure, read now
-  }
 }
 
 async function handleChange(db: SupabaseClient, field: string, value: any) {
@@ -105,7 +81,7 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
   if (!pnid) return;
   const { data: num } = await db.from("wa_numbers").select("workspace_id,display_phone").eq("phone_number_id", pnid).maybeSingle();
   if (!num) throw new Error("WhatsApp number is not connected to a workspace");
-  const ctx: Ctx = { db, ws: num.workspace_id, pnid, touched: [], urgent: [] };
+  const ctx: Ctx = { db, ws: num.workspace_id, pnid, touched: [] };
 
   if (field === "messages") {
     const names = new Map<string | null, string>((value.contacts ?? []).map((c: any) => [contactKey(c), c.profile?.name]));
@@ -220,10 +196,8 @@ async function handleChange(db: SupabaseClient, field: string, value: any) {
   }
   // Signals are recomputed from the full message history, so a partial earlier run is repaired here.
   if (ctx.touched.length) await reanalyze(db, ctx.touched);
-  // A money moment (customer says they paid, a receipt photo, the business confirms or ships): Kito
-  // reads that chat now. Other new messages wait until the chat goes quiet (kito's quiet window),
-  // so a burst of "habari" / "bei gani" / "nipo Mbeya" is read once, not after every line.
-  if ((field === "messages" || field === "smb_message_echoes") && ctx.urgent.length) wakeKito(ctx.urgent);
+  // A customer just wrote: have Kito read those chats now (not at the next 15-minute run).
+  if (field === "messages" && ctx.touched.length) wakeKito(ctx.touched);
 }
 
 /** Ask Kito to read these chats right away. Fire-and-forget: the webhook never waits for the AI. */
