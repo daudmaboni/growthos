@@ -6,6 +6,7 @@ import { enterCards, enterRows, usePageEnter, select } from "./motion";
 import { supabase, callFn, Workspace, Outcome, Task, L, when, ago, canEdit } from "./lib";
 import { KitoLoader } from "./KitoLoader";
 import { PromiseList, dueBucket } from "./Promises";
+import { ReorderList } from "./Reorders";
 import { useKept, kept, put } from "./keep";
 
 type Member = { user_id: string; role: string; email: string };
@@ -26,7 +27,13 @@ export default function Actions({ ws }: { ws: Workspace }) {
   const [loading, setLoading] = useState(!kept(K + ":loaded"));
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
-  const [tab, setTab] = useState<"promises" | "queue" | "tasks" | "done">(() => (location.hash.includes("tab=queue") ? "queue" : "promises"));
+  const [tab, setTab] = useState<"promises" | "reorders" | "queue" | "tasks" | "done">(() => (location.hash.includes("tab=queue") ? "queue" : location.hash.includes("tab=reorders") ? "reorders" : "promises"));
+  const [reorderCount, setReorderCount] = useKept<number | null>(K + ":reorders", null);
+  useEffect(() => {
+    supabase.rpc("reorder_candidates", { p_ws: ws.id }).then(({ data }) => {
+      if (Array.isArray(data)) setReorderCount(data.filter((r: { state: string }) => r.state === "todo").length);
+    });
+  }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Refresh quietly: after the first load the page stays on screen while new data comes in
   // (no skeleton flash). The returned promise resolves once the new data is shown, so a button
   // can keep its spinner until its card has moved.
@@ -104,6 +111,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
         </div>
         <div className="seg" role="group" aria-label="View">
           <button className={tab === "promises" ? "on" : ""} onClick={() => setTab("promises")}>{T("Promises", "Ahadi")}{promiseCount ? ` (${promiseCount})` : ""}</button>
+          <button className={tab === "reorders" ? "on" : ""} onClick={() => setTab("reorders")}>{T("Reorders", "Nunua tena")}{reorderCount ? ` (${reorderCount})` : ""}</button>
           <button className={tab === "queue" ? "on" : ""} onClick={() => setTab("queue")}>{T("Queue", "Foleni")} ({queue.length})</button>
           <button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>{T("Tasks", "Kazi")} ({open.length + snoozed.length})</button>
           <button className={tab === "done" ? "on" : ""} onClick={() => setTab("done")}>{T("Done", "Zilizokamilika")}</button>
@@ -114,6 +122,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       <p className="small muted page-note"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>{T("itaOS never sends messages. Drafts here are suggestions: copy one, edit it and send it yourself from WhatsApp.", "itaOS haitumi ujumbe. Rasimu hapa ni mapendekezo: nakili, hariri na utume mwenyewe kutoka WhatsApp.")}</p>
 
       {tab === "promises" && <PromiseList tasks={tasks} rows={rows} ws={ws} editor={editor} onChange={refresh} />}
+      {tab === "reorders" && <ReorderList ws={ws} editor={editor} onCount={setReorderCount} />}
 
       {tab === "queue" && (
         <section className="card flat">
