@@ -106,7 +106,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       {tab === "promises" && <PromiseList tasks={tasks} rows={rows} ws={ws} editor={editor} onChange={refresh} />}
 
       {tab === "queue" && (
-        <section className="card">
+        <section className="card flat">
           <div><h2>{T("Needs a reply or a follow-up", "Inahitaji jibu au ufuatiliaji")}</h2><span className="small muted">{T(`Customer waiting for a reply, or a warm chat with no message from you for ${ws.follow_up_hours} hours. Buyers, lost chats and handled chats are excluded.`, `Mteja anasubiri jibu, au chat yenye nia bila ujumbe wako kwa saa ${ws.follow_up_hours}. Wanunuzi, waliopotea na zilizoshughulikiwa hazimo.`)}</span></div>
           {queue.length === 0 ? <div className="empty">{T("Nothing waiting. Nice.", "Hakuna anayesubiri. Safi.")}</div> : (
             <div className="queue">{queue.map(({ r, reason, temp }) => (
@@ -136,7 +136,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       )}
 
       {tab === "tasks" && (
-        <section className="card">
+        <section className="card flat">
           <h2>{T("Open tasks", "Kazi zilizo wazi")}</h2>
           {open.length === 0 && snoozed.length === 0 ? <div className="empty">{T("No open tasks. Take one from the queue.", "Hakuna kazi wazi. Chukua moja kutoka foleni.")}</div> : (
             <div className="queue">
@@ -149,7 +149,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       )}
 
       {tab === "done" && (
-        <section className="card">
+        <section className="card flat">
           <h2>{T("Completed and dismissed", "Zilizokamilika na zilizoondolewa")}</h2>
           {closed.length === 0 ? <div className="empty">{T("Nothing yet.", "Hakuna bado.")}</div> : (
             <div className="scroll"><table>

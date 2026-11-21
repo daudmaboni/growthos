@@ -122,7 +122,7 @@ export default function Kito({ ws }: { ws: Workspace }) {
       </div>
 
       {turns.length === 0 && (
-        <div className="card kito-start">
+        <div className="card flat kito-start">
           <b>{T("Try asking", "Jaribu kuuliza")}</b>
           <div className="kito-suggest">
             {SUGGEST[lang].map((s) => <button key={s} type="button" onClick={() => ask(s)}><span>{s}</span><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button>)}

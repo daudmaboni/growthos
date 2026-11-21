@@ -204,3 +204,15 @@ button.linkish.small { color: var(--muted); }
 .promise-acts { display: flex; flex-wrap: wrap; gap: 8px; align-content: start; }
 .promise-acts.proposed { align-items: center; gap: 16px; }
 .promise-acts.proposed button.primary { min-height: 42px; padding: 0 22px; }
+
+/* ---- Desktop full-width pages (21 Nov 2026): Chats, Ask Kito, Actions and Find a payment sit straight
+   on the page — no big white card around them — so the inbox and lists use the full width up to the
+   one page margin. Phones already work this way. Result cards (a payment, a Kito answer) keep their card. ---- */
+@media (min-width: 900px) {
+  :root .card.chats, :root[data-dark] .card.chats, :root[data-dark="graphite"]:not([data-theme="light"]) .card.chats,
+  :root .card.flat, :root[data-dark] .card.flat, :root[data-dark="graphite"]:not([data-theme="light"]) .card.flat {
+    background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0;
+  }
+  .card.chats:hover, .card.flat:hover { border-color: transparent; }
+  .card.flat + .card.flat { border-top: 1px solid var(--line); padding-top: 22px; }
+}

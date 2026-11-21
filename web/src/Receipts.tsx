@@ -61,7 +61,7 @@ export default function Receipts({ ws }: { ws: Workspace }) {
 
   return (
     <div className="stack" style={{ display: "grid", gap: 16 }}>
-      <section className="card" style={{ display: "grid", gap: 10 }}>
+      <section className="card flat" style={{ display: "grid", gap: 10 }}>
         <div>
           <h2 style={{ margin: 0 }}>{T("Find a payment", "Tafuta malipo")}</h2>
           <span className="small muted">{T("Type a receipt number or the payment's transaction code. You'll see who paid, for what, how much, when and the proof.",
@@ -84,7 +84,7 @@ export default function Receipts({ ws }: { ws: Workspace }) {
       {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
 
       {!res && recent.length > 0 && (
-        <section className="card" style={{ display: "grid", gap: 0 }}>
+        <section className="card flat" style={{ display: "grid", gap: 0 }}>
           <style>{`.rcpt-row{all:unset;box-sizing:border-box;width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;color:inherit;font:inherit}
             .rcpt-row:last-child{border-bottom:0}.rcpt-row:hover{background:var(--hover, rgba(0,0,0,.03))}.rcpt-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}`}</style>
           <h3 style={{ margin: "0 0 4px" }}>{T("Latest receipts", "Risiti za karibuni")}</h3>

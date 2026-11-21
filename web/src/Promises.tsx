@@ -163,13 +163,13 @@ export function PromiseList({ tasks, rows, ws, editor, onChange }: { tasks: Task
   const card = (t: Task) => <PromiseCard key={t.id} t={t} r={rows.find((x) => x.id === t.conversation_id)} ws={ws} editor={editor} onChange={onChange} />;
   return (
     <>
-      <section className="card">
+      <section className="card flat">
         <div><h2>{T("Kito found these promises", "Kito amepata ahadi hizi")} ({proposed.length})</h2>
           <span className="small muted">{T("Customers who said when they'll pay, call or come. Confirm the day and itaOS reminds you on your phone, or dismiss it.", "Wateja waliosema lini watalipa, wapigiwe au watakuja. Thibitisha siku na itaOS itakukumbusha kwenye simu, au iondoe.")}</span></div>
         {proposed.length === 0 ? <div className="empty">{T("Nothing new. Kito checks every chat that gets a new message.", "Hakuna mpya. Kito anaangalia kila chat inayopata ujumbe mpya.")}</div>
           : <div className="queue">{proposed.map(card)}</div>}
       </section>
-      <section className="card">
+      <section className="card flat">
         <div><h2>{T("Your reminders", "Vikumbusho vyako")} ({live.length})</h2></div>
         {live.length === 0 ? <div className="empty">{T("No confirmed promises yet.", "Hakuna ahadi zilizothibitishwa bado.")}</div> : groups.map(([label, list]) => list.length > 0 && (
           <div key={label}><h3>{label} ({list.length})</h3><div className="queue">{list.map(card)}</div></div>
