@@ -5,7 +5,7 @@ import { moneyInput, moneyText } from "./lib";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  FUNNEL, FEATURE_LABEL, coverage, dataGaps, delta, diagnoseWs, nextSupportAction, projectMonth, sumPeriods, usageAlerts, usd,
+  FUNNEL, FEATURE_LABEL, coverage, dataGaps, delta, diagnoseWs, explainToday, nextSupportAction, projectMonth, sumPeriods, usageAlerts, usd,
   type ApiUsage, type FunnelKey, type PerfWs, type Performance,
 } from './adminInsights';
 
@@ -51,7 +51,7 @@ function Delta({ cur, prev, invert }: { cur: number; prev: number; invert?: bool
 function PeriodSeg({ v, set, opts = [7, 30, 90] }: { v: number; set: (n: number) => void; opts?: number[] }) {
   return (
     <div className="ia-seg" role="radiogroup" aria-label="Period">
-      {opts.map((d) => <button key={d} role="radio" aria-checked={v === d} className={v === d ? 'on' : ''} onClick={() => set(d)}>Last {d} days</button>)}
+      {opts.map((d) => <button key={d} role="radio" aria-checked={v === d} className={v === d ? 'on' : ''} onClick={() => set(d)}>{d === 0 ? 'Today' : `Last ${d} days`}</button>)}
     </div>
   );
 }
@@ -249,6 +249,7 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
   useEffect(() => { if (u?.budget) setBudget({ monthly: moneyText(u.budget.monthly_usd), daily: moneyText(u.budget.daily_usd), spike: (u.budget.spike_multiplier ?? 3).toString() }); }, [u?.budget]);
 
   const alerts = u ? usageAlerts(u) : [];
+  const why = u && days === 0 ? explainToday(u) : null;
   async function rpc(fn: string, args: Record<string, unknown>, ok: string) {
     setBusy(true); setMsg(null);
     const { error } = await supabase.rpc(fn, args);
@@ -261,15 +262,15 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
     <div>
       <header className="ia-pagehead"><h1>AI usage and cost</h1>
         <p>Every call itaOS makes to the Anthropic API, by business, feature and model. Costs are <b>estimates</b> from recorded token counts and the prices below; Anthropic's invoice is the real figure. The API key is never shown here.</p></header>
-      <div className="ia-tools"><PeriodSeg v={days} set={setDays} opts={[7, 30, 90]} /></div>
+      <div className="ia-tools"><PeriodSeg v={days} set={setDays} opts={[0, 7, 30, 90]} /></div>
       {error && <div className="ia-alert">{needsUpdate(error) ? 'This page needs the latest database update (0031_admin_insights).' : error}</div>}
       {loading && !u && <div className="ia-skel" style={{ height: 160 }} />}
       {u && (
         <>
           {alerts.length > 0 && <ul className="ix-alerts">{alerts.map((a, i) => <li key={i} className={`t-${a.tone}`}>{a.text}</li>)}</ul>}
           <dl className="ia-strip ix-strip5">
-            <div className="ia-stat"><dt>Estimated cost, {days} days</dt><dd>{usd(u.totals.cost)}</dd><span>{fmt(u.totals.calls)} calls · {fmt(u.totals.errors)} failed · {fmt(u.totals.retries)} retries</span></div>
-            <div className="ia-stat"><dt>Today</dt><dd>{usd(u.today.cost)}</dd><span>{fmt(u.today.calls)} calls · normal day ≈ {usd(u.baseline.avg_cost)}</span></div>
+            <div className="ia-stat"><dt>Estimated cost, {days === 0 ? 'today' : `${days} days`}</dt><dd>{usd(u.totals.cost)}</dd><span>{fmt(u.totals.calls)} calls · {fmt(u.totals.errors)} failed · {fmt(u.totals.retries)} retries</span></div>
+            <div className="ia-stat"><dt>Today</dt><dd>{usd(u.today.cost)}</dd><span>{fmt(u.today.calls)} calls · normal day ≈ {usd(u.baseline.avg_cost)}{days !== 0 && u.today.cost > 0 && <> · <button className="ia-textbtn" onClick={() => setDays(0)}>Why?</button></>}</span></div>
             <div className={`ia-stat${u.budget?.monthly_usd && projectMonth(u.month.cost, u.month.day_of_month, u.month.days_in_month) > u.budget.monthly_usd ? ' t-warn' : ''}`}>
               <dt>This month</dt><dd>{usd(u.month.cost)}</dd>
               <span>≈ {usd(projectMonth(u.month.cost, u.month.day_of_month, u.month.days_in_month))} by month end{u.budget?.monthly_usd ? ` · budget ${usd(u.budget.monthly_usd)}` : ''}</span></div>
@@ -278,9 +279,31 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
             <div className="ia-stat"><dt>Tokens out</dt><dd>{short(u.totals.output_tokens)}</dd><span>output is the expensive part</span></div>
           </dl>
 
-          <section className="ia-panel">
-            <div className="ia-panel-h"><h2>Estimated cost per day</h2><span className="ia-faint small">East Africa time</span></div>
-            <CostChart u={u} />
+          {why && (
+            <section className="ia-panel ix-why">
+              <div className="ia-panel-h"><h2>Why today costs what it does</h2></div>
+              <p className="ix-why-head">{why.headline}</p>
+              <p className="ix-why-verdict">{why.verdict}</p>
+              {why.lines.length > 0 && (
+                <ul className="ix-why-list">
+                  {why.lines.map((l) => (
+                    <li key={l.feature} className={`t-${l.tone}`}>
+                      <div className="ix-why-row"><strong>{l.title}</strong><b className="num">{usd(l.cost)}</b></div>
+                      <p>{l.why}</p>
+                      {l.advice && <p className="ix-why-advice">{l.advice}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {why.caveat && <p className="ia-faint small">{why.caveat}</p>}
+            </section>
+          )}
+
+          <section className="ia-panel" style={why ? { marginTop: 18 } : undefined}>
+            <div className="ia-panel-h"><h2>{days === 0 ? 'Estimated cost per hour, today' : 'Estimated cost per day'}</h2><span className="ia-faint small">East Africa time</span></div>
+            {days === 0 && u.today_hourly
+              ? <CostChart series={{ labels: u.today_hourly.cost.map((_, h) => `${String(h).padStart(2, '0')}:00`), cost: u.today_hourly.cost, calls: u.today_hourly.calls, errors: u.today_hourly.errors }} unit="hour" />
+              : <CostChart series={{ labels: u.daily.days.map(dayLabel), cost: u.daily.cost, calls: u.daily.calls, errors: u.daily.errors }} unit="day" />}
             {u.first_logged_at == null
               ? <p className="ia-faint small">Per-call logging starts with the next Kito run. Until then only Ask Kito history is shown (copied from its question log).</p>
               : <p className="ia-faint small">Per-call logging since {ago(u.first_logged_at)}. Earlier days show Ask Kito history only; Kito labels and screenshot reading weren't counted before then.</p>}
@@ -362,15 +385,16 @@ export function UsagePage({ supabase, tick }: { supabase: SupabaseClient; tick: 
 }
 const short = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(v >= 1e4 ? 0 : 1)}k` : fmt(v));
 
-function CostChart({ u }: { u: ApiUsage }) {
+type Series = { labels: string[]; cost: number[]; calls: number[]; errors: number[] };
+function CostChart({ series: d, unit }: { series: Series; unit: 'day' | 'hour' }) {
   const [hover, setHover] = useState<number | null>(null);
-  const d = u.daily, n = d.days.length, W = 1000, H = 220, P = { l: 52, r: 8, t: 10, b: 26 };
+  const n = d.labels.length, W = 1000, H = 220, P = { l: 52, r: 8, t: 10, b: 26 };
   const max = Math.max(0.01, ...d.cost), bw = (W - P.l - P.r) / Math.max(1, n);
   const y = (v: number) => H - P.b - (v / max) * (H - P.t - P.b);
   const ticks = [0, max / 2, max];
   return (
     <div className="ia-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Estimated cost per day" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Estimated cost per ${unit}`} onMouseLeave={() => setHover(null)}>
         {ticks.map((t, i) => <g key={i}><line className="grid" x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} /><text className="ax" x={P.l - 6} y={y(t) + 4} textAnchor="end">{usd(t)}</text></g>)}
         {d.cost.map((c, i) => (
           <g key={i} onMouseEnter={() => setHover(i)}>
@@ -379,9 +403,9 @@ function CostChart({ u }: { u: ApiUsage }) {
             {d.errors[i]! > 0 && <circle cx={P.l + i * bw + bw / 2} cy={H - P.b + 8} r={2.5} fill="var(--bad)" />}
           </g>
         ))}
-        {d.days.map((day, i) => (i % Math.ceil(n / 8) === 0 ? <text key={day} className="ax" x={P.l + i * bw + bw / 2} y={H - 4} textAnchor="middle">{dayLabel(day)}</text> : null))}
+        {d.labels.map((lb, i) => (i % Math.ceil(n / 8) === 0 ? <text key={i} className="ax" x={P.l + i * bw + bw / 2} y={H - 4} textAnchor="middle">{lb}</text> : null))}
       </svg>
-      <div className="ia-tip">{hover != null ? `${dayLabel(d.days[hover]!)}: ${usd(d.cost[hover]!)} · ${fmt(d.calls[hover]!)} calls${d.errors[hover] ? ` · ${d.errors[hover]} failed` : ''}` : 'Hover a day for details. Red dots mark days with failed calls.'}</div>
+      <div className="ia-tip">{hover != null ? `${d.labels[hover]}: ${usd(d.cost[hover]!)} · ${fmt(d.calls[hover]!)} calls${d.errors[hover] ? ` · ${d.errors[hover]} failed` : ''}` : `Hover ${unit === 'day' ? 'a day' : 'an hour'} for details. Red dots mark ${unit}s with failed calls.`}</div>
     </div>
   );
 }
@@ -528,6 +552,16 @@ export const INSIGHTS_CSS = `
 .ix-alerts{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
 .ix-alerts li{border-radius:var(--r);padding:10px 14px;font-weight:500;background:#EAF0F8;color:var(--info)}
 .ix-alerts li.t-bad{background:#FBE3E1;color:var(--bad)}.ix-alerts li.t-warn{background:#FCEFD9;color:var(--warn)}
+.ix-why{margin-bottom:18px}
+.ix-why-head{margin:0 0 4px;font-size:16px;font-weight:600}
+.ix-why-verdict{margin:0 0 10px;color:var(--muted)}
+.ix-why-list{list-style:none;margin:0;padding:0}
+.ix-why-list li{padding:12px 0;border-top:1px solid var(--line)}
+.ix-why-list li p{margin:4px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.ix-why-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.ix-why-list li.t-warn .ix-why-row strong{color:var(--warn)}.ix-why-list li.t-bad .ix-why-row strong{color:var(--bad)}
+.ix-why-advice{color:var(--ink)!important;font-weight:500}
+.ix-why-advice::before{content:'What to do: ';font-weight:600}
 .ix-strip5{grid-template-columns:repeat(5,minmax(0,1fr))}
 .ix-tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .ix-tbl th{text-align:left;font-size:12px;font-weight:500;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}

@@ -112,7 +112,9 @@ export type ApiUsage = {
   totals: { calls: number; errors: number; retries: number; input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost: number; unpriced: number };
   today: { calls: number; cost: number; errors: number };
   month: { calls: number; cost: number; from: string; day_of_month: number; days_in_month: number };
-  baseline: { avg_cost: number; avg_calls: number };
+  baseline: { avg_cost: number; avg_calls: number; n_days?: number };
+  today_hourly?: { cost: number[]; calls: number[]; errors: number[]; by_feature: Record<string, number[]>;
+    features: { feature: string; calls: number; errors: number; cost: number; last_error: string | null; last_ok?: boolean }[] };
   daily: { days: string[]; cost: number[]; calls: number[]; errors: number[] };
   by_feature: { feature: string; calls: number; errors: number; retries: number; input_tokens: number; output_tokens: number; cost: number }[];
   by_model: { model: string; priced: boolean; calls: number; errors: number; input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost: number }[];
@@ -154,6 +156,70 @@ export function usageAlerts(u: ApiUsage): UsageAlert[] {
   if (u.totals.calls >= 10 && u.totals.errors / u.totals.calls >= 0.1) out.push({ tone: 'warn', text: `${Math.round((u.totals.errors / u.totals.calls) * 100)}% of API calls failed in this period.` });
   if (u.totals.unpriced > 0) out.push({ tone: 'info', text: `${u.totals.unpriced} calls used a model with no price set, so they count as $0. Add its price below.` });
   return out;
+}
+
+/* Plain-language explanation of today's spend, with advice. Uses today's hourly cost per feature to tell
+ * one-off bursts (Kito re-reading every chat after a rule change, a voice-note catch-up) from normal use. */
+export type TodayLine = { feature: string; title: string; cost: number; calls: number; burstHour: number | null; burstCost: number; why: string; advice: string | null; tone: 'info' | 'warn' | 'bad' };
+export type TodayExplain = { headline: string; caveat: string | null; lines: TodayLine[]; withoutBursts: number | null; verdict: string };
+const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+export function explainToday(u: ApiUsage): TodayExplain | null {
+  const th = u.today_hourly;
+  if (!th) return null;
+  const base = u.baseline.avg_cost, nDays = u.baseline.n_days ?? 14, today = u.today.cost;
+  const ratio = base > 0 ? today / base : null;
+  const headline = today === 0 ? 'No AI calls yet today.'
+    : ratio == null ? `Today so far: ${usd(today)}. There's no earlier day to compare with yet.`
+    : `Today so far: ${usd(today)}, against about ${usd(base)} on a normal day (${ratio >= 1 ? `${ratio.toFixed(1)}×` : `${Math.round(ratio * 100)}%`}).`;
+  const caveat = nDays > 0 && nDays < 5 ? `"Normal day" is the average of only ${nDays} day${nDays === 1 ? '' : 's'} of full logging, so treat it as rough for now.` : null;
+  let bursts = 0;
+  const lines: TodayLine[] = th.features.filter((f) => f.cost > 0 || f.errors > 0).map((f) => {
+    const hrs = th.by_feature[f.feature] ?? [];
+    let bh = -1, bc = 0;
+    hrs.forEach((c, h) => { if (c > bc) { bc = c; bh = h; } });
+    const burst = bh >= 0 && bc >= 0.1 && bc >= f.cost * 0.4;
+    if (burst) bursts += bc;
+    const title = FEATURE_LABEL[f.feature] ?? f.feature;
+    const at = burst ? ` Most of it (${usd(bc)}) came in one burst around ${hh(bh)}.` : '';
+    let why = `${f.calls.toLocaleString()} calls.${at}`, advice: string | null = null, tone: TodayLine['tone'] = 'info';
+    switch (f.feature) {
+      case 'chat_analysis':
+        why += burst ? ' A burst like this is Kito re-labelling many chats at once: it happens after a change to Kito\'s labelling rules (every chat is read again) or when many chats gain new text at once, such as voice notes turning into words.'
+                     : ' Kito labelling new messages as they arrive. It grows with the number of chats.';
+        advice = burst ? 'One-off, nothing to fix. To keep it down, bundle Kito rule changes into one release a day instead of several.' : null;
+        break;
+      case 'voice_transcription':
+        why += burst ? ' Voice notes being turned into text. The first runs catch up on the past 7 days of saved voice notes, so this settles once the backlog is done.'
+                     : ' Voice notes being turned into text as customers send them.';
+        advice = 'Each transcribed voice note also makes Kito re-read that chat, which adds a little to Chat analysis.';
+        break;
+      case 'ask_kito':
+        why += ` Questions asked to Kito use the larger model, about ${usd(f.calls ? f.cost / f.calls : 0)} per question.`;
+        advice = f.cost > 0.5 ? 'Long questions over big date ranges cost the most; shorter ranges are cheaper.' : null;
+        break;
+      case 'receipt_reading': why += ' Payment screenshots read to confirm sales. It scales with sales, which is good spend.'; break;
+      case 'product_matching': why += ' Product photos matched to your products.'; break;
+      case 'reply_draft': why += ' Reply drafts written for owners.'; break;
+      case 'content_ideas': why += ' Content ideas generated.'; break;
+    }
+    if (f.errors > 0) {
+      const e = f.last_error ?? '';
+      const provider = /^soniox/i.test(e) ? 'Soniox' : 'Anthropic';
+      tone = 'warn';
+      why += ` ${f.errors} failed${e ? `: "${e.length > 90 ? e.slice(0, 90) + '…' : e}"` : ''}.`;
+      if (f.last_ok) { why += ' Calls are working again now.'; tone = 'info'; }
+      else if (/balance|credit|exhausted|billing|payment required|quota/i.test(e)) { tone = 'bad'; advice = `Top up the ${provider} account or turn on auto-pay. Failed calls cost nothing, but the work waits until there's credit.`; }
+      else if (/rate|429|overloaded|529/i.test(e)) advice = 'The provider was busy; itaOS retries on its own. Nothing to do unless it keeps happening.';
+    }
+    return { feature: f.feature, title, cost: f.cost, calls: f.calls, burstHour: burst ? bh : null, burstCost: burst ? bc : 0, why, advice, tone };
+  });
+  const withoutBursts = bursts > 0 ? today - bursts : null;
+  const verdict = today === 0 ? 'Nothing to worry about.'
+    : withoutBursts != null && base > 0 && withoutBursts <= base * 1.5 ? `Without the one-off burst${lines.filter((l) => l.burstHour != null).length > 1 ? 's' : ''}, today would be about ${usd(withoutBursts)}, a normal day. No action needed beyond the advice below.`
+    : ratio != null && ratio <= 1.5 ? 'A normal day.'
+    : ratio != null ? 'Higher than normal without a clear one-off cause. Check which business and feature grew in the breakdown below; a business with many new chats is the usual reason.'
+    : 'Not enough history to judge yet.';
+  return { headline, caveat, lines, withoutBursts, verdict };
 }
 
 export function usd(v: number | null | undefined): string {
