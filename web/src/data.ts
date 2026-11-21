@@ -86,6 +86,7 @@ export type GrowthData = {
   today: string;
   findings: Finding[];                       // top of the weekly diagnosis for this period
   objections: [string, number][];            // objections in unsold chats started this period
+  objByAd?: AdObjections[];                  // the same, split by the ad the chat came from
   allTime: { orders: number; revenue: number; chats: number } | null;   // every recorded sale, any date
   dataStart: string | null;                  // first day with a chat or ad data (start of "All time")
   cached: boolean;                           // numbers shown are from the last visit; fresh ones are loading
@@ -175,6 +176,28 @@ function writeCache(key: string, g: GrowthData) {
   const { convs: _c, orders, loading: _l, err: _e, cached: _x, ...rest } = g;
   try { localStorage.setItem(key, JSON.stringify({ ...rest, orders: orders.slice(0, 300) })); }
   catch { try { localStorage.removeItem(key); } catch { /* storage full or blocked */ } }
+}
+
+export type AdObjections = { ad_id: string; chats: number; sold: number; unsold: number; counts: Record<string, number> };
+/** Per ad: chats started this period, how many bought, and the objections raised in the ones that didn't.
+ *  Ads with fewer than `min` chats are left out (too few to say anything). Most chats first. */
+export function objectionsByAd(convs: Outcome[], period: { from: string; to: string }, tz: string, min = 8): AdObjections[] {
+  const by = new Map<string, AdObjections>();
+  for (const c of convs) {
+    if (!c.ad_id || !c.started_at) continue;
+    const d = localDay(c.started_at, tz);
+    if (d < period.from || d > period.to) continue;
+    const r = by.get(c.ad_id) ?? { ad_id: c.ad_id, chats: 0, sold: 0, unsold: 0, counts: {} };
+    r.chats++;
+    if (c.outcome === "sold") r.sold++;
+    else {
+      r.unsold++;
+      const kinds = new Set([...(c.objections ?? []), ...(c.kito_objections ?? []), ...(c.kito_blocker && c.kito_blocker !== "business_slow" ? [c.kito_blocker] : [])]);
+      for (const o of kinds) r.counts[o as string] = (r.counts[o as string] ?? 0) + 1;
+    }
+    by.set(c.ad_id, r);
+  }
+  return [...by.values()].filter((r) => r.chats >= min).sort((a, b) => b.chats - a.chats);
 }
 
 /** Objections raised in chats started this period that didn't end in a sale, most common first. */
@@ -310,7 +333,7 @@ export function useGrowthData(ws: Workspace, range: RangeSel, opts: { cache?: bo
           loading: false, err: firstErr ? "Some data could not be loaded: " + firstErr.message : "",
           mx, prev, convs: fd.conversations, ads: fd.ads, adsPrev: fd.adsPrev, orders, daily, expenses,
           conns: (cn.data as Conn[]) ?? [], nums: (nm.data as Num[]) ?? [], health: (h.data as Health[]) ?? [], importBatches: (ib.data as any[]) ?? [], today,
-          findings: diagnose(mx, fd.conversations, orders, tz).slice(0, 4), objections: objectionTally(fd.conversations, period, tz), allTime, dataStart, cached: false, options,
+          findings: diagnose(mx, fd.conversations, orders, tz).slice(0, 4), objections: objectionTally(fd.conversations, period, tz), objByAd: objectionsByAd(fd.conversations, period, tz), allTime, dataStart, cached: false, options,
         };
         setState(next);
         if (opts.cache) writeCache(ck, next);

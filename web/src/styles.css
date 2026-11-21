@@ -1343,3 +1343,8 @@ button.wa-side-btn svg { flex: none; opacity: .8; }
 /* "Not a customer — stop labelling" (chat side panel): visible, quiet, never mistaken for a sale button */
 .cc-notcust { justify-self: start; margin-top: 2px; background: transparent; border: 1px dashed var(--line-2); color: var(--muted); border-radius: 999px; padding: 6px 12px; }
 .cc-notcust:hover { color: var(--ink); border-style: solid; }
+/* How interested? (one-tap correction of Kito's hot / warm / cold) */
+.cc-fromad .seg button.hot, .cc-fromad .seg button.warm, .cc-fromad .seg button.cold { padding: 5px 10px; font-weight: 600; }
+.cc-fromad .seg button.hot.on { background: #d9480f; color: #fff; box-shadow: 0 0 0 1px #d9480f, var(--shadow-sm); }
+.cc-fromad .seg button.warm.on { background: #e8a317; color: #1b1300; box-shadow: 0 0 0 1px #e8a317, var(--shadow-sm); }
+.cc-fromad .seg button.cold.on { background: #64748b; color: #fff; box-shadow: 0 0 0 1px #64748b, var(--shadow-sm); }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
 import { Workspace, AdPerf, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency, moneyInput } from "./lib";
 import { TrendChart, SpendSplit, CostBars } from "./Charts";
-import { useGrowthData } from "./data";
+import { useGrowthData, type AdObjections } from "./data";
 import { FilterBar, useFilters } from "./Filters";
 import DateRange from "./DateRange";
 import { RangeSel, loadRange, saveRange } from "./ranges";
@@ -218,6 +218,8 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
           </section>
         </div>
 
+        {(g.objByAd?.length ?? 0) > 0 && <ObjectionsByAd rows={g.objByAd!} names={Object.fromEntries(g.options.ads.map((x) => [x.id, x.name]))} lang={lang} T={T} />}
+
         <AdsTable ads={ads} daily={g.daily} today={g.today} adCur={adCur} A={A} T={T} />
       </>)}
     </div>
@@ -227,6 +229,34 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
 function Objections({ list, lang }: { list: [string, number][]; lang: "sw" | "en" }) {
   if (!list.length) return <span className="small muted">–</span>;
   return <ul className="dmini">{list.map(([k, n]) => <li key={k}><span>{L[lang].obj[k] ?? k}</span><b>{n}</b></li>)}</ul>;
+}
+
+/** "Ad X brings people who say it's too expensive": what stops buyers, split by the ad the chat came from. */
+function ObjectionsByAd({ rows, names, lang, T }: { rows: AdObjections[]; names: Record<string, string>; lang: "sw" | "en"; T: (en: string, sw: string) => string }) {
+  const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+  return (
+    <section className="card">
+      <div><h2>{T("What stops buyers, by ad", "Kinachozuia wanunuzi, kwa tangazo")}</h2>
+        <span className="small muted">{T("Chats this period from each ad, how many bought, and the main reason the rest didn't (from what customers said). Ads with fewer than 8 chats are left out.", "Chat za kipindi hiki kutoka kila tangazo, wangapi wamenunua, na sababu kuu ya waliobaki kutonunua (kutokana na walichosema wateja). Matangazo yenye chat chini ya 8 hayamo.")}</span></div>
+      <div className="scroll"><table className="ads-t objad">
+        <thead><tr><th>{T("Ad", "Tangazo")}</th><th className="num">{T("Chats", "Chat")}</th><th className="num">{T("Bought", "Wamenunua")}</th><th>{T("Main objection in the rest", "Pingamizi kuu kwa waliobaki")}</th></tr></thead>
+        <tbody>{rows.slice(0, 12).map((r) => {
+          const top = Object.entries(r.counts).sort((a, b) => b[1] - a[1]);
+          const [k, n] = top[0] ?? [null, 0];
+          return (
+            <tr key={r.ad_id}>
+              <td title={r.ad_id}>{names[r.ad_id] ?? r.ad_id}</td>
+              <td className="num">{r.chats}</td>
+              <td className="num">{r.sold} <span className="small muted">({pct(r.sold, r.chats)}%)</span></td>
+              <td>{k ? <><b>{L[lang].obj[k] ?? k}</b> <span className="small muted">{T(`${pct(n, r.unsold)}% of unsold`, `${pct(n, r.unsold)}% ya wasionunua`)}</span>
+                {top.slice(1, 3).map(([k2, n2]) => <span key={k2} className="chip">{L[lang].obj[k2] ?? k2} {pct(n2, r.unsold)}%</span>)}</>
+                : <span className="small muted">{T("No objection said", "Hakuna pingamizi lililosemwa")}</span>}</td>
+            </tr>
+          );
+        })}</tbody>
+      </table></div>
+    </section>
+  );
 }
 
 /** "1–7 Nov" style label for the Revenue card, so it's clear which days are counted. */

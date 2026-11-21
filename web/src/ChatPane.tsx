@@ -7,7 +7,7 @@ import { useProducts, ProductPicker, itemsCost, itemsLabel, productPhotosReady, 
 import { OrderForm, OrderList, inferredFrom, usePaymentMoment, toLocalInput, fromLocalInput, momentWhy } from "./Orders";
 import { KitoLogo } from "./Logo";
 import { KitoLoader } from "./KitoLoader";
-import { Msg, Tr, waLink, agoT, statusOf, kitoStale, PARTY, markNotCustomer, nameOf, fromOf, prettyPhone, hiddenNote, special, whySource, lostWhy, lastPriceSent } from "./chatParts";
+import { Msg, Tr, waLink, agoT, statusOf, kitoStale, PARTY, markNotCustomer, nameOf, fromOf, prettyPhone, hiddenNote, special, whySource, lostWhy, lastPriceSent, interest } from "./chatParts";
 
 /** Kito thinks this person isn't a customer (e.g. Hassan the bodaboda talks money but doesn't buy). */
 export function PartyHint({ r, T, onChange }: { r: Outcome; T: Tr; onChange: () => void }) {
@@ -201,6 +201,7 @@ export function ChatPane({ r, ws, T, adName, phone, task, onChange, onClose, sta
             <div className={"cc-status " + st.tone}>{st.icon === "●" ? <span className="cc-dot" /> : <span className="cc-ico">{st.icon}</span>}{st.text}{st.key === "lost" && why ? ` · ${lostWhy(why, T)}` : ""}</div>
             {!r.not_customer && <span className="small muted">{fromOf(r, T, adName)}</span>}
             {editor && !confirmed && <NotCustomer r={r} T={T} busy={busy} setBusy={setBusy} onChange={onChange} />}
+            {editor && !confirmed && !r.not_customer && <TempFix r={r} T={T} onChange={onChange} />}
             {editor && !r.not_customer && (
               <div className="cc-fromad">
                 <span className="small">{T("Came from an ad?", "Ametoka kwenye tangazo?")}</span>
@@ -540,3 +541,32 @@ function NotCustomer({ r, T, busy, setBusy, onChange }: { r: Outcome; T: Tr; bus
   );
 }
 
+
+/** One-tap correction of Kito's hot / warm / cold. Kept until the customer writes again (migration 0052). */
+function TempFix({ r, T, onChange }: { r: Outcome; T: Tr; onChange: () => void }) {
+  const cur = interest(r);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  async function set(v: "hot" | "warm" | "cold") {
+    if (v === cur) return;
+    setSaving(v); setNote("");
+    const { data: u } = await supabase.auth.getUser();
+    const { error } = await supabase.from("conversations").update({ kito_temp: v, temp_override: v, temp_override_at: new Date().toISOString(), temp_override_by: u.user?.id ?? null }).eq("id", r.id);
+    setSaving(null);
+    if (error) setNote(error.message);
+    else { setNote(T("Saved. Kito keeps your answer until the customer writes again.", "Imehifadhiwa. Kito atabaki na jibu lako hadi mteja aandike tena.")); onChange(); }
+  }
+  const opts: ["hot" | "warm" | "cold", string][] = [["hot", T("Very interested", "Ana hamu sana")], ["warm", T("Interested", "Ana hamu")], ["cold", T("Not very", "Hana hamu sana")]];
+  return (
+    <div className="cc-fromad">
+      <span className="small">{T("How interested?", "Ana hamu kiasi gani?")}</span>
+      <div className="seg" role="group" aria-label={T("How interested?", "Ana hamu kiasi gani?")}>
+        {opts.map(([k, label]) => (
+          <button key={k} type="button" className={k + (cur === k ? " on" : "")} aria-pressed={cur === k} disabled={!!saving} onClick={() => set(k)}>
+            {saving === k ? <span className="kito-spin sm" aria-hidden /> : cur === k ? "✓ " : ""}{label}</button>
+        ))}
+      </div>
+      {note && <span className={"small " + (/Saved|Imehifadhiwa/.test(note) ? "muted" : "err")} style={{ flexBasis: "100%" }}>{note}</span>}
+    </div>
+  );
+}

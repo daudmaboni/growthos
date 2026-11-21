@@ -149,3 +149,4 @@ body:has(.dash-ia) { background: #F1F2F6; }
 .fix-why[open] { flex-basis: 100%; }
 .fix-why p { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
 .fix-why .fix-sure { color: var(--muted); }
+.objad td .chip { margin-left: 6px; } .objad td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
