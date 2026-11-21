@@ -127,3 +127,25 @@ body:has(.dash-ia) { background: #F1F2F6; }
 .dash-ia .cov li.bad em { color: var(--bad); }
 .dash-ia .cov li.bad { background: var(--bad-soft); }
 @media (prefers-reduced-motion: reduce) { .dash-ia .run-on i::after { animation: none; } }
+
+/* "What to fix this week": big number, one plain line, its own button, urgency tag; detail behind "Why?". */
+.fix-list { display: grid; gap: 10px; margin-top: 12px; }
+.fix { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; display: grid; gap: 6px; }
+.fix-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fix-num { font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fix-num.today { color: var(--bad); } .fix-num.good { color: var(--good); }
+.fix-tag { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.fix-tag.today { background: var(--bad-soft); color: var(--bad); }
+.fix-tag.week { background: var(--warn-soft); color: var(--warn); }
+.fix-tag.later { background: var(--raised); color: var(--muted); border: 1px solid var(--line-2); }
+.fix-tag.good { background: var(--good-soft); color: var(--good); }
+.fix-line { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.fix-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 4px; }
+.fix-btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; text-decoration: none; }
+.fix-btn:hover { filter: brightness(1.06); }
+.fix-btn:focus-visible, .fix-why summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fix-why summary { cursor: pointer; font-size: 14px; color: var(--muted); list-style: none; min-height: 40px; display: inline-flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; }
+.fix-why summary::-webkit-details-marker { display: none; }
+.fix-why[open] { flex-basis: 100%; }
+.fix-why p { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.fix-why .fix-sure { color: var(--muted); }

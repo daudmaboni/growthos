@@ -92,7 +92,7 @@ export function diagnose(mx: FunnelMetrics, convs: Outcome[], orders: Order[], t
     out.push({
       kind: "price_objection", severity: share >= 0.5 ? "bad" : "warn", score: 70 * share + priceHit.size * 0.5, confidence: conf(priced.length, share),
       title: { en: `${priceHit.size} customers stopped at the price`, sw: `Wateja ${priceHit.size} walisimama kwenye bei` },
-      observed: { en: `Of ${priced.length} chats where a price was shared, ${silent.length} went silent right after it and ${priceObj.length} objected to it.`, sw: `Kati ya chats ${priced.length} zilizopewa bei, ${silent.length} zilinyamaza mara moja na ${priceObj.length} zililalamikia bei.` },
+      observed: { en: `Of ${priced.length} chats where you gave the price, ${silent.length} went quiet right after it and ${priceHit.size - silent.length} more said it was too much.`, sw: `Kati ya chats ${priced.length} ulizotoa bei, ${silent.length} zilinyamaza mara baada ya bei na ${priceHit.size - silent.length} nyingine zilisema ni ghali.` },
       hypothesis: { en: "The price lands before the value does, or the offer lacks an entry option.", sw: "Bei inafika kabla ya thamani, au hakuna ofa ya kuanzia." },
       action: { en: "Lead with the result and proof, give the price with a question, and test a smaller starter pack.", sw: "Anza na matokeo na ushahidi, toa bei ukiuliza swali, na jaribu kifurushi kidogo cha kuanzia." },
       count: priceHit.size, sample: priced.length, source: "price_shared, stage, objections (rules + Kito)", missing: missingBase, conversationIds: ids([...silent, ...priceObj]),
@@ -122,7 +122,7 @@ export function diagnose(mx: FunnelMetrics, convs: Outcome[], orders: Order[], t
     out.push({
       kind: "payment_friction", severity: "warn", score: 65 * share + awaiting.length * 0.5, confidence: conf(payInstr.length, share),
       title: { en: `${awaiting.length} customers got payment details and never paid`, sw: `Wateja ${awaiting.length} walipewa namba ya kulipia na hawakulipa` },
-      observed: { en: `${awaiting.length} of ${payInstr.length} chats that reached payment instructions have no payment signal or order.`, sw: `Chats ${awaiting.length} kati ya ${payInstr.length} zilizofika kwenye maelekezo ya malipo hazina dalili ya malipo wala oda.` },
+      observed: { en: `You sent your payment number in ${payInstr.length} chats; ${awaiting.length} of them have not paid and have no sale recorded.`, sw: `Ulituma namba ya malipo kwenye chats ${payInstr.length}; ${awaiting.length} kati yake hawajalipa na hakuna mauzo yaliyorekodiwa.` },
       hypothesis: { en: "Payment is the friction point: method, trust, or no reminder after instructions.", sw: "Malipo ndiyo kikwazo: njia, uaminifu, au hakuna ukumbusho baada ya maelekezo." },
       action: { en: "Offer pay-on-delivery where you can, send one reminder 24 h after instructions, confirm receipts fast.", sw: "Toa malipo wakati wa kupokea inapowezekana, tuma ukumbusho mmoja saa 24 baada ya maelekezo, thibitisha risiti haraka." },
       count: awaiting.length, sample: payInstr.length, source: "pay_instructions + label + orders", missing: missingBase, conversationIds: ids(awaiting),
@@ -134,8 +134,8 @@ export function diagnose(mx: FunnelMetrics, convs: Outcome[], orders: Order[], t
   if (unconfirmed.length >= 1) {
     out.push({
       kind: "unconfirmed_signals", severity: unconfirmed.length >= 5 ? "warn" : "info", score: 20 + unconfirmed.length, confidence: "high",
-      title: { en: `${unconfirmed.length} payments detected but not recorded as orders`, sw: `Malipo ${unconfirmed.length} yamegunduliwa lakini hayajarekodiwa kama oda` },
-      observed: { en: `${unconfirmed.length} chats show a payment signal (words, screenshot, Kito or ✅) with no confirmed order. Revenue and cost per sale exclude them.`, sw: `Chats ${unconfirmed.length} zina dalili ya malipo (maneno, picha, Kito au ✅) bila oda iliyothibitishwa. Mapato na gharama kwa mauzo hazizihesabu.` },
+      title: { en: unconfirmed.length === 1 ? "1 payment found but not recorded as a sale" : `${unconfirmed.length} payments found but not recorded as sales`, sw: `Malipo ${unconfirmed.length} yameonekana lakini hayajarekodiwa kama mauzo` },
+      observed: { en: `${unconfirmed.length === 1 ? "1 chat looks" : `${unconfirmed.length} chats look`} paid (the customer said so, sent a screenshot, Kito read it, or you sent ✅) but no sale is recorded. Revenue leaves ${unconfirmed.length === 1 ? "it" : "them"} out until you record ${unconfirmed.length === 1 ? "it" : "them"}.`, sw: `Chats ${unconfirmed.length} zinaonekana zimelipwa (mteja alisema, alituma picha, Kito alisoma, au ulituma ✅) lakini mauzo hayajarekodiwa. Mapato hayazihesabu mpaka uzirekodi.` },
       hypothesis: { en: "Real sales are probably under-counted until these are confirmed or corrected.", sw: "Mauzo halisi yanaweza kuwa yamehesabiwa pungufu hadi haya yathibitishwe au yasahihishwe." },
       action: { en: "Open each one in Chats and record the order (or mark it lost).", sw: "Fungua kila moja kwenye Chats na rekodi oda (au weka alama imepotea)." },
       count: unconfirmed.length, sample: N, source: "payment_signal, Kito outcome, ✅ marks vs orders", missing: [], conversationIds: ids(unconfirmed),

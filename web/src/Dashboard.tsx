@@ -1,4 +1,5 @@
 import type { ReactNode, FormEvent } from "react";
+import FixList from "./FixList";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countTo, enterCards, enterRows, growBars, usePageEnter, select } from "./motion";
 import { Workspace, AdPerf, fmt, pct, dur, L, amt, money, ago, supabase, callFn, canManage, converter, displayCurrency, moneyInput } from "./lib";
@@ -173,14 +174,7 @@ export default function Dashboard({ ws, onWs }: { ws: Workspace; onWs?: (w: Work
         <div className="two">
           <section className="card">
             <div className="row between"><h2>{T("What to fix this week", "Cha kurekebisha wiki hii")}</h2><a href="#report" className="small">{T("Full diagnosis →", "Uchunguzi kamili →")}</a></div>
-            {findings.map((f) => (
-              <div className={"finding " + f.severity} key={f.kind}>
-                <b>{f.title[lang]}</b>
-                <span className="small">{f.observed[lang]}</span>
-                <span className="small muted">{T("Suggested", "Pendekezo")}: {f.action[lang]} · <span className={"chip conf-" + f.confidence}>{T("confidence", "uhakika")}: {f.confidence}</span></span>
-              </div>
-            ))}
-            {(mx.warmNoFollowUp.value ?? 0) > 0 && <a href="#actions" className="small">{T("Open the follow-up queue →", "Fungua foleni ya ufuatiliaji →")}</a>}
+            <FixList findings={findings} lang={lang === "sw" ? "sw" : "en"} />
           </section>
           <section className="card">
             {(() => {
