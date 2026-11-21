@@ -107,6 +107,7 @@ const T = {
   week: { en: "Sales, last 7 days", sw: "Mauzo, siku 7 zilizopita" },
   newChats: { en: "+12 new chats today", sw: "+12 gumzo mpya leo" },
   kito: { en: "Kito replied in 8 seconds", sw: "Kito amejibu ndani ya sekunde 8" },
+  legal: { en: "Terms & privacy", sw: "Masharti na faragha" },
 } as const;
 type Key = keyof typeof T;
 export const tr = (lang: Lang, k: Key, vars: Record<string, string> = {}) =>
@@ -185,8 +186,14 @@ function Showcase({ lang }: { lang: Lang }) {
   return (
     <aside className="ax-show" ref={ref} aria-hidden="true">
       <div className="ax-show-copy">
-        <span className="ax-eyebrow">{t("flow")}</span>
+        <span className="ax-eyebrow">itaOS · {t("flow")}</span>
         <p className="ax-headline">{t("tagline")}</p>
+      </div>
+      <div className="ax-mini">
+        <span className="ax-tick">{Icon.check}</span>
+        <span className="ax-mini-l">{t("paid")}</span>
+        <b className="ax-mini-v">TZS 45,000</b>
+        <span className="ax-mini-s">{t("paidSub")}</span>
       </div>
       <div className="ax-stage">
         <div className="ax-float ax-chat">
@@ -231,7 +238,12 @@ export function AuthShell({ lang, children, showcase = true }: { lang: Lang; chi
 }
 
 function Brand({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
-  return <div className="auth-top"><div className="row ax-brand"><Logo size={34} variant="white" /><b className="auth-brand">itaOS</b></div><LangToggle lang={lang} onChange={setLang} /></div>;
+  return (
+    <div className="auth-top">
+      <a className="row ax-brand" href="/" aria-label={tr(lang, "close")} title={tr(lang, "close")}><Logo size={36} variant="white" /><b className="auth-brand">itaOS</b></a>
+      <LangToggle lang={lang} onChange={setLang} />
+    </div>
+  );
 }
 
 function Field({ id, label, icon, children, extra }: { id: string; label: string; icon: React.ReactNode; children: React.ReactNode; extra?: React.ReactNode }) {
@@ -407,11 +419,13 @@ export function AuthScreen() {
         {mode === "signup" && <p className="muted small ax-center" style={{ margin: 0 }}>{t("terms")} <a href="https://ponditech.com/#terms" target="_blank" rel="noreferrer">{t("termsLink")}</a>.</p>}
         {!tabbed && <button type="button" className="link-btn small ax-center" onClick={() => go("signin")}>{mode === "link" ? t("usePassword") : t("back")}</button>}
 
+        {tabbed && (
+          <p className="ax-switch">{mode === "signin" ? t("noAccount") : t("haveAccount")} <button type="button" className="link-btn" onClick={() => go(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? t("createAccount") : t("signIn")}</button></p>
+        )}
         <div className="ax-foot">
-          {tabbed
-            ? <span className="small muted">{mode === "signin" ? t("noAccount") : t("haveAccount")} <button type="button" className="link-btn small" onClick={() => go(mode === "signin" ? "signup" : "signin")}>{mode === "signin" ? t("createAccount") : t("signIn")}</button></span>
-            : <a href="/" className="small muted">{t("home")}</a>}
+          {!tabbed && <a href="/" className="small muted">{t("home")}</a>}
           <a href="/app/admin" className="small muted">{t("staff")}</a>
+          <a href="https://ponditech.com/#terms" target="_blank" rel="noreferrer" className="small muted">© Pondi Technologies · {t("legal")}</a>
         </div>
       </form>
     </AuthShell>

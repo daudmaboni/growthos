@@ -252,3 +252,40 @@ html[data-screen="auth"]::-webkit-scrollbar { display: none; }
 }
 /* short phones: drop the floating cards, keep the headline */
 @media (max-width: 760px) and (max-height: 760px) { .ax-stage { display: none; } }
+
+/* ---- 21 Nov clean-up: calmer banner, one clear action, visible sign-up ---- */
+.ax-brand { text-decoration: none; color: inherit; }
+.ax-mini { display: none; }
+/* flat brand green, no gloss */
+.ax button.primary.ax-cta, :where(html:not(.hp-page)) .ax button.primary.ax-cta {
+  background-color: var(--hp-btn); background-image: none; border: 0; box-shadow: 0 8px 18px -12px #0a3d2999;
+}
+.ax button.primary.ax-cta:hover:not(:disabled) { background-color: var(--hp-g); box-shadow: 0 10px 22px -12px #0a3d29b3; }
+/* sign-up prompt: its own line, easy to find */
+.ax-switch { margin: 2px 0 0; text-align: center; font-size: 14px; color: var(--muted); }
+.ax-switch .link-btn { font-size: 14px; font-weight: 700; color: var(--accent-text); padding: 0 2px !important; }
+.ax-foot { justify-content: center; gap: 4px 16px; }
+
+@media (max-width: 760px) {
+  /* banner: eyebrow + one line + a single "paid" chip, no floating cards, no close button */
+  .ax-notch { display: none; }
+  .ax-stage { display: none !important; }
+  .ax-show { padding: max(14px, env(safe-area-inset-top)) 20px 16px; border-radius: 0 0 22px 22px; }
+  .ax-show-copy { padding-right: 0; max-width: none; }
+  .ax-headline { font-size: 18px; }
+  .ax-mini { display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; margin-top: 12px;
+    padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--hp-mint); color: var(--hp-deep); max-width: 100%; }
+  .ax-mini .ax-tick { width: 22px; height: 22px; padding: 4px; }
+  .ax-mini-l { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .75; white-space: nowrap; }
+  .ax-mini-v { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ax-mini-s { font-size: 11px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* while typing (keyboard open) the banner folds down to its eyebrow, so the button stays visible */
+  .ax:has(.ax-side input:focus) .ax-headline,
+  .ax:has(.ax-side input:focus) .ax-mini { display: none; }
+  .ax:has(.ax-side input:focus) .ax-show { padding-bottom: 12px; }
+  /* the banner already names itaOS: just the tile here */
+  .ax-brand .auth-brand { display: none; }
+  .ax-foot > span { display: revert; }
+  .ax-form { gap: 12px; }
+}
+@media (max-width: 380px) { .ax-mini-s { display: none; } }
