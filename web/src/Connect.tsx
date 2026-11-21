@@ -116,6 +116,7 @@ function ConnectSimple({ ws }: { ws: Workspace }) {
           </div>
         ))}
       </section>
+      {canManage(ws) && <SalesToMeta ws={ws} T={T} />}
       <p className="small muted" style={{ margin: 0 }}>{T("Exchange rate, language and your password are in ", "Kiwango cha kubadilisha fedha, lugha na nenosiri viko kwenye ")}<a href="#settings">{T("Settings", "Mipangilio")}</a>.</p>
     </div>
   );
@@ -413,5 +414,55 @@ function DisconnectAds({ c, onDone, onError, last }: { c: Conn; onDone: (t: stri
         <button className="small" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </div>
+  );
+}
+
+/** Step 4: send recorded sales from ad chats back to Meta (Conversions API), so ads are optimised for buyers.
+ *  The owner pastes a system-user token from their own Meta portfolio; itaOS keeps it in the vault. */
+function SalesToMeta({ ws, T }: { ws: Workspace; T: (en: string, sw: string) => string }) {
+  type St = { connected: boolean; last_error: string | null; last_sent_at: string | null; token_last4: string | null; sent_30d: number; failed_30d: number };
+  const [st, setSt] = useState<St | null>(null);
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok?: string; err?: string }>({});
+  const load = () => callFn<St>("capi", { workspace_id: ws.id, action: "status" }).then(setSt).catch(() => setSt(null));
+  useEffect(() => { load(); }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function save() {
+    setBusy(true); setMsg({});
+    try {
+      const r = await callFn<{ datasets: number; sent: number; failed: number; problems: string[] }>("capi", { workspace_id: ws.id, action: "setup", token: token.trim() });
+      setToken(""); setOpen(false);
+      setMsg({ ok: T(`Connected. ${r.sent} recent sale${r.sent === 1 ? "" : "s"} sent to Meta${r.failed ? `, ${r.failed} failed` : ""}.`, `Imeunganishwa. Mauzo ${r.sent} ya karibuni yametumwa kwa Meta${r.failed ? `, ${r.failed} yameshindwa` : ""}.`) });
+      load();
+    } catch (e) { setMsg({ err: (e as Error).message }); }
+    setBusy(false);
+  }
+  const on = !!st?.connected;
+  return (
+    <section className="card">
+      <h2>{T("Send sales to Meta", "Tuma mauzo kwa Meta")}</h2>
+      <p className="small muted" style={{ margin: 0 }}>{T("When you record a sale from a chat that came from a WhatsApp ad, itaOS tells Meta that click became a purchase, so Facebook shows your ads to people more likely to buy. Only the ad click, the amount and the currency are sent: no names, numbers or messages.", "Ukirekodi mauzo ya chat iliyotoka kwenye tangazo la WhatsApp, itaOS inaiambia Meta kwamba bofya hilo limeleta mauzo, ili Facebook ionyeshe matangazo yako kwa watu wenye uwezekano wa kununua. Hutumwa bofya la tangazo, kiasi na sarafu tu: hakuna majina, namba wala jumbe.")}</p>
+      {msg.ok && <p className="ok small" style={{ margin: 0 }}>{msg.ok}</p>}
+      {msg.err && <p className="err small" style={{ margin: 0 }}>{msg.err}</p>}
+      {st && on && (
+        <div className="row between" style={{ gap: 10, flexWrap: "wrap" }}>
+          <span><span className={"status-dot " + (st.last_error ? "err" : "on")} /> <b>{T(`${st.sent_30d} sales sent in 30 days`, `Mauzo ${st.sent_30d} yametumwa siku 30`)}</b>
+            <span className="small muted">{st.last_sent_at ? T(` · last ${ago(st.last_sent_at)}`, ` · mwisho ${ago(st.last_sent_at)}`) : ""}{st.token_last4 ? ` · token …${st.token_last4}` : ""}</span></span>
+          <span className={"pill-s " + (st.last_error ? "err" : "on")}>{st.last_error ? T("Needs attention", "Inahitaji kuangaliwa") : T("Connected ✓", "Imeunganishwa ✓")}</span>
+        </div>
+      )}
+      {st?.last_error && <p className="small err" style={{ margin: 0 }}>{st.last_error}</p>}
+      {(!on || open) ? (
+        <div style={{ display: "grid", gap: 8 }}>
+          <label className="small muted" htmlFor="capi-token">{T("Meta system-user token (from your own Business portfolio, with whatsapp_business_management and whatsapp_business_manage_events)", "Token ya system user ya Meta (kutoka portfolio yako ya biashara, yenye whatsapp_business_management na whatsapp_business_manage_events)")}</label>
+          <input id="capi-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAA…" />
+          <div className="row" style={{ gap: 8 }}>
+            <button className="small primary" disabled={busy || token.trim().length < 50} onClick={save}>{busy && <span className="kito-spin sm" aria-hidden />}{busy ? T("Checking with Meta…", "Inathibitisha na Meta…") : T("Save and connect", "Hifadhi na unganisha")}</button>
+            {on && <button className="linkish small" onClick={() => { setOpen(false); setToken(""); }}>{T("Cancel", "Ghairi")}</button>}
+          </div>
+        </div>
+      ) : <div><button className="linkish small" onClick={() => setOpen(true)}>{T("Replace token", "Badilisha token")}</button></div>}
+    </section>
   );
 }
