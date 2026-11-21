@@ -83,6 +83,12 @@ export default function App() {
       // Just signed in from the login screen: the full panel curtain carries them into the app (a big
       // moment, so the short pause feels deliberate). It lifts once the business has loaded.
       if (e === "SIGNED_IN" && s && hadSession.current === false) { curtainPending.current = true; void curtainCover(initialLang() === "en" ? "Welcome" : "Karibu"); }
+      // Signing out (or a fresh sign-in) always starts on the dashboard: the page the last person was on
+      // (e.g. #settings, where Sign out lives) must not carry over to the next account on this device.
+      if (e === "SIGNED_OUT" || (e === "SIGNED_IN" && s && hadSession.current === false)) {
+        if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+        viewRef.current = "dashboard"; setView("dashboard");
+      }
       hadSession.current = !!s;
       setSession(s); if (e === "PASSWORD_RECOVERY") setRecovering(true);
     });
