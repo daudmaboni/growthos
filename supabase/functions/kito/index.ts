@@ -1,7 +1,9 @@
 // Kito: itaOS's background AI. Reads chats that are new or changed and labels them:
 // outcome, stage label, amount, objections, customer tags, a one-line summary and the next step.
 // It also spots the customer's still-open promise ("nitalipa Ijumaa") and proposes a reminder (Ahadi).
-// Runs every 15 minutes (cron), right after a customer message (wa-webhook), or on demand from the app.
+// Runs every 5 minutes (cron): changed chats are read once they've been quiet for 10 minutes (or 15
+// minutes after their last read while the talk goes on). Money moments (a receipt, "nimelipa", the
+// business confirming payment) are read at once via wa-webhook; the owner's button reads at once too.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { claude, type UsageMeta } from "../_shared/claude.ts";
 import { planPromise, promiseTitle, localStamp, PROMISE_KINDS } from "../_shared/promise.ts";
@@ -22,6 +24,10 @@ const MODEL = Deno.env.get("KITO_MODEL") ?? "claude-haiku-5-5";
 // Older never-read chats Kito catches up on: how far back, and how many slots per run they get.
 const BACKLOG_DAYS = Number(Deno.env.get("KITO_BACKLOG_DAYS") ?? "30");
 const BACKLOG_SLOTS = Number(Deno.env.get("KITO_BACKLOG_SLOTS") ?? "4");
+// Quiet window: a changed chat is read once it has been quiet this long (customers write in bursts),
+// or once its last read is this old even if the talk goes on. Money moments skip the wait.
+const QUIET_MIN = Number(Deno.env.get("KITO_QUIET_MIN") ?? "10");
+const MAX_WAIT_MIN = Number(Deno.env.get("KITO_MAX_WAIT_MIN") ?? "15");
 const LABELS = ["new", "talking", "priced", "awaiting_payment", "paid", "shipped", "received", "using"];
 const OBJECTIONS = ["price", "think", "money", "trust", "delivery"];
 const TEMPS = ["hot", "warm", "cold"];
@@ -145,6 +151,10 @@ function call(payload: Record<string, unknown>, meta: UsageMeta) {
     (p) => JSON.stringify(p, (_k, v) => (typeof v === "string" ? wellFormed(v) : v)));
 }
 
+/** A 400 that is about the tool / tool_choice settings (the only case where retrying without tools helps). */
+const toolProblem = (r: { ok: boolean; status: number; body: any }) =>
+  !r.ok && r.status === 400 && /tool/i.test(String(r.body?.error?.message ?? "")) && !/credit balance/i.test(String(r.body?.error?.message ?? ""));
+
 function parse(body: any) {
   const blocks: any[] = body.content ?? [];
   const tool = blocks.find((c) => c.type === "tool_use" && c.input);
@@ -158,8 +168,9 @@ function parse(body: any) {
 async function ask(p: string, ws: string) {
   // 1) forced tool call = guaranteed structure
   let r = await call({ messages: [{ role: "user", content: p }], tools: [TOOL], tool_choice: { type: "tool", name: "label_chat" } }, { feature: "chat_analysis", workspaceId: ws });
-  // 2) if this model/config rejects forced tools, fall back to plain JSON
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "chat_analysis", workspaceId: ws, attempt: 2 });
+  // 2) if this model/config rejects forced tools, fall back to plain JSON. Only for tool errors: a second
+  //    call can't help when credit is out or the request itself is bad, and it would cost twice.
+  if (toolProblem(r)) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "chat_analysis", workspaceId: ws, attempt: 2 });
   if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
   return parse(r.body);
 }
@@ -226,7 +237,7 @@ async function draftReply(db: ReturnType<typeof admin>, ws: string, conversation
   if (!msgs?.length) throw new Error("this chat has no messages to draft from");
   const p = draftPrompt(transcript(msgs), profileText(profile as Profile), contact?.name ?? null, conv.kito_next);
   let r = await call({ messages: [{ role: "user", content: p }], tools: [DRAFT_TOOL], tool_choice: { type: "tool", name: "draft_reply" } }, { feature: "reply_draft", workspaceId: ws });
-  if (!r.ok && r.status === 400) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "reply_draft", workspaceId: ws, attempt: 2 });
+  if (toolProblem(r)) r = await call({ messages: [{ role: "user", content: p }] }, { feature: "reply_draft", workspaceId: ws, attempt: 2 });
   if (!r.ok) throw new Error(`AI ${r.status}: ${r.body?.error?.message ?? "request failed"}`);
   const out = parse(r.body);
   const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
@@ -347,12 +358,12 @@ Deno.serve(async (req) => {
   }
 
   // Chats never checked, or with new messages since the last check.
-  // wa-webhook passes conversation_ids (with the cron secret) the moment a customer writes, so Kito
-  // reads that chat within seconds instead of at the next 15-minute run.
+  // wa-webhook passes conversation_ids (with the cron secret) for money moments, so Kito reads those
+  // within seconds instead of waiting for the quiet window.
   const only: string[] = isCron && Array.isArray(body.conversation_ids)
     ? body.conversation_ids.map(String).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20) : [];
   // People marked "not a customer" (bodaboda, suppliers, staff…) are not read: they aren't sales chats.
-  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+  let q = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
     .eq("contacts.not_customer", false)
     .not("last_message_at", "is", null).order("last_message_at", { ascending: false }).limit(400);
   if (wsFilter) q = q.eq("workspace_id", wsFilter);
@@ -363,7 +374,7 @@ Deno.serve(async (req) => {
   // Kito, not the word rules, decides whether they go to "Check payment".
   let flagged: any[] = [];
   if (!only.length) {
-    let fq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+    let fq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
       .eq("contacts.not_customer", false).eq("payment_signal", true).not("last_message_at", "is", null)
       .order("last_message_at", { ascending: false }).limit(300);
     if (wsFilter) fq = fq.eq("workspace_id", wsFilter);
@@ -371,8 +382,21 @@ Deno.serve(async (req) => {
     flagged = (fl ?? []).filter((c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at));
   }
   const force = !isCron && body.all === true;
+  // The 15-minute run and the app's automatic catch-up when Chats opens wait for the quiet window.
+  // Instant: chats wa-webhook sends (money moments), the owner's "Update with Kito" button, and
+  // flagged "maybe paid" chats. Every changed chat is still read: at the latest MAX_WAIT after its
+  // last read (or after it started, if never read), plus the cron interval.
+  const patient = !only.length && !force && (isCron || body.background === true);
+  const now = Date.now();
+  const settled = (c: any) => {
+    if (!patient) return true;
+    if (now - Date.parse(c.last_message_at) >= QUIET_MIN * 60e3) return true;
+    const since = c.kito_checked_at ?? c.started_at ?? c.last_message_at;
+    return now - Date.parse(since) >= MAX_WAIT_MIN * 60e3;
+  };
   const seen = new Set(flagged.map((c) => c.id));
-  const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at)))];
+  const changed = (c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at);
+  const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || (changed(c) && settled(c))))];
   for (const c of due) seen.add(c.id);
   // Catch-up: the query above only sees the 400 newest chats, so busy businesses had older chats
   // (still inside the last 30 days) that Kito never read. A few of those, newest first, ride along
@@ -380,7 +404,7 @@ Deno.serve(async (req) => {
   // Cron only: the app keeps calling while "remaining" > 0, and the backlog would keep it looping.
   let backlog: any[] = [];
   if (isCron && !only.length) {
-    let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+    let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,started_at,contacts!inner(not_customer)")
       .eq("contacts.not_customer", false).is("kito_checked_at", null).is("kito_error", null)
       .gte("last_message_at", new Date(Date.now() - BACKLOG_DAYS * 864e5).toISOString())
       .order("last_message_at", { ascending: false }).limit(60);

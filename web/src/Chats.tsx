@@ -251,7 +251,8 @@ export default function Chats({ ws }: { ws: Workspace }) {
       try {
         let total = 0;
         for (let i = 0; i < 10; i++) {
-          const r = await callFn<{ checked: number; remaining: number }>("kito", { workspace_id: ws.id });
+          // background: Kito skips chats still mid-conversation (they're read once they go quiet).
+          const r = await callFn<{ checked: number; remaining: number }>("kito", { workspace_id: ws.id, background: true });
           total += r.checked;
           if (!r.remaining || !r.checked) break;
         }

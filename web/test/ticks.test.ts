@@ -63,3 +63,22 @@ describe("owner ✅ messages", () => {
     expect(lastPriceBefore(msgs, "2026-10-04T10:00:00Z")).toBe(150000);
   });
 });
+
+import { isMoneyMoment } from "../../supabase/functions/_shared/signals";
+describe("isMoneyMoment (Kito reads these chats at once)", () => {
+  it("customer payment words, M-Pesa SMS and read receipts", () => {
+    for (const t of ["Nimelipa tayari", "nimetuma pesa", "nimetuma", "QK41ABC9XY Imethibitishwa. Umelipa Tsh155,000", "[picha ya malipo] M-Pesa · TSh 155,000", "I've paid"])
+      expect(isMoneyMoment(t, "in"), t).toBe(true);
+  });
+  it("ordinary customer messages wait for the quiet window", () => {
+    for (const t of ["Habari", "bei gani?", "nipo Mbeya", "mnaleta mikoani?", "[picha] product photo", null])
+      expect(isMoneyMoment(t as string | null, "in"), String(t)).toBe(false);
+  });
+  it("business confirms, ships, sends usage or its own paid text", () => {
+    expect(isMoneyMoment("Tumepokea malipo yako, asante", "out")).toBe(true);
+    expect(isMoneyMoment("Mzigo wako umetumwa leo", "out")).toBe(true);
+    expect(isMoneyMoment("Matumizi ya KayaTox: kunywa asubuhi", "out")).toBe(true);
+    expect(isMoneyMoment("Karibu KAYANI, special pack imefika", "out", ["special pack imefika"])).toBe(true);
+    expect(isMoneyMoment("Bei ni 75,000", "out")).toBe(false);
+  });
+});

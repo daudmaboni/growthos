@@ -28,6 +28,22 @@ const SIG = {
   } as Record<string, RegExp>,
 };
 
+/**
+ * A "money moment": a message that may mean a sale just happened, so Kito should read the chat now
+ * instead of waiting for it to go quiet. Generous on purpose: a false alarm costs one extra read,
+ * a miss only delays the label until the next quiet-window read.
+ *  in:  the customer says they paid / sent money, pastes an M-Pesa SMS, or a receipt photo was read.
+ *  out: the business confirms payment, ships, sends usage instructions, or one of its own "paid" texts.
+ */
+export function isMoneyMoment(text: string | null | undefined, direction: "in" | "out", paidTexts: string[] = []): boolean {
+  const t = text ?? "";
+  if (!t) return false;
+  if (direction === "in") return SIG.paidCustomer.test(t) || SIG.paidCustomerAfterPay.test(t) || SIG.mpesaSms.test(t) || /muamala/i.test(t);
+  if (SIG.paidBusiness.test(t) || SIG.shipped.test(t) || SIG.usage.test(t)) return true;
+  const low = t.toLowerCase();
+  return paidTexts.some((p) => p && p.trim().length >= 4 && low.includes(p.trim().toLowerCase()));
+}
+
 export function extractAmount(text: string): number {
   const m = text.match(/(?:tsh|tzs|sh\.?|shs)\s*\.?\s*([\d][\d,. ]{2,})|([\d][\d,.]{2,})\s*(?:\/=|tsh|tzs)|\b(\d{1,3}[,.]\d{3}(?:[,.]\d{3})?)\b/i);
   if (!m) return 0;
