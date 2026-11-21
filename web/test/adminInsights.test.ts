@@ -87,5 +87,12 @@ describe("onboarding and recovery", () => {
     expect(recoveryFor("webhook:unrouted", "Event for a number not linked to any workspace (messages)")!.cause).toMatch(/not linked/);
     expect(recoveryFor("stuck:messages", "Started processing 19 Nov 10:00 and never finished.")!.steps[0]).toMatch(/Retry/);
     expect(recoveryFor("kito-tag", "something novel")).toBeNull();
+    // Kito's own AI request errors are not webhook or credit problems
+    expect(recoveryFor("kito-run", "1 chat(s) failed: AI 400: The request body is not valid JSON: unexpected end of hex escape at line 1 column 2380")!.cause).toMatch(/emoji/);
+    expect(recoveryFor("kito-ask", "AI 400: messages.1.content.0: Invalid `signature` in `thinking` block. The block is bound to a different conversation.")!.cause).toMatch(/reasoning/);
+    expect(recoveryFor("kito-run", "1 chat(s) failed: AI 400: tools.0: unknown field")!.cause).toMatch(/bug/);
+    expect(recoveryFor("kito-run", "1 chat(s) failed: AI 400: Your credit balance is too low")!.cause).toMatch(/credit/);
+    expect(recoveryFor("kito-run", "1 chat(s) failed: AI 529: Overloaded")!.cause).toMatch(/overloaded/);
+    expect(recoveryFor("webhook:messages", "signature mismatch")!.cause).toMatch(/Webhook signature/);
   });
 });

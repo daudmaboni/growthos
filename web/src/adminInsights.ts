@@ -263,6 +263,14 @@ export function stepAction(step: number, days: number | null): { tone: 'bad' | '
 /* ---------------- connection recovery ---------------- */
 export type Recovery = { cause: string; steps: string[] };
 const RECOVERY: { test: RegExp; r: Recovery }[] = [
+  // Kito's own AI request bugs come first: their text contains words ("signature", "AI 400") that the
+  // webhook and credit rules below would otherwise claim.
+  { test: /hex escape|not valid JSON/i,
+    r: { cause: 'A chat had an emoji cut in half, which made the request to the AI invalid. Fixed in Kito on 18 Nov (broken emoji halves are now removed).',
+         steps: ['Entries from before 18 Nov are history and need nothing.', 'If a new one appears, the kito function is running old code: redeploy it.'] } },
+  { test: /thinking. block|block is bound|thinking block/i,
+    r: { cause: 'Ask Kito resent its earlier reasoning after the instructions changed between steps, and the AI refused it. Fixed in Kito Ask on 18 Nov (instructions are built once per question).',
+         steps: ['Entries from before 18 Nov are history and need nothing.', 'If a new one appears, the kito-ask function is running old code: redeploy it.'] } },
   { test: /code 190|access token|session has expired|token (has )?expired|invalid oauth|error validating access token|token unavailable/i,
     r: { cause: 'The Meta access token expired or was revoked (password change, removed app, or 60-day expiry).',
          steps: ['Ask the owner to open Connections and reconnect Meta Ads.', 'If it fails again, check the itaOS app still has access in their Business Settings → Integrations.', 'Then retry the sync.'] } },
@@ -292,6 +300,9 @@ const RECOVERY: { test: RegExp; r: Recovery }[] = [
   { test: /download|link expired|could not store|unsupported type/i,
     r: { cause: 'A customer photo or PDF could not be downloaded or saved.',
          steps: ['If they use Dualhook, make sure the API key is saved (downloads go through it).', 'Media links expire after a while; newer photos will work once fixed.'] } },
+  { test: /AI 400(?!.*credit)/i,   // a 400 about credit balance falls through to the credit rule below
+    r: { cause: 'The AI rejected the request itaOS sent (a bug in how the request was built, not credit or load). The error text says what was wrong.',
+         steps: ['Read the error text and send it to the developer with the time it happened.', 'Kito retries on its next run, but the same chat will keep failing until the code is fixed.'] } },
   { test: /AI \d+|anthropic|overloaded|credit|rate_limit_error|529/i,
     r: { cause: 'The Anthropic API refused or failed the call (overloaded, rate limit, or credit).',
          steps: ['Check the AI usage page for a spike and the Anthropic console for credit.', 'Kito retries on its next run every 15 minutes.'] } },
