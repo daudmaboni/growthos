@@ -217,12 +217,13 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
 :root { --glass: rgba(28, 29, 33, .52); --glass-edge: rgba(255, 255, 255, .16); --glass-hi: rgba(255, 255, 255, .22); --glass-lens: rgba(255, 255, 255, .13); }
 [data-theme="light"] { --glass: rgba(255, 255, 255, .58); --glass-edge: rgba(255, 255, 255, .85); --glass-hi: rgba(255, 255, 255, .95); --glass-lens: rgba(20, 24, 36, .07); }
 @media (max-width: 760px) {
+  :root { --bn-bottom: max(16px, calc(env(safe-area-inset-bottom) + 6px)); } /* bottom bar's distance from the screen edge; the More sheet sits above it */
   nav.tabs:not(.subtabs), .actions .gear { display: none; }
   .shell { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
   /* Facebook-style bar: a compact solid capsule centred on the screen (icons close together, not the full width),
      sitting clear above the iPhone home bar. Icons only, a tinted pill behind the active tab. */
   .bottomnav { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); align-items: center; position: fixed; z-index: 40; left: 50%; right: auto;
-    width: min(296px, calc(100% - 64px)); transform: translateX(-50%); bottom: max(16px, calc(env(safe-area-inset-bottom) + 6px));
+    width: min(296px, calc(100% - 64px)); transform: translateX(-50%); bottom: var(--bn-bottom);
     height: 54px; padding: 5px; border-radius: 999px; background: var(--card); border: 1px solid var(--line-2);
     box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .28), 0 1px 3px rgba(0, 0, 0, .06); }
   /* the lens: one slot wide; its ::before is the pill (FB's is ~58 × 39 pt) */
@@ -245,7 +246,7 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
   .bottomnav a:focus-visible, .bottomnav button:focus-visible { outline: none; } /* the pill already shows where you are; no ring around the tab */
   .sheet-back { display: block; position: fixed; inset: 0; z-index: 38; background: rgba(0, 0, 0, .22); -webkit-backdrop-filter: blur(12px) saturate(1.1); backdrop-filter: blur(12px) saturate(1.1); animation: sheet-fade .25s var(--ease); }
   /* More menu: a compact two-column grid of tiles, so it covers as little of the page as possible */
-  .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; position: fixed; z-index: 39; left: 13px; right: 13px; bottom: calc(max(8px, calc(env(safe-area-inset-bottom) - 12px)) + 62px);
+  .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; position: fixed; z-index: 39; left: 13px; right: 13px; bottom: calc(var(--bn-bottom) + 54px + 10px);
     max-width: 440px; margin: 0 auto;
     background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 24px; padding: 6px;
     -webkit-backdrop-filter: blur(28px) saturate(1.9); backdrop-filter: blur(28px) saturate(1.9);
@@ -429,7 +430,7 @@ nav.tabs a, .bottomnav a, .bottomnav button, .sheet-item { position: relative; }
   font: 700 11px/1 var(--font); font-variant-numeric: tabular-nums; color: #fff; box-shadow: 0 0 0 2px var(--paper); pointer-events: none; animation: badge-pop .45s var(--ease); }
 .navbadge.green { background: #25d366; color: #06301a; }
 .navbadge.red { background: #ff3b30; }
-.bottomnav .navbadge { top: 3px; right: calc(50% - 24px); }
+.bottomnav .navbadge { top: 0; left: calc(50% + 9px); right: auto; } /* starts past the icon's middle so the More dots stay visible */
 .sheet-item .navbadge { position: absolute; top: 1px; left: 24px; right: auto; box-shadow: 0 0 0 2px var(--card); } /* on the tile icon's corner, so the text keeps its room */
 @keyframes badge-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .navbadge { animation: none; } }
