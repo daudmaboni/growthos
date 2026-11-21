@@ -11,6 +11,7 @@ import { dualhookKey } from "../_shared/media.ts";
 
 const DUALHOOK = "https://api.dualhook.com/v25.0";
 const WINDOW_MS = 24 * 3600e3;
+const LIMIT = { chatPerMinute: 6, perMinute: 20, perHour: 300 };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -42,6 +43,20 @@ Deno.serve(async (req) => {
   if (!lastInAt || Date.now() - lastInAt > WINDOW_MS) {
     return json({ error: "More than 24 hours since the customer's last message. WhatsApp only allows approved template messages now; reply from the WhatsApp app.", window_closed: true }, 409);
   }
+
+  // Send limits (21 Nov 2026): far above a person typing replies, but stops a burst (a stuck button,
+  // a script, a stolen login) from flooding customers and getting the number blocked by WhatsApp.
+  const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+  const sentSince = (since: string, conv?: string) => {
+    let q = db.from("messages").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ws).eq("direction", "out").eq("origin", "itaos").gte("sent_at", since);
+    if (conv) q = q.eq("conversation_id", conv);
+    return q.then(({ count }) => count ?? 0);
+  };
+  const [perChatMin, perMin, perHour] = await Promise.all([sentSince(ago(60e3), convId), sentSince(ago(60e3)), sentSince(ago(3600e3))]);
+  if (perChatMin >= LIMIT.chatPerMinute) return json({ error: "Too many messages to this customer in a minute. Wait a moment, then send again.", rate_limited: true }, 429);
+  if (perMin >= LIMIT.perMinute) return json({ error: "Too many messages sent in the last minute. Wait a moment, then send again.", rate_limited: true }, 429);
+  if (perHour >= LIMIT.perHour) return json({ error: "This business has sent the most messages allowed in an hour from itaOS. Try again later, or reply from the WhatsApp app.", rate_limited: true }, 429);
 
   const key = await dualhookKey(db, ws);
   if (!key) return json({ error: "Add your Dualhook API key (dh_live_…) on the Connections page to send from itaOS." }, 400);

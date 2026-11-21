@@ -11,7 +11,7 @@
     "test:sql": "bash ../supabase/tests/run.sh"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.45.4",
+    "@supabase/supabase-js": "2.119.2",
     "gsap": "^3.15.1",
     "jszip": "^3.10.1",
     "qrcode": "^1.5.4",
