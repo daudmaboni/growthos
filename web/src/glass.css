@@ -152,3 +152,20 @@
 .app-curtain.cover .app-curtain-in > span { transition-delay: .38s; }
 .app-curtain.reveal .app-curtain-in > * { opacity: 0; transform: translateY(-24px); transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) { .lang-seg .lang-thumb, .app-curtain, .app-curtain-in > * { transition: none !important; } }
+
+/* Ask Kito start card: suggestions and recent questions are plain rows with hairline dividers,
+   not a stack of glass pills (21 Nov 2026). Higher specificity than the glass rule above. */
+.kito-start { display: grid; gap: 6px; }
+.kito-start > b { margin-top: 6px; }
+.kito-start .kito-suggest, .kito-start .kito-recent { display: grid; gap: 0; margin-bottom: 8px; }
+.kito-start .kito-suggest button, .kito-start .kito-recent-item {
+  all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 4px; min-height: 48px; border-bottom: 1px solid var(--line); cursor: pointer; text-align: left;
+  font: 500 15px/1.4 var(--font); color: var(--ink); white-space: normal; background: none; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; transform: none;
+}
+.kito-start .kito-suggest button:last-child, .kito-start .kito-recent-item:last-child { border-bottom: 0; }
+.kito-start .kito-suggest button svg { flex-shrink: 0; color: var(--muted); }
+.kito-start .kito-suggest button:hover, .kito-start .kito-recent-item:hover { background: var(--raised); border-radius: 10px; }
+.kito-start .kito-suggest button:focus-visible, .kito-start .kito-recent-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.kito-start .kito-recent-item .small { white-space: nowrap; flex-shrink: 0; }
