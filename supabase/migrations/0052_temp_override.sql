@@ -11,7 +11,7 @@ create or replace function private.keep_temp_override() returns trigger
 language plpgsql set search_path = public as $$
 begin
   if new.temp_override is not null and new.temp_override is not distinct from old.temp_override then
-    if new.last_message_at is not null and new.temp_override_at is not null and new.last_message_at > new.temp_override_at then
+    if new.last_dir = 'in' and new.last_message_at is not null and new.temp_override_at is not null and new.last_message_at > new.temp_override_at then
       new.temp_override := null; new.temp_override_at := null; new.temp_override_by := null;   -- customer wrote again
     else
       new.kito_temp := new.temp_override;   -- Kito re-read without new messages: the owner's answer stands
