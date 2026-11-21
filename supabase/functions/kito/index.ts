@@ -19,6 +19,9 @@ const userClient = (req: Request) => createClient(Deno.env.get("SUPABASE_URL")!,
 
 const KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const MODEL = Deno.env.get("KITO_MODEL") ?? "claude-haiku-5-5";
+// Older never-read chats Kito catches up on: how far back, and how many slots per run they get.
+const BACKLOG_DAYS = Number(Deno.env.get("KITO_BACKLOG_DAYS") ?? "30");
+const BACKLOG_SLOTS = Number(Deno.env.get("KITO_BACKLOG_SLOTS") ?? "4");
 const LABELS = ["new", "talking", "priced", "awaiting_payment", "paid", "shipped", "received", "using"];
 const OBJECTIONS = ["price", "think", "money", "trust", "delivery"];
 const TEMPS = ["hot", "warm", "cold"];
@@ -370,7 +373,23 @@ Deno.serve(async (req) => {
   const force = !isCron && body.all === true;
   const seen = new Set(flagged.map((c) => c.id));
   const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at)))];
-  const batch = due.slice(0, isCron ? 12 : 20);
+  for (const c of due) seen.add(c.id);
+  // Catch-up: the query above only sees the 400 newest chats, so busy businesses had older chats
+  // (still inside the last 30 days) that Kito never read. A few of those, newest first, ride along
+  // on every run. Chats that already failed are skipped (they show on the admin Errors page).
+  let backlog: any[] = [];
+  if (!only.length) {
+    let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
+      .eq("contacts.not_customer", false).is("kito_checked_at", null).is("kito_error", null)
+      .gte("last_message_at", new Date(Date.now() - BACKLOG_DAYS * 864e5).toISOString())
+      .order("last_message_at", { ascending: false }).limit(60);
+    if (wsFilter) bq = bq.eq("workspace_id", wsFilter);
+    const { data: bl } = await bq;
+    backlog = (bl ?? []).filter((c: any) => !seen.has(c.id));
+  }
+  const cap = isCron ? 12 : 20;
+  const fresh = due.slice(0, backlog.length ? cap - BACKLOG_SLOTS : cap);
+  const batch = [...fresh, ...backlog.slice(0, cap - fresh.length)];
 
   const wsInfo = new Map<string, WsInfo>();
   const tally = new Map<string, { checked: number; failed: number; note: string }>();
@@ -424,8 +443,8 @@ Deno.serve(async (req) => {
   }
   for (const [ws, t] of tally) {
     if (only.length && !t.failed) continue;   // instant reads after a new message aren't logged as runs
-    const left = due.filter((c) => c.workspace_id === ws).length - t.checked - t.failed;
+    const left = [...due, ...backlog].filter((c) => c.workspace_id === ws).length - t.checked - t.failed;
     await db.from("kito_runs").insert({ workspace_id: ws, trigger: isCron ? "auto" : "manual", checked: t.checked, failed: t.failed, remaining: Math.max(0, left), note: t.note || null });
   }
-  return json({ ready: true, checked: done, failed, remaining: Math.max(0, due.length - done - failed), ...(lastError ? { last_error: lastError } : {}) });
+  return json({ ready: true, checked: done, failed, remaining: Math.max(0, due.length + backlog.length - done - failed), ...(lastError ? { last_error: lastError } : {}) });
 });
