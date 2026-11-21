@@ -169,3 +169,38 @@
 .kito-start .kito-suggest button:hover, .kito-start .kito-recent-item:hover { background: var(--raised); border-radius: 10px; }
 .kito-start .kito-suggest button:focus-visible, .kito-start .kito-recent-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 .kito-start .kito-recent-item .small { white-space: nowrap; flex-shrink: 0; }
+
+/* ---- Calmer surfaces (21 Nov 2026): no coloured bars down the left, no card-inside-card,
+   lists separated by thin lines, quiet secondary actions. ---- */
+.page-note { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; line-height: 1.5; }
+.page-note svg { flex-shrink: 0; margin-top: 2px; }
+
+/* Findings (Diagnosis page, notes): a soft tinted block, no stripe. */
+.finding, .dash-ia .finding { border: 0; border-radius: var(--r-md); background: var(--raised); padding: 12px 14px; }
+.finding.bad, .dash-ia .finding.bad { background: var(--bad-soft); }
+.finding.warn, .dash-ia .finding.warn { background: var(--warn-soft); }
+.finding.good, .dash-ia .finding.good { background: var(--good-soft); }
+
+/* Quotes and evidence: plain text on a light ground, no bar. */
+.evidence { border-left: 0; }
+.promise-quote { border-left: 0; padding: 0; margin: 8px 0 4px; font-size: 15px; }
+
+/* Queues (promises, follow-ups, tasks): rows with a thin line between them, not boxes in a card. */
+.card .queue { gap: 0; }
+.card .queue > .qitem { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 16px 0; box-shadow: none; }
+.card .queue > .qitem:last-child { border-bottom: 0; padding-bottom: 4px; }
+.qitem.promise.proposed, .qitem.promise.overdue { border-left: 0; }
+
+/* Small option buttons inside a row (day picks, Copy, Talked to them…): flat, no glass edge. */
+.qitem button.small:not(.primary):not(.linkish) {
+  background: var(--raised); border: 1px solid transparent; box-shadow: none; background-image: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; min-height: 38px; padding: 0 14px;
+}
+.qitem button.small:not(.primary):not(.linkish):hover:not(:disabled) { border-color: var(--line-2); }
+button.linkish { box-shadow: none; background: none; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; padding: 0; min-height: 0; text-decoration: underline; text-underline-offset: 3px; }
+button.linkish.small { color: var(--muted); }
+
+/* Promise actions: main button + quiet "Not a promise" link side by side. */
+.promise-acts { display: flex; flex-wrap: wrap; gap: 8px; align-content: start; }
+.promise-acts.proposed { align-items: center; gap: 16px; }
+.promise-acts.proposed button.primary { min-height: 42px; padding: 0 22px; }

@@ -160,7 +160,7 @@ export function OrderList({ ws, conversationId, onChange }: { ws: Workspace; con
       {printId && <ReceiptPrint ws={ws} orderId={printId} onClose={() => setPrintId(null)} />}
       {err && <span className="err small">{err}</span>}
       {orders.map((o) => (
-        <div key={o.id} className="evidence" style={{ borderLeftColor: o.status === "paid" ? "var(--good)" : "var(--line-2)" }}>
+        <div key={o.id} className="evidence">
           <div className="row between">
             <span><b>{amt(orderNet(o), o.currency)} {o.currency}</b> <span className={"pill " + (o.status === "paid" ? "sold" : o.status === "pending" ? "open" : "lost")}>{L[lang].orderStatus[o.status]}</span> <span className="chip">{L[lang].provenance[o.provenance]}{o.inferred_from ? ` · ${T("confirmed from", "kutoka")} ${o.inferred_from === "kito" ? "Kito" : o.inferred_from === "rules" ? T("rules", "kanuni") : o.inferred_from === "tick" ? T("your ✅ message", "ujumbe wako wa ✅") : "✅"}` : ""}</span>{o.fulfillment_status !== "not_applicable" && <span className="chip">{L[lang].fulfillment[o.fulfillment_status]}</span>}</span>
             <span className="small muted">{o.receipt_no ? <b>{o.receipt_no} · </b> : null}{o.paid_at ? T("paid", "imelipwa") + " " + when(o.paid_at) : when(o.occurred_at)}{o.payment_ref ? ` · ${T("txn", "muamala")} ${o.payment_ref}` : ""}{o.product ? ` · ${o.product}` : ""}{o.external_ref && !o.external_ref.startsWith("auto:") ? ` · ref ${o.external_ref}` : ""}</span>

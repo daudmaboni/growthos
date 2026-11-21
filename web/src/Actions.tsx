@@ -101,7 +101,7 @@ export default function Actions({ ws }: { ws: Workspace }) {
       </div>
       {err && <p className="err">{err}</p>}
       {!editor && <p className="small muted">{T("You have a viewer role: you can see the queue but not change tasks.", "Una nafasi ya kutazama tu: unaweza kuona foleni lakini si kubadilisha kazi.")}</p>}
-      <div className="finding"><b>{T("itaOS never sends messages.", "itaOS haitumi ujumbe kamwe.")}</b><span className="small">{T("Drafts here are suggestions. Copy one, edit it, and send it yourself from WhatsApp.", "Rasimu hapa ni mapendekezo. Nakili, hariri, na utume mwenyewe kutoka WhatsApp.")}</span></div>
+      <p className="small muted page-note"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>{T("itaOS never sends messages. Drafts here are suggestions: copy one, edit it and send it yourself from WhatsApp.", "itaOS haitumi ujumbe. Rasimu hapa ni mapendekezo: nakili, hariri na utume mwenyewe kutoka WhatsApp.")}</p>
 
       {tab === "promises" && <PromiseList tasks={tasks} rows={rows} ws={ws} editor={editor} onChange={refresh} />}
 

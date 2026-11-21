@@ -82,7 +82,7 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
       <div>
         <b>{name}</b>
         <div className="small" style={{ marginTop: 3 }}>
-          <span className="chip">{kindLabel(t.kind, sw)}</span>
+          {!proposed && <span className="chip">{kindLabel(t.kind, sw)}</span>}
           {t.when_text && <span className="chip">{t.when_text}</span>}
           {!proposed && at && <span className={"chip " + (bucket === "overdue" ? "bad" : bucket === "today" ? "ok" : "")}>{bucket === "overdue" ? T("overdue · ", "imepita · ") : bucket === "today" ? T("today · ", "leo · ") : ""}{when(at)}</span>}
           {t.result === "no_answer" && <span className="chip">{T("no answer last time", "hakupokea mara iliyopita")}</span>}
@@ -129,10 +129,10 @@ export function PromiseCard({ t, r, ws, editor, onChange }: { t: Task; r?: Outco
       )}
 
       {editor && (
-        <div className="row" style={{ gap: 6, flexDirection: "column", alignItems: "stretch" }}>
+        <div className={"promise-acts" + (proposed ? " proposed" : "")}>
           {proposed ? <>
             <button className="small primary" disabled={busy} onClick={confirm}>{T("Remind me", "Nikumbushe")}</button>
-            <button className="small" disabled={busy} onClick={() => patch({ status: "dismissed" })}>{T("Not a promise", "Si ahadi")}</button>
+            <button className="linkish small" disabled={busy} onClick={() => patch({ status: "dismissed" })}>{T("Not a promise", "Si ahadi")}</button>
           </> : <>
             <button className="small primary" disabled={busy} onClick={() => { patch({ status: "done", result: "paid" }); location.hash = "#chats/open=" + t.conversation_id; }} title={T("Opens the chat so you can record the sale", "Inafungua chat ili urekodi mauzo")}>{T("Paid → record sale", "Amelipa → rekodi mauzo")}</button>
             <button className="small" disabled={busy} onClick={() => patch({ status: "done", result: "called" })}>{T("Talked to them", "Nimeongea naye")}</button>
