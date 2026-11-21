@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /app
+Disallow: /r/
 
 Sitemap: https://itaos.app/sitemap.xml

@@ -14,6 +14,17 @@
   to = "/index.html"
   status = 200
 
+# A printed receipt's QR opens /r/<secret code> (ReceiptCheck.tsx). Never indexed by search engines.
+[[redirects]]
+  from = "/r/*"
+  to = "/index.html"
+  status = 200
+[[headers]]
+  for = "/r/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Referrer-Policy = "no-referrer"
+
 # The service worker must never be cached, or phones keep running an old one after a deploy.
 [[headers]]
   for = "/sw.js"

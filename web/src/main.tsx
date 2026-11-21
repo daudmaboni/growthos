@@ -15,6 +15,7 @@ startPwa();
 startPullRefresh();
 
 // "/" is the public homepage; the app lives at "/app".
+// "/r/<code>" is the public page a printed receipt's QR opens.
 // Old links ("/#dashboard") and Supabase sign-in links that land on "/" with tokens are sent on to the app.
 const APP_VIEWS = /^#(dashboard|kito|report|actions|chats|content|connect|settings)\b/;
 const AUTH_HASH = /(access_token|refresh_token|error_description|type=(magiclink|recovery|signup|invite))=?/;
@@ -26,7 +27,8 @@ if (!isApp && (APP_VIEWS.test(location.hash) || AUTH_HASH.test(location.hash) ||
 } else {
   const root = createRoot(document.getElementById("root")!);
   const isAdmin = path === "/app/admin";
-  (isAdmin ? import("./AdminPage") : isApp ? import("./App") : import("./Home")).then(({ default: Page }) => {
+  const isReceipt = path.startsWith("/r/"); // public receipt check from a printed QR (ReceiptCheck.tsx)
+  (isReceipt ? import("./ReceiptCheck") : isAdmin ? import("./AdminPage") : isApp ? import("./App") : import("./Home")).then(({ default: Page }) => {
     root.render(<React.StrictMode><Page /></React.StrictMode>);
   });
 }

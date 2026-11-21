@@ -29,7 +29,7 @@ const POPUP_QUIET_DAYS = 3;
 /** Bottom pop-up on any page (homepage, login, app) inviting the visitor to install itaOS.
  *  Plain DOM so it works on the homepage too. "Not now" hides it for a few days. */
 function installPopup() {
-  if (isInstalled() || document.getElementById("itaos-install") || location.pathname.startsWith("/app/admin")) return;
+  if (isInstalled() || document.getElementById("itaos-install") || location.pathname.startsWith("/app/admin") || location.pathname.startsWith("/r/")) return; // not on customer receipt pages
   if (!deferred && !isIOS()) return;
   try { const t = Number(localStorage.getItem(POPUP_KEY) || 0); if (Date.now() - t < POPUP_QUIET_DAYS * 864e5) return; } catch { /* storage unavailable */ }
   let lang: string | null = null;
