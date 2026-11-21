@@ -6,6 +6,7 @@
 //      notifications on for that business. Only for messages from the last 10 minutes, so
 //      replayed or backfilled events never ring phones about old chats.
 //  - The promises-due-15m cron job (migration 0046): { due_tasks: true } → "promise due" notifications.
+//  - The briefing-daily cron job (migration 0051): { briefing: true } → one morning summary per business.
 //  - A signed-in member from Settings → Phone app: { test: true, workspace_id } → a test to
 //    that member's own devices.
 //
@@ -123,6 +124,46 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, due: tasks.length, sent: rung });
   }
+  // Morning briefing (cron once a day, migration 0051): one notification per business with what needs doing today.
+  // Sent only when something is waiting. The tag carries the date, so a repeated run replaces it instead of ringing twice.
+  if (body.briefing) {
+    const { data: allSubs } = await db.from("push_subscriptions").select("workspace_id,endpoint,p256dh,auth,fail_count");
+    const byWs = new Map<string, Sub[]>();
+    for (const s of (allSubs ?? []) as any[]) { if (!byWs.has(s.workspace_id)) byWs.set(s.workspace_id, []); byWs.get(s.workspace_id)!.push(s); }
+    let sent = 0; const out: Record<string, unknown> = {};
+    for (const [ws, subs] of byWs) {
+      const { data: w } = await db.from("workspaces").select("language,timezone").eq("id", ws).maybeSingle();
+      const sw = w?.language === "sw";
+      const tz = w?.timezone || "Africa/Dar_es_Salaam";
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());   // YYYY-MM-DD, business time
+      const endOfToday = new Date(Date.now() + 864e5).toISOString();   // generous: anything due by about this time tomorrow morning
+      const threeDays = new Date(Date.now() - 3 * 864e5).toISOString();
+      const [due, snz, proposed, hot, signals] = await Promise.all([
+        db.from("follow_up_tasks").select("id", { count: "exact", head: true }).eq("workspace_id", ws).eq("status", "open").lte("due_at", endOfToday),
+        db.from("follow_up_tasks").select("id", { count: "exact", head: true }).eq("workspace_id", ws).eq("status", "snoozed").lte("snoozed_until", endOfToday),
+        db.from("follow_up_tasks").select("id", { count: "exact", head: true }).eq("workspace_id", ws).eq("status", "proposed").eq("source", "kito_promise"),
+        db.from("conversation_outcomes").select("id", { count: "exact", head: true }).eq("workspace_id", ws).eq("not_customer", false)
+          .eq("kito_temp", "hot").eq("last_dir", "in").eq("paid_orders", 0).gte("last_message_at", threeDays),
+        db.from("conversation_outcomes").select("id", { count: "exact", head: true }).eq("workspace_id", ws).eq("not_customer", false).eq("paid_orders", 0)
+          .or("and(kito_outcome.eq.sold,or(kito_confidence.is.null,kito_confidence.neq.low)),outcome_override.eq.sold").or("override_by.is.null,outcome_override.eq.sold"),
+      ]);
+      const n = { due: (due.count ?? 0) + (snz.count ?? 0), proposed: proposed.count ?? 0, hot: hot.count ?? 0, signals: signals.count ?? 0 };
+      out[ws] = n;
+      const parts = [
+        n.due ? (sw ? `${n.due} ahadi/kazi za leo` : `${n.due} promise${n.due === 1 ? "" : "s"}/task${n.due === 1 ? "" : "s"} due`) : "",
+        n.hot ? (sw ? `wateja ${n.hot} wa moto wanasubiri jibu` : `${n.hot} hot chat${n.hot === 1 ? "" : "s"} waiting for a reply`) : "",
+        n.signals ? (sw ? `malipo ${n.signals} ya kuhakiki` : `${n.signals} payment${n.signals === 1 ? "" : "s"} to check`) : "",
+        n.proposed ? (sw ? `ahadi ${n.proposed} mpya za kuthibitisha` : `${n.proposed} new promise${n.proposed === 1 ? "" : "s"} to confirm`) : "",
+      ].filter(Boolean);
+      if (!parts.length) continue;   // nothing waiting: no notification
+      sent += await deliver(db, subs, {
+        title: sw ? "Habari za asubuhi ☀️ Leo kwenye itaOS" : "Good morning ☀️ Today in itaOS",
+        body: parts.join(" · "), url: n.due || n.proposed ? "/app#actions" : "/app#chats", tag: "briefing-" + day,
+      });
+    }
+    return json({ ok: true, sent, counts: out });
+  }
+
   const ids: string[] = [...new Set((body.conversation_ids ?? []).map(String))].filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20);
   let sent = 0;
   for (const id of ids) {
