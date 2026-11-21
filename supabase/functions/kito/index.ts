@@ -376,9 +376,10 @@ Deno.serve(async (req) => {
   for (const c of due) seen.add(c.id);
   // Catch-up: the query above only sees the 400 newest chats, so busy businesses had older chats
   // (still inside the last 30 days) that Kito never read. A few of those, newest first, ride along
-  // on every run. Chats that already failed are skipped (they show on the admin Errors page).
+  // on every 15-minute run. Chats that already failed are skipped (they show on the admin Errors page).
+  // Cron only: the app keeps calling while "remaining" > 0, and the backlog would keep it looping.
   let backlog: any[] = [];
-  if (!only.length) {
+  if (isCron && !only.length) {
     let bq = db.from("conversations").select("id,workspace_id,last_message_at,kito_checked_at,contacts!inner(not_customer)")
       .eq("contacts.not_customer", false).is("kito_checked_at", null).is("kito_error", null)
       .gte("last_message_at", new Date(Date.now() - BACKLOG_DAYS * 864e5).toISOString())
@@ -437,6 +438,9 @@ Deno.serve(async (req) => {
       done++; bump(c.workspace_id, "checked");
     } catch (e) {
       failed++; lastError = (e as Error).message.slice(0, 200); bump(c.workspace_id, "failed", lastError);
+      // Out of credit, rate-limited or overloaded: not this chat's fault, so don't mark it (marked chats
+      // drop out of the catch-up) and stop the run: every other chat would fail the same way.
+      if (/AI (429|5\d\d)|credit balance|overloaded/i.test(lastError)) break;
       await db.from("conversations").update({ kito_error: lastError }).eq("id", c.id);
       if (/AI (401|403)/.test(lastError)) break; // bad key: stop, don't hammer
     }
