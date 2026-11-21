@@ -385,18 +385,28 @@ Deno.serve(async (req) => {
   const force = !isCron && body.all === true;
   // The 5-minute run and the app's automatic catch-up when Chats opens wait for the quiet window.
   // Instant: chats wa-webhook sends (money moments), the owner's "Update with Kito" button, and
-  // flagged "maybe paid" chats. Every changed chat is still read: at the latest MAX_WAIT after its
-  // last read (or after it started, if never read), plus the cron interval.
+  // flagged "maybe paid" chats. Every changed chat is still read: once quiet for QUIET_MIN, or at the
+  // latest MAX_WAIT after its first unread message (while the talk goes on), plus the cron interval.
   const patient = !only.length && !force && (isCron || body.background === true);
   const now = Date.now();
-  const settled = (c: any) => {
-    if (!patient) return true;
-    if (now - Date.parse(c.last_message_at) >= QUIET_MIN * 60e3) return true;
-    const since = c.kito_checked_at ?? c.started_at ?? c.last_message_at;
-    return now - Date.parse(since) >= MAX_WAIT_MIN * 60e3;
-  };
   const seen = new Set(flagged.map((c) => c.id));
   const changed = (c: any) => !c.kito_checked_at || Date.parse(c.last_message_at) > Date.parse(c.kito_checked_at);
+  const quiet = (c: any) => now - Date.parse(c.last_message_at) >= QUIET_MIN * 60e3;
+  // Chats still mid-conversation: overdue once their first unread message is MAX_WAIT old. Measured
+  // from that message, not from the last read (a chat last read yesterday is not "overdue" the moment
+  // a new message arrives).
+  const overdue = new Set<string>();
+  if (patient) {
+    const busy = (all ?? []).filter((c: any) => !seen.has(c.id) && changed(c) && !quiet(c)).slice(0, 60);
+    for (const c of busy) {
+      let fm = db.from("messages").select("sent_at").eq("conversation_id", c.id).order("sent_at", { ascending: true }).limit(1);
+      if (c.kito_checked_at) fm = fm.gt("sent_at", c.kito_checked_at);
+      const { data: first } = await fm;
+      const since = first?.[0]?.sent_at ?? c.last_message_at;
+      if (now - Date.parse(since) >= MAX_WAIT_MIN * 60e3) overdue.add(c.id);
+    }
+  }
+  const settled = (c: any) => !patient || quiet(c) || overdue.has(c.id);
   const due = [...flagged, ...(all ?? []).filter((c) => !seen.has(c.id) && (force || (changed(c) && settled(c))))];
   for (const c of due) seen.add(c.id);
   const wsInfo = new Map<string, WsInfo>();
