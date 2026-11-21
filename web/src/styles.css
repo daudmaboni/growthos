@@ -218,10 +218,11 @@ html[data-font="inter"] { --font: "Inter", system-ui, -apple-system, "Segoe UI",
 [data-theme="light"] { --glass: rgba(255, 255, 255, .58); --glass-edge: rgba(255, 255, 255, .85); --glass-hi: rgba(255, 255, 255, .95); --glass-lens: rgba(20, 24, 36, .07); }
 @media (max-width: 760px) {
   nav.tabs:not(.subtabs), .actions .gear { display: none; }
-  .shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
-  /* Facebook-style bar: a solid white capsule nearly the full width, icons only, a tinted pill behind the active tab. */
+  .shell { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+  /* Facebook-style bar: a compact solid capsule centred on the screen (icons close together, not the full width),
+     sitting clear above the iPhone home bar. Icons only, a tinted pill behind the active tab. */
   .bottomnav { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); align-items: center; position: fixed; z-index: 40; left: 50%; right: auto;
-    width: min(440px, calc(100% - 26px)); transform: translateX(-50%); bottom: max(8px, calc(env(safe-area-inset-bottom) - 12px));
+    width: min(296px, calc(100% - 64px)); transform: translateX(-50%); bottom: max(16px, calc(env(safe-area-inset-bottom) + 6px));
     height: 54px; padding: 5px; border-radius: 999px; background: var(--card); border: 1px solid var(--line-2);
     box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .28), 0 1px 3px rgba(0, 0, 0, .06); }
   /* the lens: one slot wide; its ::before is the pill (FB's is ~58 × 39 pt) */
