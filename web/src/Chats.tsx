@@ -43,6 +43,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
   const [rows, setRows] = useState<Outcome[]>([]);
   const [lite, setLite] = useState<Lite[]>([]);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  // Bought + a date picked: chat id -> when that customer actually paid (the order's paid date, read from the chat),
+  // and how many bought on those days. Null when no date is picked.
+  const [paidOn, setPaidOn] = useState<Record<string, string> | null>(null);
+  const [boughtInRange, setBoughtInRange] = useState<number | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [openId, setOpenId] = useState<string | null>(hashOpen());
   // Search by name or phone, and an optional date range (own to this page; empty = all dates).
@@ -119,12 +123,43 @@ export default function Chats({ ws }: { ws: Workspace }) {
   useEffect(() => {
     if (!quiet) setLoading(true);
     setQuiet(false); setErr("");
-    let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id).order("last_message_at", { ascending: false, nullsFirst: false }).limit(limit);
+    const byPaid = filter === "sold";
+    let q = supabase.from("conversation_outcomes").select("*").eq("workspace_id", ws.id)
+      .order(byPaid ? "last_paid_at" : "last_message_at", { ascending: false, nullsFirst: false }).limit(limit);
     if (filter !== "ids" && src === "import") q = q.eq("phone_number_id", "import");
     else if (filter !== "ids" && src === "live") q = q.neq("phone_number_id", "import");
     if (filter === "ids" && ids) q = q.in("id", ids);
     // Date range: chats with a message on those days (local days, East Africa time).
-    if (filter !== "ids" && period) q = q.gte("last_message_at", fromLocalInput(period.from + "T00:00")).lt("last_message_at", fromLocalInput(addDays(period.to, 1) + "T00:00"));
+    // Bought is different: it lists the customers who PAID on those days (the payment day read from the chat),
+    // not the day you confirmed the money or the day they last wrote.
+    const fromTs = period ? fromLocalInput(period.from + "T00:00") : "";
+    const toTs = period ? fromLocalInput(addDays(period.to, 1) + "T00:00") : "";
+    const paidIds = period ? (async () => {
+      const map: Record<string, string> = {};
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from("orders").select("conversation_id,paid_at").eq("workspace_id", ws.id).eq("status", "paid")
+          .not("conversation_id", "is", null).gte("paid_at", fromTs).lt("paid_at", toTs).order("paid_at", { ascending: false }).range(from, from + 999);
+        if (error) break;
+        for (const o of (data ?? []) as { conversation_id: string; paid_at: string }[]) if (!map[o.conversation_id]) map[o.conversation_id] = o.paid_at;
+        if (!data || data.length < 1000) break;
+      }
+      return map;
+    })() : Promise.resolve(null);
+    paidIds.then(async (map) => {
+      setPaidOn(map);
+      if (!map) { setBoughtInRange(null); return; }
+      const idsIn = Object.keys(map);
+      if (!idsIn.length) { setBoughtInRange(0); return; }
+      let n = 0;
+      for (let i = 0; i < idsIn.length; i += 200) {
+        let cq = supabase.from("conversation_outcomes").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id)
+          .in("id", idsIn.slice(i, i + 200)).gt("paid_orders", 0).eq("not_customer", false);
+        if (src === "import") cq = cq.eq("phone_number_id", "import"); else if (src === "live") cq = cq.neq("phone_number_id", "import");
+        const { count } = await cq; n += count ?? 0;
+      }
+      setBoughtInRange(n);
+    });
+    if (filter !== "ids" && period && !byPaid) q = q.gte("last_message_at", fromLocalInput(period.from + "T00:00")).lt("last_message_at", fromLocalInput(addDays(period.to, 1) + "T00:00"));
     if (filter === "not") q = q.eq("not_customer", true);
     else if (filter !== "ids") q = q.eq("not_customer", false);
     if (filter === "ids" && ids) { /* handled below */ }
@@ -143,6 +178,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
         .then(({ data }) => setLite((data as Lite[]) ?? []));
     });
     const searched = async () => {
+      if (byPaid && period) {
+        const ids = Object.keys((await paidIds) ?? {});
+        q = q.in("id", ids.length ? ids.slice(0, 2000) : ["00000000-0000-0000-0000-000000000000"]);
+      }
       if (filter === "ids" || !search) return q;
       const digits = search.replace(/\D/g, "");
       const like = `%${search.replace(/[%_,()]/g, "")}%`;
@@ -160,6 +199,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
     ]).then(async ([c, a, t]) => {
       if (c.error) setErr(c.error.message);
       let list = (c.data as Outcome[]) ?? [];
+      if (byPaid && period) {
+        const m = (await paidIds) ?? {};
+        list = [...list].sort((x, y) => Date.parse(m[y.id] ?? "") - Date.parse(m[x.id] ?? ""));
+      }
       if (filter === "follow") {
         const rank = (r: Outcome) => (interest(r) === "hot" ? 0 : 1) * 10 + (r.last_dir === "in" ? 0 : 1);
         list = [...list].sort((x, y) => rank(x) - rank(y) || Date.parse(y.last_message_at ?? "") - Date.parse(x.last_message_at ?? ""));
@@ -228,7 +271,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
 
   const pick = (f: Filter) => { setIds(null); setFilter(f); setLimit(PAGE); if (location.hash !== "#chats") history.replaceState(null, "", "#chats"); };
   const pool = lite.filter((r) => inSource(r, src));
-  const count = (f: Filter) => counts ? Number(counts[f] ?? 0) : pool.filter((r) => inFilter(r, f)).length;
+  const count = (f: Filter) => f === "sold" && period && boughtInRange != null ? boughtInRange : counts ? Number(counts[f] ?? 0) : pool.filter((r) => inFilter(r, f)).length;
   const imported = counts ? Number(counts.imported ?? 0) : lite.filter((r) => (r as any).phone_number_id === "import").length;
   const total = counts ? Number(counts.all ?? 0) : lite.length;
   const shownTotal = filter === "ids" ? rows.length : count(filter);
@@ -316,7 +359,7 @@ export default function Chats({ ws }: { ws: Workspace }) {
         </div>
       )}
       </div>
-      {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
+      {filter !== "ids" && (search || period) && !loading && <p className="small" style={{ margin: 0 }}>{T(`${fmt(rows.length)}${rows.length >= limit ? "+" : ""} chats`, `Chat ${fmt(rows.length)}${rows.length >= limit ? "+" : ""}`)}{search ? T(` matching “${search}”`, ` zinazolingana na “${search}”`) : ""}{period && range ? (filter === "sold" ? T(` that paid ${presetLabel(range.key, "en").toLowerCase()}`, ` waliolipa ${presetLabel(range.key, "sw").toLowerCase()}`) : T(` with messages ${presetLabel(range.key, "en").toLowerCase()}`, ` zenye ujumbe ${presetLabel(range.key, "sw").toLowerCase()}`)) : ""} · <button className="linkish small" onClick={() => { setQText(""); setSearch(""); setRange(null); }}>{T("clear", "futa")}</button></p>}
       {filter !== "ids" && <p className="small muted chats-hint" style={{ margin: 0 }}>{tabs.find((t) => t[0] === filter)?.[2]}</p>}
       {filter === "ids" && ids && <p className="small" style={{ margin: 0 }}>{T(`Showing ${ids.length} customers Kito picked`, `Inaonyesha wateja ${ids.length} aliowachagua Kito`)} · <a href="#chats" onClick={() => pick("all")}>{T("show everyone", "onyesha wote")}</a></p>}
       {src === "import" && imported > 0 && canManage(ws) && (
@@ -334,8 +377,10 @@ export default function Chats({ ws }: { ws: Workspace }) {
         <div className="cc-list">
           {rows.map((r, i) => {
             // Newest first, grouped by when they last wrote (the follow-up list is sorted by priority instead).
-            const g = filter === "follow" ? null : timeGroup(r.last_message_at, tz, T);
-            const head = g && (i === 0 || timeGroup(rows[i - 1].last_message_at, tz, T) !== g);
+            // On Bought they are grouped by the day they paid.
+            const when = (x: Outcome) => filter === "sold" ? (paidOn?.[x.id] ?? x.last_paid_at ?? x.last_message_at) : x.last_message_at;
+            const g = filter === "follow" ? null : timeGroup(when(r), tz, T);
+            const head = g && (i === 0 || timeGroup(when(rows[i - 1]), tz, T) !== g);
             return (
               <div key={r.id} style={{ display: "contents" }}>
                 {head && <h3 className="cc-group">{g}</h3>}
